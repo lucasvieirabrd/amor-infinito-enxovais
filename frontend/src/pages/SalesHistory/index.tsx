@@ -12,6 +12,7 @@ interface Sale {
   saleNumber: string;
   createdAt: string;
   customer?: { name: string };
+  customerName?: string;
   paymentMethod: 'cash' | 'credit_card' | 'installment';
   totalAmount: number;
   status: 'completed' | 'canceled';
@@ -212,7 +213,7 @@ export const SalesHistory: React.FC = () => {
                       {format(new Date(sale.createdAt), 'dd/MM/yyyy HH:mm')}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
-                      {sale.customer?.name || 'N/A'}
+                      {sale.customer?.name || sale.customerName || 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <Badge variant={getPaymentMethodVariant(sale.paymentMethod)}>
@@ -238,11 +239,19 @@ export const SalesHistory: React.FC = () => {
                         >
                           <FiEye size={18} />
                         </button>
-                        {sale.status === 'completed' && (
+                        {sale.status === 'completed' ? (
                           <button
                             onClick={() => handleDeleteClick(sale.id)}
                             className="text-error hover:bg-error hover:bg-opacity-10 p-2 rounded-lg transition-colors"
                             title="Cancelar venda"
+                          >
+                            <FiTrash2 size={18} />
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className="text-gray-400 p-2 rounded-lg cursor-not-allowed"
+                            title="Venda cancelada"
                           >
                             <FiTrash2 size={18} />
                           </button>

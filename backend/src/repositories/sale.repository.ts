@@ -1,5 +1,5 @@
 import { db } from '../database';
-import { sales, saleItems, installments, saleSequence } from '../database/schema';
+import { sales, saleItems, installments, saleSequence, customers } from '../database/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { MySqlTransaction } from 'drizzle-orm/mysql-core';
@@ -111,7 +111,24 @@ export class SaleRepository {
     const { page = 1, limit = 10, customerId, paymentMethod, startDate, endDate, search } = filters;
     const offset = (page - 1) * limit;
 
-    let query = db.select().from(sales).where(isNull(sales.deletedAt));
+    let query = db
+      .select({
+        id: sales.id,
+        saleNumber: sales.saleNumber,
+        customerId: sales.customerId,
+        userId: sales.userId,
+        paymentMethod: sales.paymentMethod,
+        totalAmount: sales.totalAmount,
+        saleDate: sales.saleDate,
+        installmentsCount: sales.installmentsCount,
+        createdAt: sales.createdAt,
+        updatedAt: sales.updatedAt,
+        deletedAt: sales.deletedAt,
+        customerName: sql`${customers.name}`,
+      })
+      .from(sales)
+      .leftJoin(customers, eq(sales.customerId, customers.id))
+      .where(isNull(sales.deletedAt));
 
     if (customerId) {
       query = query.where(eq(sales.customerId, customerId));
@@ -134,13 +151,19 @@ export class SaleRepository {
       .offset(offset)
       .orderBy(sql`${sales.createdAt} DESC`);
 
+    // Mapear os dados para incluir status derivado
+    const mappedData = data.map((row: any) => ({
+      ...row,
+      status: row.deletedAt ? 'canceled' : 'completed',
+    }));
+
     const countResult = await db
       .select({ count: sql<number>`count(*)` })
       .from(sales)
       .where(isNull(sales.deletedAt));
 
     return {
-      data,
+      data: mappedData,
       total: countResult[0].count,
       page,
       limit,
