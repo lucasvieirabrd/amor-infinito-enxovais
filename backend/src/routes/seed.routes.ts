@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../database';
 import { users } from '../database/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 
 const seedRouter = Router();
