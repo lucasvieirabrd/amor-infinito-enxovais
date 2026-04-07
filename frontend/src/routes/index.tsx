@@ -16,7 +16,7 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -37,14 +37,15 @@ export const AppRoutes: React.FC = () => {
           </PrivateRoute>
         }
       >
-        <Route index element={<Dashboard />} />
-        <Route path="/clientes" element={<Customers />} />
-        <Route path="/produtos" element={<Products />} />
-        <Route path="/vendas" element={<Sales />} />
-        <Route path="/crediario" element={<Installments />} />
-        <Route path="/mensagens" element={<Messages />} />
-        {/* Outras rotas serão adicionadas aqui */}
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/customers" element={<Customers />} />
+        <Route path="/products" element={<Products />} />
+        <Route path="/sales" element={<Sales />} />
+        <Route path="/installments" element={<Installments />} />
+        <Route path="/messages" element={<Messages />} />
+        {/* Rotas para Billing e Settings serão adicionadas aqui */}
+        <Route index element={<Navigate to="/dashboard" />} />
+        <Route path="*" element={<Navigate to="/dashboard" />} />
       </Route>
     </Routes>
   );

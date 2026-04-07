@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
-import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox } from 'react-icons/fi';
+import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit } from 'react-icons/fi';
+import { Button, Card, Badge, Loading } from '../../components/ui';
 
 interface Product {
   id: string;
@@ -37,98 +38,112 @@ export const Products: React.FC = () => {
     }
   });
 
+  const lowStockCount = products?.filter(p => p.quantity <= p.minStockLevel).length || 0;
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Produtos / Estoque</h2>
-          <p className="text-gray-600">Controle integrado com Google Sheets</p>
+          <h1 className="text-3xl font-bold text-gray-900">Produtos / Estoque</h1>
+          <p className="text-gray-600 mt-1">Controle integrado com Google Sheets</p>
         </div>
         <div className="flex gap-3">
-          <button 
+          <Button
+            variant="secondary"
+            size="lg"
             onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-            className="flex items-center justify-center px-4 py-2 border border-primary-600 text-primary-600 font-bold rounded-lg hover:bg-primary-50 transition-colors disabled:opacity-50"
+            loading={syncMutation.isPending}
+            className="flex items-center gap-2"
           >
-            <FiRefreshCw className={`mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} /> 
+            <FiRefreshCw size={20} />
             {syncMutation.isPending ? 'Sincronizando...' : 'Sincronizar Planilha'}
-          </button>
-          <button className="btn-primary flex items-center justify-center">
-            <FiPlus className="mr-2" /> Novo Produto
-          </button>
+          </Button>
+          <Button
+            variant="primary"
+            size="lg"
+            className="flex items-center gap-2"
+          >
+            <FiPlus size={20} />
+            Novo Produto
+          </Button>
         </div>
       </div>
 
-      {/* Barra de Busca e Alertas */}
+      {/* Search and Alert */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <Card className="lg:col-span-2">
           <div className="relative">
-            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input 
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
               type="text"
               placeholder="Buscar por nome ou SKU..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-primary-500 focus:border-primary-500"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="input-base pl-10 w-full"
             />
           </div>
-        </div>
-        
-        <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 flex items-center">
-          <FiAlertTriangle className="text-orange-500 mr-3" size={24} />
-          <div>
-            <p className="text-sm font-bold text-orange-800">Atenção ao Estoque</p>
-            <p className="text-xs text-orange-700">
-              {products?.filter(p => p.quantity <= p.minStockLevel).length || 0} produtos abaixo do nível mínimo.
-            </p>
+        </Card>
+
+        <Card className="bg-secondary bg-opacity-10 border-secondary border-opacity-20">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-secondary bg-opacity-20 rounded-lg">
+              <FiAlertTriangle className="text-secondary" size={24} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Atenção ao Estoque</p>
+              <p className="text-xs text-gray-600">
+                {lowStockCount} produto{lowStockCount !== 1 ? 's' : ''} abaixo do nível mínimo.
+              </p>
+            </div>
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Grid de Produtos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {isLoading ? (
-          <div className="col-span-full text-center py-12">Carregando estoque...</div>
-        ) : products?.map((product) => (
-          <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-            <div className="p-5">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-gray-50 rounded-lg">
-                  <FiBox className="text-gray-400" size={20} />
+      {/* Products Grid */}
+      {isLoading ? (
+        <Loading variant="skeleton" />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {products?.map((product) => {
+            const isLowStock = product.quantity <= product.minStockLevel;
+            return (
+              <Card key={product.id} className="hover:shadow-lg transition-shadow">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="p-3 bg-background rounded-lg">
+                    <FiBox className="text-gray-400" size={24} />
+                  </div>
+                  <Badge variant={isLowStock ? 'error' : 'success'}>
+                    {product.quantity} em estoque
+                  </Badge>
                 </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                  product.quantity <= product.minStockLevel 
-                    ? 'bg-red-100 text-red-600' 
-                    : 'bg-green-100 text-green-600'
-                }`}>
-                  {product.quantity} em estoque
-                </span>
-              </div>
-              
-              <h4 className="font-bold text-gray-800 mb-1 truncate">{product.name}</h4>
-              <p className="text-xs text-gray-500 mb-4">SKU: {product.sku}</p>
-              
-              <div className="flex items-end justify-between">
-                <div>
-                  <p className="text-xs text-gray-400">Preço de Venda</p>
-                  <p className="text-lg font-bold text-primary-600">
-                    R$ {parseFloat(product.price.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
+
+                <h4 className="font-semibold text-gray-900 mb-1 truncate">{product.name}</h4>
+                <p className="text-xs text-gray-500 mb-4">SKU: {product.sku}</p>
+
+                <div className="flex items-end justify-between pt-4 border-t border-gray-100">
+                  <div>
+                    <p className="text-xs text-gray-500">Preço de Venda</p>
+                    <p className="text-lg font-bold text-primary">
+                      R$ {parseFloat(product.price.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <Button variant="secondary" size="sm" className="flex items-center gap-1">
+                    <FiEdit size={16} />
+                    Editar
+                  </Button>
                 </div>
-                <button className="text-sm font-medium text-gray-600 hover:text-primary-600">
-                  Editar
-                </button>
-              </div>
-            </div>
-            
-            {product.quantity <= product.minStockLevel && (
-              <div className="bg-red-50 px-5 py-2 border-t border-red-100">
-                <p className="text-[10px] font-bold text-red-600 uppercase">Reposição Necessária</p>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+
+                {isLowStock && (
+                  <div className="mt-4 p-3 bg-error bg-opacity-10 rounded-lg border border-error border-opacity-20">
+                    <p className="text-xs font-semibold text-error uppercase">Reposição Necessária</p>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
