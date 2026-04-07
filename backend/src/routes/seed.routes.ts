@@ -35,6 +35,141 @@ seedRouter.get('/health', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /seed/migrate
+ * Cria as tabelas do banco de dados
+ * Apenas para uso inicial - deve ser removido em produção após criar as tabelas
+ */
+seedRouter.post('/migrate', async (req: Request, res: Response) => {
+  try {
+    console.log('📦 Criando tabelas do banco de dados...');
+    
+    // Obter conexão raw do MySQL
+    const connection = (db as any)._.client;
+    
+    // Criar tabelas
+    const createTablesSQL = `
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(36) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        role ENUM('admin', 'seller') NOT NULL DEFAULT 'seller',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME,
+        KEY idx_email (email),
+        KEY idx_role (role)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      
+      CREATE TABLE IF NOT EXISTS customers (
+        id VARCHAR(36) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        phone VARCHAR(20) NOT NULL UNIQUE,
+        cpf VARCHAR(14) NOT NULL UNIQUE,
+        email VARCHAR(255),
+        cep VARCHAR(9),
+        address_street VARCHAR(255),
+        address_neighborhood VARCHAR(255),
+        address_city VARCHAR(255),
+        address_state VARCHAR(2),
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME,
+        KEY idx_phone (phone),
+        KEY idx_cpf (cpf)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      
+      CREATE TABLE IF NOT EXISTS products (
+        id VARCHAR(36) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        sku VARCHAR(50) UNIQUE,
+        quantity INT NOT NULL DEFAULT 0,
+        price DECIMAL(10, 2) NOT NULL,
+        min_stock_level INT NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME,
+        KEY idx_sku (sku)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      
+      CREATE TABLE IF NOT EXISTS sales (
+        id VARCHAR(36) PRIMARY KEY,
+        sale_number VARCHAR(20) NOT NULL UNIQUE,
+        customer_id VARCHAR(36) NOT NULL,
+        user_id VARCHAR(36) NOT NULL,
+        payment_method ENUM('cash', 'credit_card', 'installment') NOT NULL,
+        total_amount DECIMAL(10, 2) NOT NULL,
+        discount_amount DECIMAL(10, 2) DEFAULT 0,
+        final_amount DECIMAL(10, 2) NOT NULL,
+        status ENUM('pending', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME,
+        KEY idx_customer_id (customer_id),
+        KEY idx_user_id (user_id),
+        KEY idx_status (status),
+        FOREIGN KEY (customer_id) REFERENCES customers(id),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      
+      CREATE TABLE IF NOT EXISTS sale_items (
+        id VARCHAR(36) PRIMARY KEY,
+        sale_id VARCHAR(36) NOT NULL,
+        product_id VARCHAR(36) NOT NULL,
+        quantity INT NOT NULL,
+        unit_price DECIMAL(10, 2) NOT NULL,
+        total_price DECIMAL(10, 2) NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_sale_id (sale_id),
+        KEY idx_product_id (product_id),
+        FOREIGN KEY (sale_id) REFERENCES sales(id),
+        FOREIGN KEY (product_id) REFERENCES products(id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      
+      CREATE TABLE IF NOT EXISTS installments (
+        id VARCHAR(36) PRIMARY KEY,
+        sale_id VARCHAR(36) NOT NULL,
+        installment_number INT NOT NULL,
+        total_installments INT NOT NULL,
+        amount DECIMAL(10, 2) NOT NULL,
+        due_date DATE NOT NULL,
+        paid_date DATE,
+        status ENUM('pending', 'paid', 'overdue', 'cancelled') NOT NULL DEFAULT 'pending',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_sale_id (sale_id),
+        KEY idx_status (status),
+        FOREIGN KEY (sale_id) REFERENCES sales(id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `;
+    
+    // Executar cada comando SQL separadamente
+    const statements = createTablesSQL.split(';').filter(s => s.trim());
+    for (const statement of statements) {
+      if (statement.trim()) {
+        await connection.query(statement + ';');
+      }
+    }
+    
+    console.log('✅ Tabelas criadas com sucesso!');
+    
+    return res.status(201).json({
+      status: 'success',
+      message: 'Tabelas criadas com sucesso',
+      tables: ['users', 'customers', 'products', 'sales', 'sale_items', 'installments'],
+    });
+  } catch (error) {
+    console.error('Erro ao criar tabelas:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Erro ao criar tabelas',
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+    });
+  }
+});
+
+/**
  * POST /seed/init
  * Inicializa o banco de dados criando as tabelas e o usuário admin
  * Apenas para uso inicial - deve ser removido em produção após criar o primeiro admin
