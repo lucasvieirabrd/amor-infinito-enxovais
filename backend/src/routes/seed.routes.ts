@@ -8,6 +8,33 @@ import { v4 as uuidv4 } from 'uuid';
 const seedRouter = Router();
 
 /**
+ * GET /seed/health
+ * Testa a conexão com o banco de dados
+ */
+seedRouter.get('/health', async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 Testando conexão com banco de dados...');
+    
+    // Tentar uma query simples
+    const result = await db.select().from(users).limit(1);
+    
+    return res.status(200).json({
+      status: 'success',
+      message: 'Conexão com banco de dados OK',
+      database: 'MySQL',
+      usersCount: result.length,
+    });
+  } catch (error) {
+    console.error('Erro ao conectar ao banco de dados:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Erro ao conectar ao banco de dados',
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+    });
+  }
+});
+
+/**
  * POST /seed/init
  * Inicializa o banco de dados criando as tabelas e o usuário admin
  * Apenas para uso inicial - deve ser removido em produção após criar o primeiro admin
