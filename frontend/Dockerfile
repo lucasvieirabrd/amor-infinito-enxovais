@@ -2,11 +2,12 @@ FROM node:22-slim AS build
 
 WORKDIR /app
 
-COPY package*.json ./
+# O contexto agora é a raiz do projeto, então os arquivos estão em ./frontend
+COPY frontend/package*.json ./
 
 RUN npm install
 
-COPY . .
+COPY frontend/ .
 
 RUN npm run build
 
