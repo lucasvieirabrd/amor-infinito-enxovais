@@ -28,21 +28,10 @@ export class AuthController {
     const data = loginSchema.parse(req.body);
     const { user, token } = await authService.login(data);
 
-    // Configurar cookie httpOnly
-    // Em produção no Railway, usamos sameSite: 'none' para permitir cookies cross-domain
-    const isProduction = process.env.NODE_ENV === 'production';
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000, // 1 dia
-    });
-
-    return res.json({ user });
+    return res.json({ user, token });
   }
 
   async logout(req: Request, res: Response) {
-    res.clearCookie('token');
     return res.status(204).send();
   }
 
