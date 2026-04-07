@@ -32,13 +32,17 @@ export class GoogleSheetsService {
       throw new AppError('Erro ao processar credenciais do Google Sheets', 500);
     }
 
-    // Configuração de autenticação via Service Account usando o arquivo JSON    console.log('Attempting to initialize GoogleAuth with credentials:', { client_email: credentials.client_email, project_id: credentials.project_id });
-    const auth = new google.auth.GoogleAuth({
+    // Configuração de autenticação via Service Account usando o arquivo JSON
+    console.log('Attempting to initialize GoogleAuth with credentials:', { client_email: credentials.client_email, project_id: credentials.project_id });
+    this.auth = new google.auth.GoogleAuth({
       credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
+    // Log para verificar se o objeto GoogleAuth foi criado com sucesso
+    console.log("GoogleAuth object created successfully.");
 
     this.sheets = google.sheets({ version: 'v4', auth: this.auth });
+    console.log("Google Sheets API client initialized.");
   }
 
   /**
