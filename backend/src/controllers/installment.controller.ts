@@ -1,0 +1,55 @@
+import { Request, Response } from 'express';
+import { InstallmentService } from '../services/installment.service';
+import { z } from 'zod';
+
+const installmentService = new InstallmentService();
+
+export class InstallmentController {
+  async getByCustomer(req: Request, res: Response) {
+    const { customerId } = req.params;
+    const installments = await installmentService.getByCustomer(customerId);
+    return res.json(installments);
+  }
+
+  async markAsPaid(req: Request, res: Response) {
+    const { id } = req.params;
+    const paidSchema = z.object({
+      paymentDate: z.string().optional().default(new Date().toISOString()),
+      paidAmount: z.number().positive('Valor pago deve ser positivo'),
+    });
+
+    const data = paidSchema.parse(req.body);
+    const result = await installmentService.markAsPaid(id, data);
+
+    return res.json(result);
+  }
+
+  async revertPayment(req: Request, res: Response) {
+    const { id } = req.params;
+    const result = await installmentService.revertPayment(id);
+    return res.json(result);
+  }
+
+  async update(req: Request, res: Response) {
+    const { id } = req.params;
+    const updateSchema = z.object({
+      dueDate: z.string().optional(),
+      originalAmount: z.number().positive().optional(),
+    });
+
+    const data = updateSchema.parse(req.body);
+    const result = await installmentService.updateInstallment(id, data);
+
+    return res.json(result);
+  }
+
+  async listOverdue(req: Request, res: Response) {
+    const result = await installmentService.listOverdue();
+    return res.json(result);
+  }
+
+  async listActiveCrediarios(req: Request, res: Response) {
+    const result = await installmentService.listActiveCrediarios();
+    return res.json(result);
+  }
+}
