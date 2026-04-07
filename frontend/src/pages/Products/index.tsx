@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit } from 'react-icons/fi';
-import { Button, Card, Badge, Loading } from '../../components/ui';
+import { Button, Card, Badge, Loading, Modal, Input } from '../../components/ui';
 
 interface Product {
   id: string;
@@ -16,6 +16,8 @@ interface Product {
 
 export const Products: React.FC = () => {
   const [search, setSearch] = useState('');
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editFormData, setEditFormData] = useState({ quantity: 0, price: 0 });
   const queryClient = useQueryClient();
 
   // Busca de produtos via API
@@ -38,6 +40,33 @@ export const Products: React.FC = () => {
       alert('Erro ao sincronizar com Google Sheets. Verifique as credenciais.');
     }
   });
+
+  // Mutação para atualizar produto
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => api.put(`/products/${editingProduct?.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      setEditingProduct(null);
+      alert('Produto atualizado com sucesso!');
+    },
+    onError: () => {
+      alert('Erro ao atualizar produto.');
+    }
+  });
+
+  const handleEditClick = (product: Product) => {
+    setEditingProduct(product);
+    setEditFormData({
+      quantity: product.quantity,
+      price: typeof product.price === 'string' ? parseFloat(product.price) : product.price
+    });
+  };
+
+  const handleSaveEdit = () => {
+    if (editingProduct) {
+      updateMutation.mutate(editFormData);
+    }
+  };
 
   const lowStockCount = products?.filter(p => p.quantity <= p.minStockLevel).length || 0;
 
@@ -129,7 +158,12 @@ export const Products: React.FC = () => {
                       {product.priceDisplay || `R$ ${parseFloat(product.price.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                     </p>
                   </div>
-                  <Button variant="secondary" size="sm" className="flex items-center gap-1">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="flex items-center gap-1"
+                    onClick={() => handleEditClick(product)}
+                  >
                     <FiEdit size={16} />
                     Editar
                   </Button>
@@ -144,6 +178,68 @@ export const Products: React.FC = () => {
             );
           })}
         </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingProduct && (
+        <Modal
+          isOpen={!!editingProduct}
+          onClose={() => setEditingProduct(null)}
+          title="Editar Produto"
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nome</label>
+              <Input
+                type="text"
+                value={editingProduct.name}
+                disabled
+                className="bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">SKU</label>
+              <Input
+                type="text"
+                value={editingProduct.sku}
+                disabled
+                className="bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Quantidade</label>
+              <Input
+                type="number"
+                value={editFormData.quantity}
+                onChange={(e) => setEditFormData({ ...editFormData, quantity: parseInt(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Preco (R$)</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={editFormData.price}
+                onChange={(e) => setEditFormData({ ...editFormData, price: parseFloat(e.target.value) })}
+              />
+            </div>
+            <div className="flex gap-3 justify-end pt-4">
+              <Button
+                variant="secondary"
+                onClick={() => setEditingProduct(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSaveEdit}
+                loading={updateMutation.isPending}
+              >
+                Salvar Alteracoes
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

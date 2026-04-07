@@ -41,8 +41,26 @@ export class MessageRepository {
    */
   async listConversations() {
     // Busca a última mensagem de cada telefone para montar a lista de conversas
-    return db.execute(sql`
-      SELECT m1.*, c.name as customer_name
+    const result = await db.execute(sql`
+      SELECT 
+        m1.id,
+        m1.meta_message_id as metaMessageId,
+        m1.customer_id as customerId,
+        m1.from_phone as fromPhone,
+        m1.to_phone as toPhone,
+        m1.type,
+        m1.content,
+        m1.direction,
+        m1.status,
+        m1.timestamp,
+        m1.tag,
+        m1.notes,
+        m1.created_at as createdAt,
+        m1.updated_at as updatedAt,
+        m1.deleted_at as deletedAt,
+        c.name as customerName,
+        m1.content as lastMessage,
+        m1.timestamp as lastMessageAt
       FROM messages m1
       LEFT JOIN customers c ON m1.customer_id = c.id
       INNER JOIN (
@@ -57,6 +75,8 @@ export class MessageRepository {
       WHERE m1.deleted_at IS NULL
       ORDER BY m1.timestamp DESC
     `);
+    
+    return result;
   }
 
   async listChatHistory(phone: string, page: number, limit: number) {
