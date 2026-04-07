@@ -65,7 +65,15 @@ export const Customers: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Dados do formulário enviados:", formData);
     registerMutation.mutate(formData);
+  };
+
+  // Adicionar onError para depurar falhas na mutação
+  registerMutation.onError = (error) => {
+    console.error("Erro ao cadastrar cliente:", error);
+    alert(`Erro ao cadastrar cliente: ${error.message || 'Erro desconhecido'}`);
+  };
   };
 
   return (
