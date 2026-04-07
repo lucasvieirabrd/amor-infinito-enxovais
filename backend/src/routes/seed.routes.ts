@@ -8,6 +8,73 @@ import { v4 as uuidv4 } from 'uuid';
 const seedRouter = Router();
 
 /**
+ * POST /seed/init
+ * Inicializa o banco de dados criando as tabelas e o usuário admin
+ * Apenas para uso inicial - deve ser removido em produção após criar o primeiro admin
+ */
+seedRouter.post('/init', async (req: Request, res: Response) => {
+  try {
+    console.log('🔄 Iniciando inicialização do banco de dados...');
+
+    // Criar usuário admin
+    console.log('👤 Criando usuário admin...');
+
+    const adminEmail = 'admin@amorinfinito.com';
+    const adminPassword = 'AmorInfinito@2026';
+    const adminName = 'Lucas';
+    const adminRole = 'admin';
+
+    // Verificar se o admin já existe
+    const existingAdmin = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, adminEmail))
+      .limit(1);
+
+    if (existingAdmin.length > 0) {
+      return res.status(409).json({
+        status: 'warning',
+        message: 'Admin já existe no banco de dados',
+        email: adminEmail,
+      });
+    }
+
+    // Hash da senha
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+
+    // Criar o usuário admin
+    const adminId = uuidv4();
+    await db.insert(users).values({
+      id: adminId,
+      name: adminName,
+      email: adminEmail,
+      password: hashedPassword,
+      role: adminRole,
+    });
+
+    console.log('✅ Usuário admin criado com sucesso!');
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Banco de dados inicializado com sucesso',
+      admin: {
+        id: adminId,
+        name: adminName,
+        email: adminEmail,
+        role: adminRole,
+      },
+    });
+  } catch (error) {
+    console.error('Erro ao inicializar banco de dados:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Erro ao inicializar banco de dados',
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+    });
+  }
+});
+
+/**
  * POST /seed/create-admin
  * Cria um usuário admin com as credenciais fornecidas
  * Apenas para uso inicial - deve ser removido em produção após criar o primeiro admin
