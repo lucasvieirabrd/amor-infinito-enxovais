@@ -23,6 +23,7 @@ export class GoogleSheetsService {
     let credentials;
     try {
       credentials = JSON.parse(credentialsJson);
+      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
       console.log('Parsed credentials successfully.');
     } catch (parseError: any) {
       console.error('Erro ao fazer JSON.parse de GOOGLE_SERVICE_ACCOUNT_JSON:', parseError.message);
