@@ -40,6 +40,10 @@ export const Customers: React.FC = () => {
       setIsModalOpen(false);
       setFormData({});
     },
+    onError: (error: any) => {
+      console.error("Erro ao cadastrar cliente:", error);
+      alert(`Erro ao cadastrar cliente: ${error.response?.data?.message || error.message || 'Erro desconhecido'}`);
+    },
   });
 
   // Integração ViaCEP
@@ -69,11 +73,7 @@ export const Customers: React.FC = () => {
     registerMutation.mutate(formData);
   };
 
-  // Adicionar onError para depurar falhas na mutação
-  registerMutation.onError = (error) => {
-    console.error("Erro ao cadastrar cliente:", error);
-    alert(`Erro ao cadastrar cliente: ${error.message || 'Erro desconhecido'}`);
-  };
+
 
   return (
     <div className="space-y-6">
