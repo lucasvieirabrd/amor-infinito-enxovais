@@ -12,11 +12,15 @@ export class GoogleSheetsService {
 
   constructor() {
     this.spreadsheetId = process.env.GOOGLE_SHEET_ID || '';
-    const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || '';
+    const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!credentialsJson) {
+      throw new AppError('GOOGLE_SERVICE_ACCOUNT_JSON não configurado.', 500);
+    }
+    const credentials = JSON.parse(credentialsJson);
 
     // Configuração de autenticação via Service Account usando o arquivo JSON
     this.auth = new google.auth.GoogleAuth({
-      keyFile: credentialsPath,
+      credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
