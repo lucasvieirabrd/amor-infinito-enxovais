@@ -6,6 +6,7 @@ import { saleRouter } from './sale.routes';
 import { installmentRouter } from './installment.routes';
 import { webhookRouter } from './webhook.routes';
 import { messageRouter } from './message.routes';
+import { seedRouter } from './seed.routes';
 
 const routes = Router();
 
@@ -16,5 +17,6 @@ routes.use('/sales', saleRouter);
 routes.use('/installments', installmentRouter);
 routes.use('/webhook', webhookRouter);
 routes.use('/messages', messageRouter);
+routes.use('/seed', seedRouter);
 
 export { routes };
