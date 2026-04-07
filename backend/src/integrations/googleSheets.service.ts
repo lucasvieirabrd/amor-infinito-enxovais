@@ -24,6 +24,7 @@ export class GoogleSheetsService {
     try {
       credentials = JSON.parse(credentialsJson);
       credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+      console.log('Private key after \\n replacement:', credentials.private_key.substring(0, 50) + '...' + credentials.private_key.substring(credentials.private_key.length - 50));
       console.log('Private key snippet:', credentials.private_key.substring(0, 30), '...', credentials.private_key.substring(credentials.private_key.length - 30));
       console.log('Parsed credentials successfully.');
     } catch (parseError: any) {
@@ -31,8 +32,8 @@ export class GoogleSheetsService {
       throw new AppError('Erro ao processar credenciais do Google Sheets', 500);
     }
 
-    // Configuração de autenticação via Service Account usando o arquivo JSON
-    this.auth = new google.auth.GoogleAuth({
+    // Configuração de autenticação via Service Account usando o arquivo JSON    console.log('Attempting to initialize GoogleAuth with credentials:', { client_email: credentials.client_email, project_id: credentials.project_id });
+    const auth = new google.auth.GoogleAuth({
       credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
