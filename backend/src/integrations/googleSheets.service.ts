@@ -49,29 +49,27 @@ export class GoogleSheetsService {
    * Lê todos os produtos da planilha do Google Sheets.
    * Assume que a primeira linha é o cabeçalho e as colunas são: SKU, Nome, Preço, Quantidade.
    */
-  async getProductsFromSheet(range = 'Estoque!A2:D') {
-    try {
-      const response = await this.sheets.spreadsheets.values.get({
-        spreadsheetId: this.spreadsheetId,
-        range,
-      });
-
-      const rows = response.data.values;
-      if (!rows || rows.length === 0) {
-        return [];
-      }
-
-      return rows.map((row: any[]) => ({
-        sku: row[0] || '',
-        name: row[1] || '',
-        price: row[2] ? parseFloat(row[2].toString().replace(',', '.')) : 0,
-        quantity: row[3] ? parseInt(row[3].toString(), 10) : 0,
-      }));
-    } catch (error: any) {
-      console.error('Erro ao ler planilha do Google Sheets:', error.message);
-      throw new AppError('Falha na integração com Google Sheets', 502);
+  async getProductsFromSheet(range = 'Página1!A2:H') {
+  try {
+    const response = await this.sheets.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range,
+    });
+    const rows = response.data.values;
+    if (!rows || rows.length === 0) {
+      return [];
     }
+    return rows.map((row: any[]) => ({
+      sku: row[0] || '',
+      name: row[1] || '',
+      price: row[6] ? parseFloat(row[6].toString().replace('R$', '').replace('.', '').replace(',', '.').trim()) : 0,
+      quantity: row[7] ? parseInt(row[7].toString(), 10) : 0,
+    }));
+  } catch (error: any) {
+    console.error('Erro ao ler planilha do Google Sheets:', error.message);
+    throw new AppError('Falha na integração com Google Sheets', 502);
   }
+}
 
   /**
    * Atualiza a quantidade de um produto na planilha com base no SKU.
@@ -81,7 +79,7 @@ export class GoogleSheetsService {
       // Primeiro, localizamos a linha do SKU
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Estoque!A2:A',
+        range: 'Página1!A2:A',
       });
 
       const rows = response.data.values;
