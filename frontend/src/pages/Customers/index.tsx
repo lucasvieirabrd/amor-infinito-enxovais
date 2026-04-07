@@ -22,6 +22,7 @@ export const Customers: React.FC = () => {
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Customer>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // Busca de clientes via API
@@ -35,15 +36,21 @@ export const Customers: React.FC = () => {
 
   // Mutação para cadastrar novo cliente
   const registerMutation = useMutation({
-    mutationFn: (newCustomer: Partial<Customer>) => api.post('/customers', newCustomer),
+    mutationFn: (newCustomer: Partial<Customer>) => {
+      if (editingId) {
+        return api.put(`/customers/${editingId}`, newCustomer);
+      }
+      return api.post('/customers', newCustomer);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       setIsModalOpen(false);
       setFormData({});
+      setEditingId(null);
     },
     onError: (error: any) => {
-      console.error("Erro ao cadastrar cliente:", error);
-      alert(`Erro ao cadastrar cliente: ${error.response?.data?.message || error.message || 'Erro desconhecido'}`);
+      console.error("Erro ao salvar cliente:", error);
+      alert(`Erro ao salvar cliente: ${error.response?.data?.message || error.message || 'Erro desconhecido'}`);
     },
   });
 
@@ -72,6 +79,18 @@ export const Customers: React.FC = () => {
     e.preventDefault();
     console.log("Dados do formulário enviados:", formData);
     registerMutation.mutate(formData);
+  };
+
+  const handleEdit = (customer: Customer) => {
+    setEditingId(customer.id);
+    setFormData(customer);
+    setIsModalOpen(true);
+  };
+
+  const handleSell = (customer: Customer) => {
+    // Navegar para a página de vendas com o cliente pré-selecionado
+    // Isso será implementado com React Router
+    window.location.href = `/sales?customerId=${customer.id}`;
   };
 
   const columns = [
@@ -105,6 +124,31 @@ export const Customers: React.FC = () => {
         <span>{value ? `${value}/${item.addressState}` : '-'}</span>
       ),
     },
+    {
+      key: 'actions' as const,
+      label: 'Ações',
+      render: (_: any, item: Customer) => (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleEdit(item)}
+            className="flex items-center gap-1"
+          >
+            <FiEdit size={16} />
+            Editar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => handleSell(item)}
+            className="flex items-center gap-1"
+          >
+            Vender
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -118,7 +162,11 @@ export const Customers: React.FC = () => {
         <Button
           variant="primary"
           size="lg"
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setEditingId(null);
+            setFormData({});
+            setIsModalOpen(true);
+          }}
           className="flex items-center gap-2"
         >
           <FiPlus size={20} />
@@ -154,17 +202,25 @@ export const Customers: React.FC = () => {
         )}
       </Card>
 
-      {/* Modal de Cadastro */}
+      {/* Modal de Cadastro/Edição */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Cadastrar Novo Cliente"
+        onClose={() => {
+          setIsModalOpen(false);
+          setFormData({});
+          setEditingId(null);
+        }}
+        title={editingId ? "Editar Cliente" : "Cadastrar Novo Cliente"}
         size="lg"
         footer={
           <>
             <Button
               variant="secondary"
-              onClick={() => setIsModalOpen(false)}
+              onClick={() => {
+                setIsModalOpen(false);
+                setFormData({});
+                setEditingId(null);
+              }}
             >
               Cancelar
             </Button>
@@ -174,7 +230,7 @@ export const Customers: React.FC = () => {
               loading={registerMutation.isPending}
               onClick={handleSubmit}
             >
-              Salvar Cliente
+              {editingId ? 'Atualizar Cliente' : 'Salvar Cliente'}
             </Button>
           </>
         }
