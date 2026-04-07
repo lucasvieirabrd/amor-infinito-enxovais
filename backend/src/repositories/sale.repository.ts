@@ -106,4 +106,52 @@ export class SaleRepository {
       limit,
     };
   }
+
+  async listWithFilters(filters: any) {
+    const { page = 1, limit = 10, customerId, paymentMethod, startDate, endDate, search } = filters;
+    const offset = (page - 1) * limit;
+
+    let query = db.select().from(sales).where(isNull(sales.deletedAt));
+
+    if (customerId) {
+      query = query.where(eq(sales.customerId, customerId));
+    }
+
+    if (paymentMethod) {
+      query = query.where(eq(sales.paymentMethod, paymentMethod));
+    }
+
+    if (startDate) {
+      query = query.where(sql`${sales.saleDate} >= ${startDate}`);
+    }
+
+    if (endDate) {
+      query = query.where(sql`${sales.saleDate} <= ${endDate}`);
+    }
+
+    const data = await query
+      .limit(limit)
+      .offset(offset)
+      .orderBy(sql`${sales.createdAt} DESC`);
+
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(sales)
+      .where(isNull(sales.deletedAt));
+
+    return {
+      data,
+      total: countResult[0].count,
+      page,
+      limit,
+    };
+  }
+
+  async softDelete(tx: MySqlTransaction<any, any, any, any>, saleId: string) {
+    await tx.update(sales).set({ deletedAt: new Date() }).where(eq(sales.id, saleId));
+  }
+
+  async updateInstallmentStatus(tx: MySqlTransaction<any, any, any, any>, installmentId: string, status: string) {
+    await tx.update(installments).set({ status }).where(eq(installments.id, installmentId));
+  }
 }

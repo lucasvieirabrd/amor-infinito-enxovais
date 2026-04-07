@@ -47,4 +47,33 @@ export class SaleController {
     const sale = await saleService.getById(id);
     return res.json(sale);
   }
+
+  async listWithFilters(req: Request, res: Response) {
+    const listSchema = z.object({
+      page: z.string().optional().transform(v => Number(v) || 1),
+      limit: z.string().optional().transform(v => Number(v) || 10),
+      customerId: z.string().optional(),
+      paymentMethod: z.enum(['cash', 'credit_card', 'installment']).optional(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+      search: z.string().optional(),
+    });
+
+    const filters = listSchema.parse(req.query);
+    const result = await saleService.listWithFilters(filters);
+
+    return res.json(result);
+  }
+
+  async cancel(req: Request, res: Response) {
+    const { id } = req.params;
+    const userRole = req.user!.role;
+
+    if (userRole !== 'admin') {
+      return res.status(403).json({ error: 'Apenas administradores podem cancelar vendas' });
+    }
+
+    const result = await saleService.cancel(id);
+    return res.json(result);
+  }
 }

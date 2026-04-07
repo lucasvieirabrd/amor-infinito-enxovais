@@ -181,7 +181,10 @@ export const Messages: React.FC = () => {
                       </p>
                       <p className="text-xs text-gray-600 truncate">{conv.lastMessage}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {format(new Date(conv.lastMessageAt), 'HH:mm')}
+                        {(() => {
+                          const date = new Date(conv.lastMessageAt);
+                          return isNaN(date.getTime()) ? '-' : format(date, 'HH:mm');
+                        })()}
                       </p>
                     </div>
                     {conv.tag !== 'none' && (() => {
@@ -268,7 +271,12 @@ export const Messages: React.FC = () => {
                     <div className={`flex items-center gap-1 mt-1 text-xs ${
                       msg.direction === 'outbound' ? 'text-white text-opacity-70' : 'text-gray-500'
                     }`}>
-                      <span>{format(new Date(msg.timestamp), 'HH:mm')}</span>
+                      <span>
+                      {(() => {
+                        const date = new Date(msg.timestamp);
+                        return isNaN(date.getTime()) ? '-' : format(date, 'HH:mm');
+                      })()}
+                    </span>
                       {msg.direction === 'outbound' && (
                         msg.status === 'read' ? (
                           <FiCheckCircle size={14} />

@@ -73,10 +73,11 @@ export class ProductService {
         
         if (localProduct) {
           // Atualiza se houver diferença de quantidade ou preço
-          if (localProduct.quantity !== sheetProduct.quantity || parseFloat(localProduct.price.toString()) !== sheetProduct.price) {
+          const localPrice = typeof localProduct.price === 'string' ? parseFloat(localProduct.price) : localProduct.price;
+          if (localProduct.quantity !== sheetProduct.quantity || localPrice !== sheetProduct.price) {
             await productRepository.update(localProduct.id, {
               quantity: sheetProduct.quantity,
-              price: sheetProduct.price.toString(),
+              price: sheetProduct.price,
               name: sheetProduct.name, // Opcional: atualizar nome também
             });
           }
@@ -85,7 +86,7 @@ export class ProductService {
           await productRepository.create({
             sku: sheetProduct.sku,
             name: sheetProduct.name,
-            price: sheetProduct.price.toString(),
+            price: sheetProduct.price,
             quantity: sheetProduct.quantity,
           });
         }

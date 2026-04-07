@@ -10,6 +10,8 @@ saleRouter.use(ensureAuthenticated);
 
 saleRouter.post('/', saleController.register);
 saleRouter.get('/', saleController.list);
+saleRouter.get('/history', saleController.listWithFilters);
 saleRouter.get('/:id', saleController.getById);
+saleRouter.delete('/:id', saleController.cancel);
 
 export { saleRouter };

@@ -35,6 +35,7 @@ export const Sales: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit_card' | 'installment'>('cash');
   const [installmentsCount, setInstallmentsCount] = useState(1);
   const [firstDueDate, setFirstDueDate] = useState(format(addMonths(new Date(), 1), 'yyyy-MM-dd'));
+  const [downPayment, setDownPayment] = useState(0);
   const [isSuccess, setIsSuccess] = useState(false);
 
   const queryClient = useQueryClient();
@@ -131,6 +132,8 @@ export const Sales: React.FC = () => {
       })),
       installmentsCount: paymentMethod === 'installment' ? installmentsCount : undefined,
       saleDate: new Date().toISOString(),
+      downPayment: paymentMethod === 'installment' ? downPayment : 0,
+      firstDueDate: paymentMethod === 'installment' ? firstDueDate : undefined,
     };
 
     registerSaleMutation.mutate(saleData);
@@ -342,13 +345,26 @@ export const Sales: React.FC = () => {
               {paymentMethod === 'installment' && (
                 <div className="space-y-4 p-4 bg-background rounded-lg border border-gray-200">
                   <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">Valor de Entrada (opcional)</label>
+                    <input 
+                      type="number"
+                      value={downPayment}
+                      onChange={e => setDownPayment(Math.max(0, parseFloat(e.target.value) || 0))}
+                      placeholder="0.00"
+                      className="input-base w-full"
+                      min="0"
+                      max={total}
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-2">Número de Parcelas</label>
                     <select 
                       value={installmentsCount}
                       onChange={e => setInstallmentsCount(Number(e.target.value))}
                       className="input-base w-full"
                     >
-                      {[1,2,3,4,5,6,7,8,9,10,12].map(n => (
+                      {[1,2,3,4,5,6,7,8,9,10,12,15,20,24,30].map(n => (
                         <option key={n} value={n}>{n}x</option>
                       ))}
                     </select>
@@ -362,9 +378,23 @@ export const Sales: React.FC = () => {
                       className="input-base w-full"
                     />
                   </div>
-                  <div className="pt-3 border-t border-gray-200">
-                    <p className="text-xs text-gray-600">Valor da Parcela:</p>
-                    <p className="text-lg font-bold text-primary">R$ {(total / installmentsCount).toFixed(2)}</p>
+                  <div className="pt-3 border-t border-gray-200 space-y-2">
+                    <div className="flex justify-between text-xs text-gray-600">
+                      <span>Total:</span>
+                      <span className="font-semibold">R$ {total.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-600">
+                      <span>Entrada:</span>
+                      <span className="font-semibold">R$ {downPayment.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-600">
+                      <span>A Financiar:</span>
+                      <span className="font-semibold">R$ {(total - downPayment).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-bold text-primary pt-2 border-t border-gray-200">
+                      <span>Valor da Parcela:</span>
+                      <span>R$ {((total - downPayment) / installmentsCount).toFixed(2)}</span>
+                    </div>
                   </div>
                 </div>
               )}

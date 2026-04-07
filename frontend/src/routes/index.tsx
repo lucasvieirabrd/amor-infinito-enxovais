@@ -6,6 +6,7 @@ import { Dashboard } from '../pages/Dashboard';
 import { Customers } from '../pages/Customers';
 import { Products } from '../pages/Products';
 import { Sales } from '../pages/Sales';
+import { SalesHistory } from '../pages/SalesHistory';
 import { Installments } from '../pages/Installments';
 import { Messages } from '../pages/Messages';
 import { Billing } from '../pages/Billing';
@@ -43,6 +44,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="/customers" element={<Customers />} />
         <Route path="/products" element={<Products />} />
         <Route path="/sales" element={<Sales />} />
+        <Route path="/sales/history" element={<SalesHistory />} />
         <Route path="/installments" element={<Installments />} />
         <Route path="/messages" element={<Messages />} />
         <Route path="/billing" element={<Billing />} />

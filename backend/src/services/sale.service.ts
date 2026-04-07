@@ -118,4 +118,58 @@ export class SaleService {
     }
     return sale;
   }
+
+  async listWithFilters(filters: any) {
+    const { page = 1, limit = 10, customerId, paymentMethod, startDate, endDate, search } = filters;
+    return saleRepository.listWithFilters({
+      page,
+      limit,
+      customerId,
+      paymentMethod,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      search,
+    });
+  }
+
+  async cancel(saleId: string) {
+    return await db.transaction(async (tx) => {
+      // 1. Buscar a venda
+      const sale = await saleRepository.findById(saleId);
+      if (!sale) {
+        throw new AppError('Venda não encontrada', 404);
+      }
+
+      if (sale.deletedAt) {
+        throw new AppError('Esta venda já foi cancelada', 400);
+      }
+
+      // 2. Reverter estoque dos produtos
+      const saleItems = sale.items || [];
+      for (const item of saleItems) {
+        const product = await productRepository.findByIdForUpdate(tx, item.productId);
+        if (product) {
+          const newQuantity = product.quantity + item.quantity;
+          await productRepository.updateStock(tx, product.id, newQuantity);
+
+          // Atualizar estoque no Google Sheets
+          if (product.sku) {
+            await googleSheetsService.updateStockInSheet(product.sku, newQuantity);
+          }
+        }
+      }
+
+      // 3. Cancelar as parcelas do crediário
+      if (sale.installments && sale.installments.length > 0) {
+        for (const installment of sale.installments) {
+          await saleRepository.updateInstallmentStatus(tx, installment.id, 'canceled');
+        }
+      }
+
+      // 4. Soft delete da venda
+      await saleRepository.softDelete(tx, saleId);
+
+      return { message: 'Venda cancelada com sucesso', saleId };
+    });
+  }
 }
