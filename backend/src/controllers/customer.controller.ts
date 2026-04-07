@@ -9,9 +9,9 @@ export class CustomerController {
     const registerSchema = z.object({
       name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
       phone: z.string().min(10, 'Telefone inválido'),
-      cpf: z.string().length(14, 'CPF inválido'), // Esperado formato 000.000.000-00
+      cpf: z.string().regex(/^\d{11}$/, 'CPF deve ter 11 dígitos'),
       email: z.string().email('E-mail inválido').optional().or(z.literal('')),
-      cep: z.string().length(9, 'CEP inválido').optional().or(z.literal('')),
+      cep: z.string().regex(/^\d{8}$/, 'CEP deve ter 8 dígitos').optional().or(z.literal('')),
       addressStreet: z.string().optional().or(z.literal('')),
       addressNeighborhood: z.string().optional().or(z.literal('')),
       addressCity: z.string().optional().or(z.literal('')),
@@ -48,9 +48,9 @@ export class CustomerController {
     const updateSchema = z.object({
       name: z.string().min(3).optional(),
       phone: z.string().min(10).optional(),
-      cpf: z.string().length(14).optional(),
+      cpf: z.string().regex(/^\d{11}$/, 'CPF deve ter 11 dígitos').optional(),
       email: z.string().email().optional().or(z.literal('')),
-      cep: z.string().length(9).optional().or(z.literal('')),
+      cep: z.string().regex(/^\d{8}$/, 'CEP deve ter 8 dígitos').optional().or(z.literal('')),
       addressStreet: z.string().optional().or(z.literal('')),
       addressNeighborhood: z.string().optional().or(z.literal('')),
       addressCity: z.string().optional().or(z.literal('')),

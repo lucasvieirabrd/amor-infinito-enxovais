@@ -15,7 +15,14 @@ export class CustomerService {
       throw new AppError('Este telefone já está cadastrado para outro cliente', 400);
     }
 
-    const customer = await customerRepository.create(data);
+    // Formatar CPF e CEP antes de salvar
+    const formattedData = {
+      ...data,
+      cpf: data.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'),
+      cep: data.cep ? data.cep.replace(/(\d{5})(\d{3})/, '$1-$2') : undefined,
+    };
+
+    const customer = await customerRepository.create(formattedData);
 
     if (!customer) {
       throw new AppError('Erro ao cadastrar cliente', 500);
@@ -56,7 +63,14 @@ export class CustomerService {
       }
     }
 
-    return customerRepository.update(id, data);
+    // Formatar CPF e CEP antes de atualizar
+    const formattedData = {
+      ...data,
+      cpf: data.cpf ? data.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : data.cpf,
+      cep: data.cep ? data.cep.replace(/(\d{5})(\d{3})/, '$1-$2') : data.cep,
+    };
+
+    return customerRepository.update(id, formattedData);
   }
 
   async delete(id: string) {
