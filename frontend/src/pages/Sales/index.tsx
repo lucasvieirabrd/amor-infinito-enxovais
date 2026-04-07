@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { 
   FiSearch, FiUser, FiShoppingCart, FiPlus, FiMinus, 
@@ -28,6 +29,7 @@ interface CartItem {
 }
 
 export const Sales: React.FC = () => {
+  const navigate = useNavigate();
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [productSearch, setProductSearch] = useState('');
@@ -163,9 +165,17 @@ export const Sales: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Vendas</h1>
-        <p className="text-gray-600 mt-1">Registre novas vendas e crediários</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Vendas</h1>
+          <p className="text-gray-600 mt-1">Registre novas vendas e crediários</p>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={() => navigate('/sales/history')}
+        >
+          Ver Histórico
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -364,7 +374,7 @@ export const Sales: React.FC = () => {
                       onChange={e => setInstallmentsCount(Number(e.target.value))}
                       className="input-base w-full"
                     >
-                      {[1,2,3,4,5,6,7,8,9,10,12,15,20,24,30].map(n => (
+                      {Array.from({length: 30}, (_, i) => i + 1).map(n => (
                         <option key={n} value={n}>{n}x</option>
                       ))}
                     </select>

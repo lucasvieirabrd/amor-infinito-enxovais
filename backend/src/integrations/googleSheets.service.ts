@@ -47,7 +47,20 @@ export class GoogleSheetsService {
       }
       return rows.map((row: any[]) => {
         const rawPrice = row[6] ? row[6].toString() : '0';
-        const cleanPrice = rawPrice.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+        let calculatedPrice = 0;
+
+        // Verificar se o preco esta no formato 12x R$ 200,00
+        const match = rawPrice.match(/(\d+)x\s*R\$\s*([\d.,]+)/);
+        if (match) {
+          const installments = parseInt(match[1], 10);
+          const unitPrice = parseFloat(match[2].replace(/\./g, '').replace(',', '.'));
+          calculatedPrice = installments * unitPrice;
+        } else {
+          // Fallback: tentar parse normal
+          const cleanPrice = rawPrice.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+          calculatedPrice = parseFloat(cleanPrice) || 0;
+        }
+
         return {
           sku: row[0] || '',
           name: row[1] || '',
@@ -55,7 +68,8 @@ export class GoogleSheetsService {
           description: row[3] || '',
           specifications: row[4] || '',
           imageUrl: row[5] || '',
-          price: parseFloat(cleanPrice) || 0,
+          price: calculatedPrice,
+          displayPrice: rawPrice,
           quantity: row[7] ? parseInt(row[7].toString(), 10) : 0,
         };
       });

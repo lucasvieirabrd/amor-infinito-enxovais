@@ -229,7 +229,7 @@ export const Messages: React.FC = () => {
                       Tag
                     </Button>
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 hidden group-hover:block z-10">
-                      {Object.entries(tagColors).map(([key, value]) => {
+                      {(Object.entries(tagColors) || []).map(([key, value]) => {
                         let badgeVariant: 'success' | 'error' | 'warning' | 'info' = 'info';
                         if (key === 'cobrança') badgeVariant = 'error';
                         else if (key === 'lead') badgeVariant = 'info';
@@ -242,7 +242,7 @@ export const Messages: React.FC = () => {
                             className="w-full text-left px-4 py-2 hover:bg-background transition-colors first:rounded-t-lg last:rounded-b-lg"
                           >
                             <Badge variant={badgeVariant}>
-                              {value.label}
+                              {value?.label || key}
                             </Badge>
                           </button>
                         );
