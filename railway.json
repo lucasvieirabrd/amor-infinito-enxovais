@@ -1,32 +1,11 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
-  "services": {
-    "backend": {
-      "build": {
-        "builder": "DOCKERFILE",
-        "dockerfilePath": "backend/Dockerfile",
-        "rootDirectory": "backend",
-        "context": "."
-      },
-      "deploy": {
-        "startCommand": "npm start",
-        "healthcheckPath": "/health",
-        "healthcheckTimeout": 60,
-        "restartPolicyType": "ON_FAILURE"
-      }
-    },
-    "frontend": {
-      "build": {
-        "builder": "DOCKERFILE",
-        "dockerfilePath": "frontend/Dockerfile",
-        "rootDirectory": "frontend",
-        "context": "."
-      },
-      "deploy": {
-        "healthcheckPath": "/",
-        "healthcheckTimeout": 60,
-        "restartPolicyType": "ON_FAILURE"
-      }
-    }
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "backend/Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "node dist/app.js",
+    "restartPolicyType": "ON_FAILURE"
   }
 }
