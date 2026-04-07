@@ -9,6 +9,7 @@ interface Product {
   name: string;
   sku: string;
   price: string | number;
+  priceDisplay?: string;
   quantity: number;
   minStockLevel: number;
 }
@@ -125,7 +126,7 @@ export const Products: React.FC = () => {
                   <div>
                     <p className="text-xs text-gray-500">Preço de Venda</p>
                     <p className="text-lg font-bold text-primary">
-                      R$ {parseFloat(product.price.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      {product.priceDisplay || `R$ ${parseFloat(product.price.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                     </p>
                   </div>
                   <Button variant="secondary" size="sm" className="flex items-center gap-1">

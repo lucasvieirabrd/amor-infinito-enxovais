@@ -20,6 +20,7 @@ interface Product {
   name: string;
   sku: string;
   price: string | number;
+  priceDisplay?: string;
   quantity: number;
 }
 

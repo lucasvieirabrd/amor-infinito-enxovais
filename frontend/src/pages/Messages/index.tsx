@@ -195,7 +195,7 @@ export const Messages: React.FC = () => {
                       
                       return (
                         <Badge variant={badgeVariant} className="flex-shrink-0">
-                          {tagColors[conv.tag].label}
+                          {tagColors[conv.tag]?.label || conv.tag}
                         </Badge>
                       );
                     })()}
