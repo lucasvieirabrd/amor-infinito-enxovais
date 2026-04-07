@@ -1,4 +1,7 @@
 import { google } from 'googleapis';
+
+console.log('GOOGLE_SERVICE_ACCOUNT_JSON exists:', !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+console.log('GOOGLE_SHEET_ID:', process.env.GOOGLE_SHEET_ID);
 import { AppError } from '../utils/AppError';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -13,10 +16,18 @@ export class GoogleSheetsService {
   constructor() {
     this.spreadsheetId = process.env.GOOGLE_SHEET_ID || '';
     const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    console.log('Raw GOOGLE_SERVICE_ACCOUNT_JSON length:', credentialsJson?.length);
     if (!credentialsJson) {
       throw new AppError('GOOGLE_SERVICE_ACCOUNT_JSON não configurado.', 500);
     }
-    const credentials = JSON.parse(credentialsJson);
+    let credentials;
+    try {
+      credentials = JSON.parse(credentialsJson);
+      console.log('Parsed credentials successfully.');
+    } catch (parseError: any) {
+      console.error('Erro ao fazer JSON.parse de GOOGLE_SERVICE_ACCOUNT_JSON:', parseError.message);
+      throw new AppError('Erro ao processar credenciais do Google Sheets', 500);
+    }
 
     // Configuração de autenticação via Service Account usando o arquivo JSON
     this.auth = new google.auth.GoogleAuth({
