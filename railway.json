@@ -5,6 +5,7 @@
       "build": {
         "builder": "DOCKERFILE",
         "dockerfilePath": "backend/Dockerfile",
+        "rootDirectory": "backend",
         "context": "."
       },
       "deploy": {
@@ -18,6 +19,7 @@
       "build": {
         "builder": "DOCKERFILE",
         "dockerfilePath": "frontend/Dockerfile",
+        "rootDirectory": "frontend",
         "context": "."
       },
       "deploy": {
