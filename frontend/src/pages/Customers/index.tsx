@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
-import { FiSearch, FiPlus, FiUser, FiPhone, FiMapPin, FiX } from 'react-icons/fi';
+import { FiSearch, FiPlus, FiMapPin, FiX } from 'react-icons/fi';
 import axios from 'axios';
 
 interface Customer {

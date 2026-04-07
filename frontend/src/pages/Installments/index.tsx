@@ -2,11 +2,10 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import { 
-  FiSearch, FiAlertTriangle, FiCheckCircle, FiClock, 
+  FiSearch, FiAlertTriangle, 
   FiDollarSign, FiCalendar, FiArrowLeft, FiX, FiRotateCcw 
 } from 'react-icons/fi';
 import { format, isBefore, startOfDay } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 interface Installment {
   id: string;

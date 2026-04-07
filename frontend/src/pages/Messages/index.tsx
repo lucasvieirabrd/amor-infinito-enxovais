@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import socket from '../../services/socket';
 import { 
-  FiSearch, FiSend, FiUser, FiClock, 
-  FiTag, FiCheck, FiCheckCircle, FiInfo 
+  FiSearch, FiSend, FiUser, 
+  FiCheck, FiCheckCircle, FiInfo 
 } from 'react-icons/fi';
 import { format } from 'date-fns';
 
@@ -45,7 +45,7 @@ export const Messages: React.FC = () => {
   });
 
   // Buscar histórico de chat
-  const { data: messages, isLoading: isLoadingMessages } = useQuery({
+  const { data: messages } = useQuery({
     queryKey: ['chat-history', selectedConversation?.fromPhone],
     queryFn: async () => {
       if (!selectedConversation) return [];
