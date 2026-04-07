@@ -65,4 +65,13 @@ export class GoogleSheetsService {
                 .toString()
                 .replace('R$', '')
                 .replace(/\./g, '')
-                .replace(',', '
+                price: row[6]
+  ? parseFloat(
+      row[6]
+        .toString()
+        .replace('R$', '')
+        .replace(/\./g, '')
+        .replace(',', '.')
+        .trim()
+    )
+  : 0,
