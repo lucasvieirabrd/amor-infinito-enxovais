@@ -9,6 +9,9 @@ import { routes } from './routes';
 import { AppError } from './utils/AppError';
 import { setupCronJobs } from './cron';
 import { setupWebSocket } from './websocket';
+import { migrate } from 'drizzle-orm/mysql2/migrator';
+import { db } from './database';
+import path from 'path';
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -86,10 +89,32 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 // Inicializar Cron Jobs
 setupCronJobs();
 
+// Função para iniciar o servidor com migrações
+async function startServer() {
+  try {
+    // Executar migrações do Drizzle
+    console.log('📦 Executando migrações do banco de dados...');
+    const migrationsFolder = path.join(__dirname, '../drizzle');
+    await migrate(db, { migrationsFolder });
+    console.log('✅ Migrações executadas com sucesso!');
+  } catch (error) {
+    console.error('❌ Erro ao executar migrações:', error);
+    // Continuar mesmo se as migrações falharem (tabelas podem já existir)
+  }
+
+  // Iniciar o servidor
+  if (process.env.NODE_ENV !== 'test') {
+    httpServer.listen(port, () => {
+      console.log(`[${process.env.TZ}] Servidor HTTP e WebSocket rodando na porta ${port}`);
+    });
+  }
+}
+
 // Iniciar o servidor
 if (process.env.NODE_ENV !== 'test') {
-  httpServer.listen(port, () => {
-    console.log(`[${process.env.TZ}] Servidor HTTP e WebSocket rodando na porta ${port}`);
+  startServer().catch(error => {
+    console.error('❌ Erro ao iniciar servidor:', error);
+    process.exit(1);
   });
 }
 
