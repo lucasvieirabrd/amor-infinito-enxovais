@@ -12,3 +12,6 @@ backend/dist
 
 # Drizzle
 backend/drizzle
+
+# Google Credentials (MANTIDO PARA DEPLOY RAILWAY)
+!backend/src/config/amorinfinito-488020-0b15f07c25f0.json
