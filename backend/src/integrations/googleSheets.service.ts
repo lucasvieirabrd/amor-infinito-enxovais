@@ -35,7 +35,7 @@ export class GoogleSheetsService {
     console.log('Google Sheets API client initialized.');
   }
 
-  async getProductsFromSheet(range = 'Pagina1!A2:H') {
+  async getProductsFromSheet(range = 'Página1!A2:H') {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -69,14 +69,14 @@ export class GoogleSheetsService {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Pagina1!A2:A',
+        range: 'Página1!A2:A',
       });
       const rows = response.data.values;
       if (!rows) return;
       const rowIndex = rows.findIndex((row: any[]) => row[0] === sku);
       if (rowIndex === -1) return;
       const actualRow = rowIndex + 2;
-      const updateRange = 'Pagina1!H' + actualRow;
+      const updateRange = 'Página1!H' + actualRow;
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
         range: updateRange,
@@ -94,7 +94,7 @@ export class GoogleSheetsService {
     try {
       await this.sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: 'Pagina1!A2:H',
+        range: 'Página1!A2:H',
         valueInputOption: 'RAW',
         requestBody: {
           values: [[
