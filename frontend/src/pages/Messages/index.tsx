@@ -31,7 +31,7 @@ interface Message {
 const tagColors: Record<string, { bg: string; text: string; label: string }> = {
   'cobrança': { bg: 'bg-error', text: 'text-white', label: 'Cobrança' },
   'lead': { bg: 'bg-primary', text: 'text-white', label: 'Lead' },
-  'suporte': { bg: 'bg-secondary', text: 'text-white', label: 'Suporte' },
+  'suporte': { bg: 'bg-warning', text: 'text-white', label: 'Suporte' },
   'none': { bg: 'bg-gray-200', text: 'text-gray-700', label: 'Sem Tag' },
 };
 
@@ -124,10 +124,15 @@ export const Messages: React.FC = () => {
     }
   };
 
-  const filteredConversations = conversations?.filter(conv =>
-    conv.customerName?.toLowerCase().includes(chatSearch.toLowerCase()) ||
-    conv.fromPhone.includes(chatSearch)
-  ) || [];
+  const filteredConversations = conversations?.filter(conv => {
+    const customerName = conv.customerName || '';
+    const phone = conv.fromPhone || '';
+    const searchLower = chatSearch.toLowerCase();
+    return (
+      customerName.toLowerCase().includes(searchLower) ||
+      phone.includes(searchLower)
+    );
+  }) || [];
 
   return (
     <div className="space-y-6">
@@ -179,11 +184,18 @@ export const Messages: React.FC = () => {
                         {format(new Date(conv.lastMessageAt), 'HH:mm')}
                       </p>
                     </div>
-                    {conv.tag !== 'none' && (
-                      <Badge variant={conv.tag === 'cobrança' ? 'error' : 'info'} className="flex-shrink-0">
-                        {tagColors[conv.tag].label}
-                      </Badge>
-                    )}
+                    {conv.tag !== 'none' && (() => {
+                      let badgeVariant: 'success' | 'error' | 'warning' | 'info' = 'info';
+                      if (conv.tag === 'cobrança') badgeVariant = 'error';
+                      else if (conv.tag === 'lead') badgeVariant = 'info';
+                      else if (conv.tag === 'suporte') badgeVariant = 'warning';
+                      
+                      return (
+                        <Badge variant={badgeVariant} className="flex-shrink-0">
+                          {tagColors[conv.tag].label}
+                        </Badge>
+                      );
+                    })()}
                   </div>
                 </button>
               ))
@@ -214,17 +226,24 @@ export const Messages: React.FC = () => {
                       Tag
                     </Button>
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 hidden group-hover:block z-10">
-                      {Object.entries(tagColors).map(([key, value]) => (
-                        <button
-                          key={key}
-                          onClick={() => handleUpdateTag(key)}
-                          className="w-full text-left px-4 py-2 hover:bg-background transition-colors first:rounded-t-lg last:rounded-b-lg"
-                        >
-                          <Badge variant={key === 'cobrança' ? 'error' : key === 'lead' ? 'info' : 'warning'}>
-                            {value.label}
-                          </Badge>
-                        </button>
-                      ))}
+                      {Object.entries(tagColors).map(([key, value]) => {
+                        let badgeVariant: 'success' | 'error' | 'warning' | 'info' = 'info';
+                        if (key === 'cobrança') badgeVariant = 'error';
+                        else if (key === 'lead') badgeVariant = 'info';
+                        else if (key === 'suporte') badgeVariant = 'warning';
+                        
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => handleUpdateTag(key)}
+                            className="w-full text-left px-4 py-2 hover:bg-background transition-colors first:rounded-t-lg last:rounded-b-lg"
+                          >
+                            <Badge variant={badgeVariant}>
+                              {value.label}
+                            </Badge>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

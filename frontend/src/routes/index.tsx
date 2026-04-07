@@ -8,6 +8,8 @@ import { Products } from '../pages/Products';
 import { Sales } from '../pages/Sales';
 import { Installments } from '../pages/Installments';
 import { Messages } from '../pages/Messages';
+import { Billing } from '../pages/Billing';
+import { Settings } from '../pages/Settings';
 import { Layout } from '../components/Layout';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -43,7 +45,9 @@ export const AppRoutes: React.FC = () => {
         <Route path="/sales" element={<Sales />} />
         <Route path="/installments" element={<Installments />} />
         <Route path="/messages" element={<Messages />} />
-        {/* Rotas para Billing e Settings serão adicionadas aqui */}
+        <Route path="/billing" element={<Billing />} />
+        <Route path="/cobrança" element={<Billing />} />
+        <Route path="/settings" element={<Settings />} />
         <Route index element={<Navigate to="/dashboard" />} />
         <Route path="*" element={<Navigate to="/dashboard" />} />
       </Route>
