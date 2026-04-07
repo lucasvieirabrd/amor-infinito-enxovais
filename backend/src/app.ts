@@ -42,6 +42,15 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// Rota raiz
+app.get('/', (req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    message: 'Amor Infinito Enxovais API',
+    version: '1.0.0',
+  });
+});
+
 // Rotas da API
 app.use('/api', routes);
 
