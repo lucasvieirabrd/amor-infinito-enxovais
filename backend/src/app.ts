@@ -20,6 +20,9 @@ const app = express();
 const port = process.env.PORT || 3000;
 const httpServer = createServer(app);
 
+// Configurar Express para confiar em proxies (necessário para Railway)
+app.set('trust proxy', 1);
+
 // Inicializar WebSocket
 setupWebSocket(httpServer);
 
