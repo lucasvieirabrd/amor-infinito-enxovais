@@ -74,7 +74,6 @@ export const Customers: React.FC = () => {
     console.error("Erro ao cadastrar cliente:", error);
     alert(`Erro ao cadastrar cliente: ${error.message || 'Erro desconhecido'}`);
   };
-  };
 
   return (
     <div className="space-y-6">
