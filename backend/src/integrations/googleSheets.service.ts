@@ -24,6 +24,7 @@ export class GoogleSheetsService {
     try {
       credentials = JSON.parse(credentialsJson);
       credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+      console.log('Private key snippet:', credentials.private_key.substring(0, 30), '...', credentials.private_key.substring(credentials.private_key.length - 30));
       console.log('Parsed credentials successfully.');
     } catch (parseError: any) {
       console.error('Erro ao fazer JSON.parse de GOOGLE_SERVICE_ACCOUNT_JSON:', parseError.message);
