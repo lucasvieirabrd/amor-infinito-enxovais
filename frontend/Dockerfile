@@ -2,13 +2,15 @@ FROM node:22-slim AS build
 
 WORKDIR /app
 
-# O contexto agora é a raiz do projeto, então os arquivos estão em ./frontend
+# O contexto é a raiz do projeto
 COPY frontend/package*.json ./
 
 RUN npm install
 
+# Copia todo o conteúdo da pasta frontend para o WORKDIR
 COPY frontend/ .
 
+# Executa o build (o tsconfig.json ajustado agora é autossuficiente)
 RUN npm run build
 
 FROM nginx:stable-alpine
