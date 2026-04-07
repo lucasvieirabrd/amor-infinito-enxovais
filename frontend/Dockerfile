@@ -3,6 +3,7 @@ WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ .
+ENV VITE_API_URL=https://talented-perception-production.up.railway.app/api
 RUN npm run build
 
 FROM nginx:stable-alpine

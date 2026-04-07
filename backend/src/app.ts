@@ -32,11 +32,24 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Configuração do CORS
-// Em produção no Railway, o FRONTEND_URL deve ser o domínio público do frontend
+// Em produção no Railway, permitimos o domínio do frontend e o subdomínio do Railway
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 app.use(cors({
-  origin: [frontendUrl, 'https://essencia-humoristica-production.up.railway.app'],
-  credentials: true, // Permitir cookies
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      frontendUrl,
+      'https://essencia-humoristica-production.up.railway.app',
+      'http://localhost:5173'
+    ];
+    
+    // Permitir qualquer subdomínio do Railway em produção
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.railway.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
 }));
