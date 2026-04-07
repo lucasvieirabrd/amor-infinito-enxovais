@@ -1,11 +1,13 @@
 import React from 'react';
 import { 
-  FiTrendingUp, FiAlertTriangle, FiCheckCircle, FiDollarSign 
+  FiTrendingUp, FiAlertTriangle, FiCheckCircle, FiDollarSign, FiPackage 
 } from 'react-icons/fi';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, BarChart, Bar 
 } from 'recharts';
+import { Card, Badge, Button } from '../../components/ui';
+import { format } from 'date-fns';
 
 // Dados mockados para visualização inicial
 const salesData = [
@@ -19,141 +21,193 @@ const salesData = [
 ];
 
 const installmentData = [
-  { name: 'Em Dia', value: 85, fill: '#10B981' },
-  { name: 'Atrasado', value: 15, fill: '#EF4444' },
+  { name: 'Em Dia', value: 85, fill: '#48BB78' },
+  { name: 'Atrasado', value: 15, fill: '#FC8181' },
+];
+
+const upcomingInstallments = [
+  { id: 1, customer: 'João Silva', amount: 150.00, dueDate: '2026-04-10' },
+  { id: 2, customer: 'Maria Santos', amount: 200.00, dueDate: '2026-04-12' },
+  { id: 3, customer: 'Pedro Costa', amount: 175.50, dueDate: '2026-04-15' },
+  { id: 4, customer: 'Ana Oliveira', amount: 300.00, dueDate: '2026-04-18' },
+  { id: 5, customer: 'Carlos Ferreira', amount: 125.00, dueDate: '2026-04-20' },
+];
+
+const recentCustomers = [
+  { id: 1, name: 'João Silva', email: 'joao@email.com', phone: '(11) 98765-4321', createdAt: '2026-04-05' },
+  { id: 2, name: 'Maria Santos', email: 'maria@email.com', phone: '(11) 98765-4322', createdAt: '2026-04-04' },
+  { id: 3, name: 'Pedro Costa', email: 'pedro@email.com', phone: '(11) 98765-4323', createdAt: '2026-04-03' },
+  { id: 4, name: 'Ana Oliveira', email: 'ana@email.com', phone: '(11) 98765-4324', createdAt: '2026-04-02' },
+  { id: 5, name: 'Carlos Ferreira', email: 'carlos@email.com', phone: '(11) 98765-4325', createdAt: '2026-04-01' },
 ];
 
 export const Dashboard: React.FC = () => {
+  const today = format(new Date(), 'dd/MM/yyyy');
+
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800">Dashboard</h2>
-        <p className="text-gray-600">Visão geral da Amor Infinito Enxovais</p>
+      {/* Welcome Banner */}
+      <div className="bg-gradient-to-r from-primary to-secondary rounded-card shadow-card p-8 text-white">
+        <h1 className="text-3xl font-bold mb-2">Bem-vindo ao Amor Infinito!</h1>
+        <p className="text-white text-opacity-90">Hoje é {today}. Aqui está um resumo do seu negócio.</p>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-lg mr-4">
-            <FiTrendingUp size={24} />
+        <Card>
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-primary bg-opacity-10 text-primary rounded-lg">
+              <FiTrendingUp size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 font-medium">Total de Vendas do Mês</p>
+              <p className="text-2xl font-bold text-gray-900">R$ 12.480,00</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Vendas Hoje</p>
-            <p className="text-xl font-bold text-gray-800">R$ 1.250,00</p>
-          </div>
-        </div>
+        </Card>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center">
-          <div className="p-3 bg-green-50 text-green-600 rounded-lg mr-4">
-            <FiCheckCircle size={24} />
+        <Card>
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-success bg-opacity-10 text-success rounded-lg">
+              <FiCheckCircle size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 font-medium">Total a Receber</p>
+              <p className="text-2xl font-bold text-gray-900">R$ 8.750,00</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Recebido (Mês)</p>
-            <p className="text-xl font-bold text-gray-800">R$ 12.480,00</p>
-          </div>
-        </div>
+        </Card>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center">
-          <div className="p-3 bg-red-50 text-red-600 rounded-lg mr-4">
-            <FiAlertTriangle size={24} />
+        <Card>
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-secondary bg-opacity-10 text-secondary rounded-lg">
+              <FiAlertTriangle size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 font-medium">Parcelas Vencidas Hoje</p>
+              <p className="text-2xl font-bold text-gray-900">12</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Inadimplência</p>
-            <p className="text-xl font-bold text-gray-800">R$ 3.120,00</p>
-          </div>
-        </div>
+        </Card>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center">
-          <div className="p-3 bg-purple-50 text-purple-600 rounded-lg mr-4">
-            <FiDollarSign size={24} />
+        <Card>
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-error bg-opacity-10 text-error rounded-lg">
+              <FiDollarSign size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 font-medium">Clientes Inadimplentes</p>
+              <p className="text-2xl font-bold text-gray-900">8</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Ticket Médio</p>
-            <p className="text-xl font-bold text-gray-800">R$ 450,00</p>
-          </div>
-        </div>
+        </Card>
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-bold text-gray-800 mb-6">Evolução de Vendas (Semana)</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card title="Vendas dos Últimos 7 Dias" subtitle="Evolução diária de vendas">
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={salesData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="name" stroke="#9CA3AF" />
                 <YAxis hide />
-                <Tooltip />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '8px',
+                  }}
+                />
                 <Line 
                   type="monotone" 
                   dataKey="sales" 
-                  stroke="#4F46E5" 
+                  stroke="#6C63FF" 
                   strokeWidth={3} 
-                  dot={{ r: 4, fill: '#4F46E5' }}
+                  dot={{ r: 4, fill: '#6C63FF' }}
                   activeDot={{ r: 8 }}
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Card>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-bold text-gray-800 mb-6">Status do Crediário</h3>
+        <Card title="Status do Crediário" subtitle="Distribuição de parcelas">
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={installmentData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
                 <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" />
-                <Tooltip />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]} />
+                <YAxis dataKey="name" type="category" stroke="#9CA3AF" />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '8px',
+                  }}
+                />
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Quick Actions / Recent Activity */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">Ações Recomendadas</h3>
+      {/* Upcoming Installments and Recent Customers */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Upcoming Installments */}
+        <Card title="Próximas Parcelas a Vencer" subtitle="Próximos 15 dias">
+          <div className="space-y-3">
+            {upcomingInstallments.map((installment) => (
+              <div key={installment.id} className="flex items-center justify-between p-3 bg-background rounded-lg hover:bg-gray-200 transition-colors">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{installment.customer}</p>
+                  <p className="text-xs text-gray-500">Vence em {format(new Date(installment.dueDate), 'dd/MM/yyyy')}</p>
+                </div>
+                <p className="text-sm font-semibold text-primary">R$ {installment.amount.toFixed(2)}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Recent Customers */}
+        <Card title="Últimos Clientes Cadastrados" subtitle="Novos clientes">
+          <div className="space-y-3">
+            {recentCustomers.map((customer) => (
+              <div key={customer.id} className="flex items-center justify-between p-3 bg-background rounded-lg hover:bg-gray-200 transition-colors">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{customer.name}</p>
+                  <p className="text-xs text-gray-500">{customer.email}</p>
+                </div>
+                <Badge variant="info">{format(new Date(customer.createdAt), 'dd/MM')}</Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* Alerts and Recommendations */}
+      <Card title="Alertas e Recomendações">
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg border border-yellow-100">
-            <div className="flex items-center">
-              <FiAlertTriangle className="text-yellow-600 mr-3" size={20} />
-              <div>
-                <p className="text-sm font-bold text-yellow-800">12 Parcelas Vencidas Hoje</p>
-                <p className="text-xs text-yellow-700">A régua de cobrança automática será disparada às 08h00.</p>
-              </div>
+          <div className="flex items-start gap-4 p-4 bg-secondary bg-opacity-10 rounded-lg border border-secondary border-opacity-20">
+            <FiAlertTriangle className="text-secondary mt-1 flex-shrink-0" size={20} />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-900">12 Parcelas Vencidas Hoje</p>
+              <p className="text-xs text-gray-600 mt-1">A régua de cobrança automática será disparada às 08h00.</p>
             </div>
-            <button className="text-sm font-bold text-yellow-800 hover:underline">Ver Detalhes</button>
+            <Button variant="secondary" size="sm">Ver Detalhes</Button>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-100">
-            <div className="flex items-center">
-              <FiPackage className="text-blue-600 mr-3" size={20} />
-              <div>
-                <p className="text-sm font-bold text-blue-800">Estoque Baixo: Jogo de Lençol King</p>
-                <p className="text-xs text-blue-700">Apenas 2 unidades restantes na planilha do Google.</p>
-              </div>
+          <div className="flex items-start gap-4 p-4 bg-primary bg-opacity-10 rounded-lg border border-primary border-opacity-20">
+            <FiPackage className="text-primary mt-1 flex-shrink-0" size={20} />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-900">Estoque Baixo: Jogo de Lençol King</p>
+              <p className="text-xs text-gray-600 mt-1">Apenas 2 unidades restantes na planilha do Google.</p>
             </div>
-            <button className="text-sm font-bold text-blue-800 hover:underline">Repor Estoque</button>
+            <Button variant="secondary" size="sm">Repor Estoque</Button>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 };
-
-const FiPackage = ({ className, size }: { className?: string, size?: number }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width={size} height={size} 
-    viewBox="0 0 24 24" fill="none" 
-    stroke="currentColor" strokeWidth="2" 
-    strokeLinecap="round" strokeLinejoin="round" 
-    className={className}
-  >
-    <path d="m7.5 4.27 9 5.15" /><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" /><path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" />
-  </svg>
-);
