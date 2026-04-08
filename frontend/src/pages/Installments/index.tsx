@@ -282,12 +282,12 @@ export const Installments: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Em Atraso</p>
-                  <p className="text-2xl font-bold text-red-600">{stats?.overdueCount || 0}</p>
+                  <p className="text-2xl font-bold text-red-600">{stats?.overdue?.count || 0}</p>
                 </div>
                 <FiAlertTriangle className="text-red-500" size={32} />
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                R$ {(stats?.overdueAmount || 0).toFixed(2)}
+                R$ {(stats?.overdue?.total || 0).toFixed(2)}
               </p>
             </Card>
 
@@ -295,12 +295,12 @@ export const Installments: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Vencendo Hoje</p>
-                  <p className="text-2xl font-bold text-yellow-600">{stats?.pendingTodayCount || 0}</p>
+                  <p className="text-2xl font-bold text-yellow-600">{stats?.pendingToday?.count || 0}</p>
                 </div>
                 <FiCalendar className="text-yellow-500" size={32} />
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                R$ {(stats?.pendingTodayAmount || 0).toFixed(2)}
+                R$ {(stats?.pendingToday?.total || 0).toFixed(2)}
               </p>
             </Card>
 
@@ -308,7 +308,7 @@ export const Installments: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Em Dia</p>
-                  <p className="text-2xl font-bold text-green-600">{stats?.activeCrediariosCount || 0}</p>
+                  <p className="text-2xl font-bold text-green-600">{stats?.inDay?.count || 0}</p>
                 </div>
                 <FiDollarSign className="text-green-500" size={32} />
               </div>

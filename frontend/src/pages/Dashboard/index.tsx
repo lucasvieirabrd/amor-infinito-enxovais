@@ -22,27 +22,27 @@ interface InstallmentStats {
   inDay: { count: number; total: number };
 }
 
-const fetchTotalSales = async () => {
-  const { data } = await api.get('/sales/total-sales');
+const fetchTotalSales = async (): Promise<number> => {
+  const { data } = await api.get<{ totalSales: number }>("/sales/total-sales");
   return data.totalSales;
 };
 
-const fetchSalesLast7Days = async () => {
-  const { data } = await api.get('/sales/sales-last-7-days');
+const fetchSalesLast7Days = async (): Promise<SalesDataPoint[]> => {
+  const { data } = await api.get<{ salesLast7Days: SalesDataPoint[] }>("/sales/sales-last-7-days");
   return data.salesLast7Days;
 };
 
-const fetchInstallmentStats = async () => {
-  const { data } = await api.get('/installments/stats');
-  return data as InstallmentStats;
+const fetchInstallmentStats = async (): Promise<InstallmentStats> => {
+  const { data } = await api.get<InstallmentStats>("/installments/stats");
+  return data;
 };
 
 export const Dashboard: React.FC = () => {
   const today = format(new Date(), 'dd/MM/yyyy');
 
-  const { data: totalSales, isLoading: isLoadingTotalSales, error: errorTotalSales } = useQuery<number>('totalSales', fetchTotalSales);
-  const { data: salesLast7Days, isLoading: isLoadingSalesLast7Days, error: errorSalesLast7Days } = useQuery<SalesDataPoint[]>('salesLast7Days', fetchSalesLast7Days);
-  const { data: installmentStats, isLoading: isLoadingInstallmentStats, error: errorInstallmentStats } = useQuery<InstallmentStats>('installmentStats', fetchInstallmentStats);
+  const { data: totalSales, isLoading: isLoadingTotalSales, error: errorTotalSales } = useQuery<number, Error>({ queryKey: ['totalSales'], queryFn: fetchTotalSales });
+  const { data: salesLast7Days, isLoading: isLoadingSalesLast7Days, error: errorSalesLast7Days } = useQuery<SalesDataPoint[], Error>({ queryKey: ['salesLast7Days'], queryFn: fetchSalesLast7Days });
+  const { data: installmentStats, isLoading: isLoadingInstallmentStats, error: errorInstallmentStats } = useQuery<InstallmentStats, Error>({ queryKey: ['installmentStats'], queryFn: fetchInstallmentStats });
 
   if (isLoadingTotalSales || isLoadingSalesLast7Days || isLoadingInstallmentStats) {
     return <div>Carregando...</div>;
@@ -53,11 +53,11 @@ export const Dashboard: React.FC = () => {
   }
 
   const installmentChartData = [
-    { name: 'Em Dia', value: installmentStats?.inDay.count || 0, fill: '#48BB78' },
-    { name: 'Atrasado', value: installmentStats?.overdue.count || 0, fill: '#FC8181' },
+    { name: 'Em Dia', value: installmentStats?.inDay?.count ?? 0, fill: '#48BB78' },
+    { name: 'Atrasado', value: installmentStats?.overdue?.count ?? 0, fill: '#FC8181' },
   ];
 
-  const formattedSalesLast7Days = salesLast7Days?.map(item => ({
+  const formattedSalesLast7Days = salesLast7Days?.map((item) => ({
     name: format(new Date(item.saleDate), 'dd/MM'),
     sales: item.totalSales,
   })) || [];
@@ -79,7 +79,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600 font-medium">Total de Vendas do Mês</p>
-              <p className="text-2xl font-bold text-gray-900">R$ {totalSales?.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-gray-900">R$ {totalSales?.toFixed(2) ?? '0.00'}</p>
             </div>
           </div>
         </Card>
@@ -91,7 +91,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600 font-medium">Total a Receber</p>
-              <p className="text-2xl font-bold text-gray-900">R$ {installmentStats?.inDay.total.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-gray-900">R$ {installmentStats?.inDay?.total?.toFixed(2) ?? '0.00'}</p>
             </div>
           </div>
         </Card>
@@ -103,7 +103,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600 font-medium">Parcelas Vencidas Hoje</p>
-              <p className="text-2xl font-bold text-gray-900">{installmentStats?.pendingToday.count}</p>
+              <p className="text-2xl font-bold text-gray-900">{installmentStats?.pendingToday?.count ?? 0}</p>
             </div>
           </div>
         </Card>
@@ -115,7 +115,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600 font-medium">Clientes Inadimplentes</p>
-              <p className="text-2xl font-bold text-gray-900">{installmentStats?.overdue.count}</p>
+              <p className="text-2xl font-bold text-gray-900">{installmentStats?.overdue?.count ?? 0}</p>
             </div>
           </div>
         </Card>
@@ -172,5 +172,4 @@ export const Dashboard: React.FC = () => {
       </div>
     </div>
   );
-};
 };
