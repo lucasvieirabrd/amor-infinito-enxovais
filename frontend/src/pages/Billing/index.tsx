@@ -112,9 +112,7 @@ export const Billing: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600 font-medium">Total a Receber</p>
-              <p className="text-2xl font-bold text-gray-900">
-                R$ {stats?.totalDue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
-              </p>
+              <p className="text-2xl font-bold text-gray-900                R$ {stats?.totalDue?.toLocaleString(\'pt-BR\', { minimumFractionDigits: 2 }) ?? \'0,00\'}              </p>
             </div>
           </div>
         </Card>
@@ -127,8 +125,7 @@ export const Billing: React.FC = () => {
             <div>
               <p className="text-sm text-gray-600 font-medium">Em Atraso</p>
               <p className="text-2xl font-bold text-gray-900">
-                R$ {stats?.totalOverdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
-              </p>
+                R$ {stats?.totalOverdue?.toLocaleString(\'pt-BR\', { minimumFractionDigits: 2 }) ?? \'0,00\'}           </p>
               <p className="text-xs text-gray-500 mt-1">{stats?.overdueCount || 0} parcelas</p>
             </div>
           </div>
@@ -142,8 +139,7 @@ export const Billing: React.FC = () => {
             <div>
               <p className="text-sm text-gray-600 font-medium">Recebido</p>
               <p className="text-2xl font-bold text-gray-900">
-                R$ {stats?.totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
-              </p>
+                R$ {stats?.totalPaid?.toLocaleString(\'pt-BR\', { minimumFractionDigits: 2 }) ?? \'0,00\'}           </p>
             </div>
           </div>
         </Card>

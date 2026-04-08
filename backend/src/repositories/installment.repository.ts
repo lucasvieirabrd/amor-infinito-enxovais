@@ -112,39 +112,36 @@ export class InstallmentRepository {
 
     const overdueResult = await db
       .select({ 
-        total: sql<number>`sum(${installments.originalAmount})`,
-        count: sql<number>`count(*)`
+        count: sql<number>`count(distinct ${customers.id})`
       })
       .from(installments)
-      .where(and(eq(installments.status, 'pending'), lt(installments.dueDate, startOfToday), isNull(installments.deletedAt)));
+      .innerJoin(customers, eq(installments.customerId, customers.id))
+      .where(and(eq(installments.status, 'pending'), lt(installments.dueDate, startOfToday), isNull(installments.deletedAt), isNull(customers.deletedAt)));
 
     const pendingTodayResult = await db
       .select({ 
-        total: sql<number>`sum(${installments.originalAmount})`,
-        count: sql<number>`count(*)`
+        count: sql<number>`count(distinct ${customers.id})`
       })
       .from(installments)
-      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} >= ${startOfToday} and ${installments.dueDate} <= ${endOfToday}`, isNull(installments.deletedAt)));
+      .innerJoin(customers, eq(installments.customerId, customers.id))
+      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} >= ${startOfToday} and ${installments.dueDate} <= ${endOfToday}`, isNull(installments.deletedAt), isNull(customers.deletedAt)));
 
     const inDayResult = await db
       .select({ 
-        total: sql<number>`sum(${installments.originalAmount})`,
-        count: sql<number>`count(*)`
+        count: sql<number>`count(distinct ${customers.id})`
       })
       .from(installments)
-      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} > ${endOfToday}`, isNull(installments.deletedAt)));
+      .innerJoin(customers, eq(installments.customerId, customers.id))
+      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} > ${endOfToday}`, isNull(installments.deletedAt), isNull(customers.deletedAt)));
 
     return {
       overdue: { 
-        total: overdueResult[0].total || 0,
         count: overdueResult[0].count || 0
       },
       pendingToday: { 
-        total: pendingTodayResult[0].total || 0,
         count: pendingTodayResult[0].count || 0
       },
       inDay: { 
-        total: inDayResult[0].total || 0,
         count: inDayResult[0].count || 0
       }
     };

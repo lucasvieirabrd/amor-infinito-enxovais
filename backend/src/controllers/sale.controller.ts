@@ -78,11 +78,13 @@ export class SaleController {
   }
 
   async getTotalSales(req: Request, res: Response) {
+    console.log('GET /sales/total-sales chamado');
     const totalSales = await saleService.getTotalSales();
     return res.json({ totalSales });
   }
 
   async getSalesLast7Days(req: Request, res: Response) {
+    console.log('GET /sales/sales-last-7-days chamado');
     const salesLast7Days = await saleService.getSalesLast7Days();
     return res.json({ salesLast7Days });
   }

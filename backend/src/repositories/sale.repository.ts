@@ -179,10 +179,25 @@ export class SaleRepository {
   }
 
   async getTotalSales() {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const endOfMonth = new Date();
+    endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+    endOfMonth.setDate(0);
+    endOfMonth.setHours(23, 59, 59, 999);
+
     const result = await db
       .select({ total: sql<number>`sum(${sales.totalAmount})` })
       .from(sales)
-      .where(isNull(sales.deletedAt));
+      .where(
+        and(
+          isNull(sales.deletedAt),
+          sql`${sales.saleDate} >= ${startOfMonth}`,
+          sql`${sales.saleDate} <= ${endOfMonth}`
+        )
+      );
 
     return result[0].total || 0;
   }
