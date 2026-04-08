@@ -104,4 +104,49 @@ export class InstallmentRepository {
       totalPages,
     };
   }
+
+  async getStats() {
+    const today = new Date();
+    const startOfToday = new Date(today.setHours(0, 0, 0, 0));
+    const endOfToday = new Date(today.setHours(23, 59, 59, 999));
+
+    const overdueResult = await db
+      .select({ 
+        total: sql<number>`sum(${installments.originalAmount})`,
+        count: sql<number>`count(*)`
+      })
+      .from(installments)
+      .where(and(eq(installments.status, 'pending'), lt(installments.dueDate, startOfToday), isNull(installments.deletedAt)));
+
+    const pendingTodayResult = await db
+      .select({ 
+        total: sql<number>`sum(${installments.originalAmount})`,
+        count: sql<number>`count(*)`
+      })
+      .from(installments)
+      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} >= ${startOfToday} and ${installments.dueDate} <= ${endOfToday}`, isNull(installments.deletedAt)));
+
+    const inDayResult = await db
+      .select({ 
+        total: sql<number>`sum(${installments.originalAmount})`,
+        count: sql<number>`count(*)`
+      })
+      .from(installments)
+      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} > ${endOfToday}`, isNull(installments.deletedAt)));
+
+    return {
+      overdue: { 
+        total: overdueResult[0].total || 0,
+        count: overdueResult[0].count || 0
+      },
+      pendingToday: { 
+        total: pendingTodayResult[0].total || 0,
+        count: pendingTodayResult[0].count || 0
+      },
+      inDay: { 
+        total: inDayResult[0].total || 0,
+        count: inDayResult[0].count || 0
+      }
+    };
+  }
 }

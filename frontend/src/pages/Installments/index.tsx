@@ -41,11 +41,9 @@ interface PaginatedResponse {
 }
 
 interface StatsResponse {
-  overdueCount: number;
-  overdueAmount: number;
-  pendingTodayCount: number;
-  pendingTodayAmount: number;
-  activeCrediariosCount: number;
+  overdue: { count: number; total: number };
+  pendingToday: { count: number; total: number };
+  inDay: { count: number; total: number };
 }
 
 export const Installments: React.FC = () => {

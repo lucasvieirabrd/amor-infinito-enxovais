@@ -172,4 +172,12 @@ export class SaleService {
       return { message: 'Venda cancelada com sucesso', saleId };
     });
   }
+
+  async getTotalSales() {
+    return saleRepository.getTotalSales();
+  }
+
+  async getSalesLast7Days() {
+    return saleRepository.getSalesLast7Days();
+  }
 }

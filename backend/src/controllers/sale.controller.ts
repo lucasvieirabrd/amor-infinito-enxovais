@@ -76,4 +76,14 @@ export class SaleController {
     const result = await saleService.cancel(id);
     return res.json(result);
   }
+
+  async getTotalSales(req: Request, res: Response) {
+    const totalSales = await saleService.getTotalSales();
+    return res.json({ totalSales });
+  }
+
+  async getSalesLast7Days(req: Request, res: Response) {
+    const salesLast7Days = await saleService.getSalesLast7Days();
+    return res.json({ salesLast7Days });
+  }
 }

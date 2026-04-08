@@ -27,14 +27,14 @@ export async function sendPasswordResetEmail(email: string, token: string) {
   console.log('EMAIL_PASS configurado:', process.env.EMAIL_PASS ? 'SIM' : 'NÃO');
   
   const info = await transporter.sendMail({
-    from: `"Amor Infinito Enxovais" <${process.env.EMAIL_USER}>`,
+    from: `"Amor Infinito Enxovais" <${process.EMAIL_USER}>`,
     to: email,
     subject: 'Recuperação de Senha - Amor Infinito Enxovais',
     html: `
-      <div>
-        <p>Recuperação de Senha</p>
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h2>Recuperação de Senha</h2>
         <p>Clique no link abaixo para redefinir sua senha:</p>
-        <a href="${resetUrl}">Redefinir Senha</a>
+        <p><a href="${resetUrl}" style="background-color: #6C63FF; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Redefinir Senha</a></p>
         <p>Este link expira em 1 hora.</p>
         <p>Se não solicitou, ignore este email.</p>
       </div>

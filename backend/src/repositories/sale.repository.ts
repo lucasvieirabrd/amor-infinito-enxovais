@@ -177,4 +177,31 @@ export class SaleRepository {
   async updateInstallmentStatus(tx: MySqlTransaction<any, any, any, any>, installmentId: string, status: string) {
     await tx.update(installments).set({ status }).where(eq(installments.id, installmentId));
   }
+
+  async getTotalSales() {
+    const result = await db
+      .select({ total: sql<number>`sum(${sales.totalAmount})` })
+      .from(sales)
+      .where(isNull(sales.deletedAt));
+
+    return result[0].total || 0;
+  }
+
+  async getSalesLast7Days() {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const result = await db
+      .select({
+        saleDate: sql<string>`DATE(${sales.saleDate})`,
+        totalSales: sql<number>`sum(${sales.totalAmount})`,
+      })
+      .from(sales)
+      .where(and(isNull(sales.deletedAt), sql`${sales.saleDate} >= ${sevenDaysAgo}`))
+      .groupBy(sql`DATE(${sales.saleDate})`)
+      .orderBy(sql`DATE(${sales.saleDate}) ASC`);
+
+    return result;
+  }
 }
