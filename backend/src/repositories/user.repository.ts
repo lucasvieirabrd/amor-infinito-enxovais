@@ -30,4 +30,18 @@ export class UserRepository {
     });
     return this.findById(id);
   }
-}
+
+  async findByResetToken(token: string) {
+    const result = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.resetToken, token), isNull(users.deletedAt)))
+      .limit(1);
+    return result[0];
+  }
+
+  async update(id: string, data: any) {
+    await db.update(users).set(data).where(eq(users.id, id));
+    return this.findById(id);
+  }
+}場で

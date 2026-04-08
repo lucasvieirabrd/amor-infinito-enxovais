@@ -39,4 +39,27 @@ export class AuthController {
     // req.user será preenchido pelo middleware de autenticação
     return res.json(req.user);
   }
+
+  async forgotPassword(req: Request, res: Response) {
+    const forgotPasswordSchema = z.object({
+      email: z.string().email("E-mail inválido"),
+    });
+
+    const { email } = forgotPasswordSchema.parse(req.body);
+    const result = await authService.forgotPassword(email);
+
+    return res.json(result);
+  }
+
+  async resetPassword(req: Request, res: Response) {
+    const resetPasswordSchema = z.object({
+      token: z.string(),
+      password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+    });
+
+    const { token, password } = resetPasswordSchema.parse(req.body);
+    const result = await authService.resetPassword(token, password);
+
+    return res.json(result);
+  }
 }

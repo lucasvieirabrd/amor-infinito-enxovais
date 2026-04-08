@@ -10,7 +10,9 @@ export const users = mysqlTable('users', {
   role: mysqlEnum('role', ['admin', 'seller']).notNull().default('seller'),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
-  deletedAt: datetime('deleted_at'),
+  deletedAt: datetime("deleted_at"),
+  resetToken: varchar("reset_token", { length: 255 }),
+  resetTokenExpires: datetime("reset_token_expires"),
 });
 
 export const customers = mysqlTable('customers', {
@@ -24,18 +26,6 @@ export const customers = mysqlTable('customers', {
   addressNeighborhood: varchar('address_neighborhood', { length: 255 }),
   addressCity: varchar('address_city', { length: 255 }),
   addressState: varchar('address_state', { length: 2 }),
-  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
-  deletedAt: datetime('deleted_at'),
-});
-
-export const products = mysqlTable('products', {
-  id: varchar('id', { length: 36 }).primaryKey(),
-  name: varchar('name', { length: 255 }).notNull(),
-  sku: varchar('sku', { length: 50 }).unique(),
-  quantity: int('quantity').notNull().default(0),
-  price: decimal('price', { precision: 10, scale: 2 }).notNull(),
-  minStockLevel: int('min_stock_level').notNull().default(0),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime('deleted_at'),

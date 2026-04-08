@@ -83,6 +83,11 @@ export const Login: React.FC = () => {
             >
               {loading ? 'Entrando...' : 'Entrar'}
             </Button>
+            <div className="text-sm text-right mt-2">
+              <a href="/forgot-password" className="font-medium text-primary hover:text-primary-dark">
+                Esqueceu sua senha?
+              </a>
+            </div>
           </form>
 
           {/* Footer */}
