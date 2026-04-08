@@ -10,6 +10,8 @@ const installmentController = new InstallmentController();
 installmentRouter.use(ensureAuthenticated);
 
 // Listagens gerais
+installmentRouter.get('/stats', installmentController.getStats);
+installmentRouter.get('/billing', installmentController.getBillingList);
 installmentRouter.get('/active', installmentController.listActiveCrediarios);
 installmentRouter.get('/overdue', installmentController.listOverdue);
 

@@ -107,4 +107,47 @@ export class InstallmentService {
   async listActiveCrediarios() {
     return installmentRepository.listActiveCrediarios();
   }
+
+  async getStats() {
+    const overdue = await installmentRepository.listOverdue();
+    const activeCrediarios = await installmentRepository.listActiveCrediarios();
+
+    let totalOverdue = 0;
+    let totalPending = 0;
+    const inadimplentCustomers = new Set<string>();
+
+    overdue.forEach(row => {
+      const amount = parseFloat(row.installment.originalAmount.toString());
+      totalOverdue += amount;
+      inadimplentCustomers.add(row.customer.id);
+    });
+
+    activeCrediarios.forEach(customer => {
+      const amount = parseFloat(customer.totalPending.toString());
+      totalPending += amount;
+    });
+
+    return {
+      totalOverdue: parseFloat(totalOverdue.toFixed(2)),
+      totalPending: parseFloat(totalPending.toFixed(2)),
+      inadimplentCustomersCount: inadimplentCustomers.size,
+    };
+  }
+
+  async getBillingList() {
+    const overdue = await installmentRepository.listOverdue();
+    
+    return overdue.map(row => ({
+      id: row.installment.id,
+      customerId: row.customer.id,
+      customerName: row.customer.name,
+      customerPhone: row.customer.phone,
+      amount: parseFloat(row.installment.originalAmount.toString()),
+      dueDate: row.installment.dueDate,
+      status: row.installment.status,
+      daysOverdue: Math.floor(
+        (new Date().getTime() - new Date(row.installment.dueDate).getTime()) / (1000 * 60 * 60 * 24)
+      ),
+    }));
+  }
 }

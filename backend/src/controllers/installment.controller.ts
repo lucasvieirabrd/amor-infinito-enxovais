@@ -52,4 +52,14 @@ export class InstallmentController {
     const result = await installmentService.listActiveCrediarios();
     return res.json(result);
   }
+
+  async getStats(req: Request, res: Response) {
+    const result = await installmentService.getStats();
+    return res.json(result);
+  }
+
+  async getBillingList(req: Request, res: Response) {
+    const result = await installmentService.getBillingList();
+    return res.json(result);
+  }
 }

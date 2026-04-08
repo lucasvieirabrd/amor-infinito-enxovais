@@ -3,10 +3,15 @@ import { Server as HttpServer } from 'http';
 
 let io: Server;
 
+const allowedOrigins = [
+  'https://essencia-humoristica-production.up.railway.app',
+  'http://localhost:5173'
+];
+
 export function setupWebSocket(server: HttpServer) {
   io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+      origin: allowedOrigins,
       methods: ['GET', 'POST'],
       credentials: true,
     },

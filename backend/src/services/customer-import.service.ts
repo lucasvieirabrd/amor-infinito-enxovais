@@ -1,4 +1,7 @@
 import { parse } from 'csv-parse/sync';
+import { db } from '../database';
+import { customers, sales, installments } from '../database/schema';
+import { eq } from 'drizzle-orm';
 import { CustomerRepository } from '../repositories/customer.repository';
 import { SaleRepository } from '../repositories/sale.repository';
 import { AppError } from '../utils/AppError';
@@ -205,7 +208,7 @@ export class CustomerImportService {
 
   private async findOrCreateCustomer(
     data: any,
-    tx: any
+    tx: typeof db
   ): Promise<{ id: string; isNew: boolean }> {
     // Buscar por CPF (se preenchido)
     if (data.cpf) {
