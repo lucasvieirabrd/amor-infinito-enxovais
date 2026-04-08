@@ -283,7 +283,7 @@ export const Customers: React.FC = () => {
           {isLoading ? (
             <Loading />
           ) : response?.data && response.data.length > 0 ? (
-            <Table columns={columns} data={response.data} keyExtractor={(item) => item.id} />
+            <Table columns={columns} data={response?.data || []} keyExtractor={(item) => item.id} />
           ) : (
             <div className="text-center py-8 text-gray-500">
               Nenhum cliente encontrado
