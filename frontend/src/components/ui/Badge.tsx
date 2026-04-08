@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface BadgeProps {
-  variant?: 'success' | 'error' | 'warning' | 'info';
+  variant?: 'primary' | 'secondary' | 'success' | 'error' | 'warning' | 'info' | 'default';
   children: React.ReactNode;
   className?: string;
 }
@@ -16,6 +16,9 @@ const Badge: React.FC<BadgeProps> = ({
     error: 'badge-error',
     warning: 'badge-warning',
     info: 'badge-info',
+    primary: 'badge-primary',
+    secondary: 'badge-secondary',
+    default: 'badge-default',
   };
 
   return (

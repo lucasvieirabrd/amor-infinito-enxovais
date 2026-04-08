@@ -108,6 +108,10 @@ export class InstallmentService {
     return installmentRepository.listActiveCrediarios();
   }
 
+  async listActiveCrediariosPaginated(page: number, limit: number, search?: string) {
+    return installmentRepository.listActiveCrediariosPaginated(page, limit, search);
+  }
+
   async getStats() {
     const overdue = await installmentRepository.listOverdue();
     const activeCrediarios = await installmentRepository.listActiveCrediarios();

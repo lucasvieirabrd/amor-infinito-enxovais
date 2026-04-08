@@ -49,7 +49,14 @@ export class InstallmentController {
   }
 
   async listActiveCrediarios(req: Request, res: Response) {
-    const result = await installmentService.listActiveCrediarios();
+    const listSchema = z.object({
+      page: z.string().optional().transform(v => Number(v) || 1),
+      limit: z.string().optional().transform(v => Number(v) || 15),
+      search: z.string().optional(),
+    });
+
+    const { page, limit, search } = listSchema.parse(req.query);
+    const result = await installmentService.listActiveCrediariosPaginated(page, limit, search);
     return res.json(result);
   }
 

@@ -76,11 +76,14 @@ export class ProductRepository {
           : isNull(products.deletedAt)
       );
 
+    const totalPages = Math.ceil(countResult[0].count / limit);
+    
     return {
       data,
       total: countResult[0].count,
       page,
       limit,
+      totalPages,
     };
   }
 

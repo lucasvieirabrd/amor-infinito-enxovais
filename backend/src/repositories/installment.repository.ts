@@ -50,7 +50,6 @@ export class InstallmentRepository {
   }
 
   async listActiveCrediarios() {
-    // Lista clientes que possuem parcelas pendentes ou atrasadas
     return db
       .selectDistinct({
         id: customers.id,
@@ -66,5 +65,43 @@ export class InstallmentRepository {
           isNull(customers.deletedAt)
         )
       );
+  }
+
+  async listActiveCrediariosPaginated(page: number, limit: number, search?: string) {
+    const offset = (page - 1) * limit;
+    
+    let whereClause = and(
+      or(eq(installments.status, 'pending'), eq(installments.status, 'overdue')),
+      isNull(installments.deletedAt),
+      isNull(customers.deletedAt)
+    );
+
+    const data = await db
+      .selectDistinct({
+        id: customers.id,
+        name: customers.name,
+        phone: customers.phone,
+      })
+      .from(customers)
+      .innerJoin(installments, eq(customers.id, installments.customerId))
+      .where(whereClause)
+      .limit(limit)
+      .offset(offset);
+
+    const countResult = await db
+      .select({ count: sql<number>`count(distinct ${customers.id})` })
+      .from(customers)
+      .innerJoin(installments, eq(customers.id, installments.customerId))
+      .where(whereClause);
+
+    const totalPages = Math.ceil(countResult[0].count / limit);
+
+    return {
+      data,
+      total: countResult[0].count,
+      page,
+      limit,
+      totalPages,
+    };
   }
 }
