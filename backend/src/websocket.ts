@@ -4,7 +4,7 @@ import { Server as HttpServer } from 'http';
 let io: Server;
 
 const allowedOrigins = [
-  'https://essencia-humoristica-production.up.railway.app',
+  'https://sistema-vendas-cobranca-aie.up.railway.app',
   'http://localhost:5173'
 ];
 

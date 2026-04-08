@@ -12,7 +12,7 @@ import { setupWebSocket } from './websocket';
 
 // Definir allowedOrigins para uso no WebSocket e CORS
 const allowedOrigins = [
-  'https://essencia-humoristica-production.up.railway.app',
+  'https://sistema-vendas-cobranca-aie.up.railway.app',
   'http://localhost:5173'
 ];
 
