@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
 import { CustomerService } from '../services/customer.service';
+import { CustomerImportService } from '../services/customer-import.service';
 import { z } from 'zod';
 
 const customerService = new CustomerService();
+const customerImportService = new CustomerImportService();
 
 export class CustomerController {
   async register(req: Request, res: Response) {
@@ -67,5 +69,14 @@ export class CustomerController {
     const { id } = req.params;
     await customerService.delete(id);
     return res.status(204).send();
+  }
+
+  async importCSV(req: Request, res: Response) {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Arquivo não fornecido' });
+    }
+
+    const result = await customerImportService.importFromCSV(req.file.buffer);
+    return res.json(result);
   }
 }
