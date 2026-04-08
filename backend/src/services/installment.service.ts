@@ -1,7 +1,8 @@
 import { InstallmentRepository } from '../repositories/installment.repository';
 import { BillingService } from './billing.service';
 import { AppError } from '../utils/AppError';
-import { isBefore, startOfDay } from 'date-fns';
+import { isBefore, startOfDay, isToday } from 'date-fns';
+import { customers, installments } from '../database/schema';
 
 const installmentRepository = new InstallmentRepository();
 const billingService = new BillingService();
@@ -76,6 +77,25 @@ export class InstallmentService {
     return installmentRepository.update(id, updateData);
   }
 
+  async updateDueDate(id: string, newDueDate: string) {
+    const existingInstallment = await installmentRepository.findById(id);
+    if (!existingInstallment) {
+      throw new AppError('Parcela não encontrada', 404);
+    }
+    // Se a nova data de vencimento for anterior à data atual e o status for 'pending', mudar para 'overdue'
+    let status = existingInstallment.status;
+    const today = startOfDay(new Date());
+    const newDate = startOfDay(new Date(newDueDate));
+
+    if (newDate < today && existingInstallment.status === 'pending') {
+      status = 'overdue';
+    } else if (newDate >= today && existingInstallment.status === 'overdue') {
+      status = 'pending'; // Se a data for para o futuro, e estava atrasada, volta a ser pendente
+    }
+
+    return installmentRepository.update(id, { dueDate: newDate, status });
+  }
+
   async listOverdue() {
     const result = await installmentRepository.listOverdue();
     
@@ -95,7 +115,7 @@ export class InstallmentService {
         };
       }
       
-      const amount = parseFloat(installment.originalAmount.toString());
+      const amount = Number(installment.originalAmount);
       grouped[customer.id].totalOverdue += amount;
       grouped[customer.id].installmentsCount += 1;
       grouped[customer.id].overdueInstallments.push(installment);
@@ -113,7 +133,8 @@ export class InstallmentService {
   }
 
   async getStats() {
-    return installmentRepository.getStats();
+    const stats = await installmentRepository.getStats();
+    return stats;
   }
 
   async getBillingList() {
@@ -124,7 +145,7 @@ export class InstallmentService {
       customerId: row.customer.id,
       customerName: row.customer.name,
       customerPhone: row.customer.phone,
-      amount: parseFloat(row.installment.originalAmount.toString()),
+      amount: Number(row.installment.originalAmount),
       dueDate: row.installment.dueDate,
       status: row.installment.status,
       daysOverdue: Math.floor(
@@ -132,4 +153,19 @@ export class InstallmentService {
       ),
     }));
   }
+
+  async sendManualBillingMessage(customerId: string, installmentId: string) {
+    const installment = await installmentRepository.findById(installmentId);
+    if (!installment) {
+      throw new AppError('Parcela não encontrada', 404);
+    }
+
+    // Aqui você pode adicionar a lógica para buscar os detalhes do cliente
+    // e da parcela para enviar a mensagem de cobrança.
+    // Por exemplo, usando o billingService.sendBillingMessage
+    await billingService.sendBillingMessage(customerId, installment.id, Number(installment.originalAmount), installment.dueDate);
+
+    return { message: 'Mensagem de cobrança manual enviada com sucesso!' };
+  }
 }
+

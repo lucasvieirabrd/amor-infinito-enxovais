@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 
 interface BillingRecord {
   id: string;
+  customerId: string;
   customerName: string;
   installmentNumber: number;
   dueDate: string;
@@ -68,6 +69,16 @@ export const Billing: React.FC = () => {
     }
   };
 
+  const handleManualBilling = async (customerId: string, installmentId: string) => {
+    try {
+      await api.post('/installments/billing/manual-send', { customerId, installmentId });
+      alert('Mensagem de cobrança enviada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao enviar cobrança manual:', error);
+      alert('Erro ao enviar mensagem de cobrança.');
+    }
+  };
+
   const handleExportCSV = () => {
     if (!billingRecords) return;
 
@@ -113,7 +124,7 @@ export const Billing: React.FC = () => {
             <div>
               <p className="text-sm text-gray-600 font-medium">Total a Receber</p>
               <p className="text-2xl font-bold text-gray-900">
-                R$ {stats?.totalDue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) ?? '0,00'}
+                R$ {(stats?.totalDue ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -127,7 +138,7 @@ export const Billing: React.FC = () => {
             <div>
               <p className="text-sm text-gray-600 font-medium">Em Atraso</p>
               <p className="text-2xl font-bold text-gray-900">
-                R$ {stats?.totalOverdue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) ?? '0,00'}
+                R$ {(stats?.totalOverdue ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
               <p className="text-xs text-gray-500 mt-1">{stats?.overdueCount || 0} parcelas</p>
             </div>
@@ -142,7 +153,7 @@ export const Billing: React.FC = () => {
             <div>
               <p className="text-sm text-gray-600 font-medium">Recebido</p>
               <p className="text-2xl font-bold text-gray-900">
-                R$ {stats?.totalPaid?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) ?? '0,00'}
+                R$ {(stats?.totalPaid ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -242,6 +253,7 @@ export const Billing: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor Pago</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Data Pagamento</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -273,6 +285,15 @@ export const Billing: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {record.paymentDate ? format(new Date(record.paymentDate), 'dd/MM/yyyy') : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleManualBilling(record.customerId, record.id)}
+                      >
+                        Cobrar Agora
+                      </Button>
                     </td>
                   </tr>
                 ))}

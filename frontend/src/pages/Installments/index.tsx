@@ -1,17 +1,18 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import {
   FiSearch,
   FiAlertTriangle,
   FiDollarSign,
-  FiCalendar,
   FiArrowLeft,
-  FiX,
   FiRotateCcw,
   FiMessageCircle,
   FiChevronLeft,
   FiChevronRight,
+  FiEdit,
+  FiClock,
+  FiCheckCircle,
 } from 'react-icons/fi';
 import { Button, Card, Badge, Modal, Input, Loading } from '../../components/ui';
 import { format, isBefore, startOfDay } from 'date-fns';
@@ -54,12 +55,13 @@ export const Installments: React.FC = () => {
   const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null);
   const [paidAmount, setPaidAmount] = useState<number>(0);
   const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [isEditDateModalOpen, setIsEditDateModalOpen] = useState(false);
+  const [newDueDate, setNewDueDate] = useState('');
 
   const queryClient = useQueryClient();
 
   const ITEMS_PER_PAGE = 15;
 
-  // Listar clientes com crediários ativos com paginação
   const { data: response, isLoading: isLoadingCustomers } = useQuery({
     queryKey: ['active-crediarios', search, page],
     queryFn: async () => {
@@ -70,7 +72,6 @@ export const Installments: React.FC = () => {
     },
   });
 
-  // Buscar estatísticas
   const { data: stats } = useQuery({
     queryKey: ['installments-stats'],
     queryFn: async () => {
@@ -79,7 +80,6 @@ export const Installments: React.FC = () => {
     },
   });
 
-  // Buscar parcelas do cliente selecionado
   const { data: customerInstallments, isLoading: isLoadingInstallments } = useQuery({
     queryKey: ['installments', selectedCustomer?.id],
     queryFn: async () => {
@@ -90,7 +90,6 @@ export const Installments: React.FC = () => {
     enabled: !!selectedCustomer,
   });
 
-  // Mutação para dar baixa em parcela
   const payMutation = useMutation({
     mutationFn: (data: { id: string; paidAmount: number; paymentDate: string }) =>
       api.post(`/installments/${data.id}/pay`, {
@@ -109,7 +108,23 @@ export const Installments: React.FC = () => {
     },
   });
 
-  // Mutação para reverter pagamento
+  const editDateMutation = useMutation({
+    mutationFn: (data: { id: string; dueDate: string }) =>
+      api.patch(`/installments/${data.id}/due-date`, {
+        dueDate: data.dueDate,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['installments'] });
+      queryClient.invalidateQueries({ queryKey: ['active-crediarios'] });
+      queryClient.invalidateQueries({ queryKey: ['installments-stats'] });
+      setIsEditDateModalOpen(false);
+      setSelectedInstallment(null);
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Erro ao atualizar data de vencimento');
+    },
+  });
+
   const revertMutation = useMutation({
     mutationFn: (id: string) => api.post(`/installments/${id}/revert`),
     onSuccess: () => {
@@ -136,6 +151,22 @@ export const Installments: React.FC = () => {
     }
   };
 
+  const handleOpenEditDate = (inst: Installment) => {
+    setSelectedInstallment(inst);
+    setNewDueDate(format(new Date(inst.dueDate), 'yyyy-MM-dd'));
+    setIsEditDateModalOpen(true);
+  };
+
+  const handleConfirmEditDate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedInstallment) {
+      editDateMutation.mutate({
+        id: selectedInstallment.id,
+        dueDate: newDueDate,
+      });
+    }
+  };
+
   const handleBackToList = () => {
     setSelectedCustomer(null);
   };
@@ -144,15 +175,10 @@ export const Installments: React.FC = () => {
     return <Loading />;
   }
 
-  const startIndex = (page - 1) * ITEMS_PER_PAGE + 1;
-  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE - 1, response?.total || 0);
-
-  // Se um cliente foi selecionado, mostrar suas parcelas
   if (selectedCustomer) {
     return (
       <div className="min-h-screen bg-background p-6">
         <div className="max-w-4xl mx-auto">
-          {/* Botão voltar */}
           <button
             onClick={handleBackToList}
             className="flex items-center gap-2 text-primary hover:text-primary/80 mb-6 transition"
@@ -161,7 +187,6 @@ export const Installments: React.FC = () => {
             Voltar para lista
           </button>
 
-          {/* Header do cliente */}
           <Card className="mb-6 p-6 bg-gradient-to-r from-primary/10 to-secondary/10">
             <div className="flex items-center justify-between">
               <div>
@@ -180,13 +205,13 @@ export const Installments: React.FC = () => {
             </div>
           </Card>
 
-          {/* Parcelas */}
           <div className="space-y-3">
             {isLoadingInstallments ? (
               <Loading />
             ) : customerInstallments && customerInstallments.length > 0 ? (
               (customerInstallments || []).map((inst) => {
-                const isOverdue = isBefore(new Date(inst.dueDate), startOfDay(new Date())) && inst.status === 'pending';
+                const isOverdue =
+                  isBefore(new Date(inst.dueDate), startOfDay(new Date())) && inst.status === 'pending';
                 const isToday =
                   format(new Date(inst.dueDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') &&
                   inst.status === 'pending';
@@ -213,7 +238,7 @@ export const Installments: React.FC = () => {
                             {inst.status === 'paid'
                               ? 'Paga'
                               : isOverdue
-                              ? 'Em atraso'
+                              ? 'Atrasada'
                               : isToday
                               ? 'Vence hoje'
                               : 'Pendente'}
@@ -234,33 +259,41 @@ export const Installments: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      {inst.status === 'pending' && (
+                      <div className="flex items-center gap-2">
                         <Button
-                          onClick={() => handleOpenPayment(inst)}
-                          className="ml-4 flex items-center gap-2"
-                        >
-                          <FiDollarSign size={16} />
-                          Pagar
-                        </Button>
-                      )}
-                      {inst.status === 'paid' && (
-                        <Button
-                          onClick={() => revertMutation.mutate(inst.id)}
+                          onClick={() => handleOpenEditDate(inst)}
                           variant="secondary"
-                          className="ml-4 flex items-center gap-2"
+                          className="flex items-center gap-2"
                         >
-                          <FiRotateCcw size={16} />
-                          Reverter
+                          <FiEdit size={16} />
+                          Editar Data
                         </Button>
-                      )}
+                        {inst.status === 'pending' && (
+                          <Button
+                            onClick={() => handleOpenPayment(inst)}
+                            className="ml-4 flex items-center gap-2"
+                          >
+                            <FiDollarSign size={16} />
+                            Pagar
+                          </Button>
+                        )}
+                        {inst.status === 'paid' && (
+                          <Button
+                            onClick={() => revertMutation.mutate(inst.id)}
+                            variant="secondary"
+                            className="flex items-center gap-2"
+                          >
+                            <FiRotateCcw size={16} />
+                            Reverter
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </Card>
                 );
               })
             ) : (
-              <Card className="text-center py-8 text-gray-500">
-                Nenhuma parcela encontrada
-              </Card>
+              <Card className="text-center py-8 text-gray-500">Nenhuma parcela encontrada</Card>
             )}
           </div>
         </div>
@@ -268,15 +301,12 @@ export const Installments: React.FC = () => {
     );
   }
 
-  // Lista de clientes com crediário
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header com título e contadores */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Crediário</h1>
 
-          {/* Badges de contadores */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="p-4 border-l-4 border-red-500">
               <div className="flex items-center justify-between">
@@ -287,7 +317,7 @@ export const Installments: React.FC = () => {
                 <FiAlertTriangle className="text-red-500" size={32} />
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                R$ {(stats?.overdue?.total || 0).toFixed(2)}
+                R$ {(stats?.overdue?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
             </Card>
 
@@ -297,10 +327,10 @@ export const Installments: React.FC = () => {
                   <p className="text-sm text-gray-600">Vencendo Hoje</p>
                   <p className="text-2xl font-bold text-yellow-600">{stats?.pendingToday?.count || 0}</p>
                 </div>
-                <FiCalendar className="text-yellow-500" size={32} />
+                <FiClock className="text-yellow-500" size={32} />
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                R$ {(stats?.pendingToday?.total || 0).toFixed(2)}
+                R$ {(stats?.pendingToday?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
             </Card>
 
@@ -310,150 +340,129 @@ export const Installments: React.FC = () => {
                   <p className="text-sm text-gray-600">Em Dia</p>
                   <p className="text-2xl font-bold text-green-600">{stats?.inDay?.count || 0}</p>
                 </div>
-                <FiDollarSign className="text-green-500" size={32} />
+                <FiCheckCircle className="text-green-500" size={32} />
               </div>
-              <p className="text-xs text-gray-500 mt-2">Clientes com crediário ativo</p>
+              <p className="text-xs text-gray-500 mt-2">
+                R$ {(stats?.inDay?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
             </Card>
           </div>
         </div>
 
-        {/* Barra de busca */}
-        <Card className="mb-6 p-4">
-          <div className="flex gap-3">
-            <div className="flex-1 relative">
-              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+        <div className="flex justify-between items-center mb-6">
+          <Input
+            type="text"
+            placeholder="Buscar cliente..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-xs"
+            icon={<FiSearch />}
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+              disabled={page === 1}
+            >
+              <FiChevronLeft />
+            </Button>
+            <span className="text-gray-700">
+              Página {page} de {response?.totalPages || 1}
+            </span>
+            <Button
+              variant="secondary"
+              onClick={() => setPage((prev) => prev + 1)}
+              disabled={page === (response?.totalPages || 1)}
+            >
+              <FiChevronRight />
+            </Button>
+          </div>
+        </div>
+
+        {isLoadingCustomers ? (
+          <Loading />
+        ) : response?.data && response.data.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {response.data.map((customer) => (
+              <Card
+                key={customer.id}
+                className="p-4 hover:shadow-md transition cursor-pointer"
+                onClick={() => setSelectedCustomer(customer)}
+              >
+                <h3 className="text-lg font-semibold text-gray-900">{customer.name}</h3>
+                <p className="text-gray-600 flex items-center gap-2 mt-1">
+                  <FiMessageCircle size={16} />
+                  {customer.phone}
+                </p>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="text-center py-8 text-gray-500">Nenhum crediário ativo encontrado.</Card>
+        )}
+
+        <Modal
+          isOpen={isPaymentModalOpen}
+          onClose={() => setIsPaymentModalOpen(false)}
+          title="Registrar Pagamento"
+        >
+          <form onSubmit={handleConfirmPayment} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Valor Pago</label>
               <Input
-                placeholder="Buscar por nome ou telefone..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                className="pl-10"
+                type="number"
+                value={paidAmount}
+                onChange={(e) => setPaidAmount(Number(e.target.value))}
+                step="0.01"
+                required
               />
             </div>
-          </div>
-        </Card>
-
-        {/* Lista de clientes */}
-        <Card className="mb-6">
-          {isLoadingCustomers ? (
-            <Loading />
-          ) : response?.data && response.data.length > 0 ? (
-            <div className="divide-y">
-              {(response?.data || []).map((customer) => (
-                <div
-                  key={customer.id}
-                  onClick={() => setSelectedCustomer(customer)}
-                  className="p-4 hover:bg-gray-50 cursor-pointer transition flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="font-semibold text-primary">{customer.name.charAt(0)}</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{customer.name}</p>
-                      <p className="text-sm text-gray-600">{customer.phone}</p>
-                    </div>
-                  </div>
-                  <FiChevronRight className="text-gray-400" size={20} />
-                </div>
-              ))}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Data do Pagamento</label>
+              <Input
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                required
+              />
             </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              Nenhum cliente com crediário ativo encontrado
-            </div>
-          )}
-        </Card>
-
-        {/* Paginação */}
-        {response && response.totalPages > 1 && (
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              Mostrando {startIndex} a {endIndex} de {response.total} clientes
-            </p>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page === 1}
-                variant="secondary"
-                className="flex items-center gap-2"
-              >
-                <FiChevronLeft size={18} /> Anterior
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setIsPaymentModalOpen(false)}>
+                Cancelar
               </Button>
-              <div className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg">
-                <span className="text-sm text-gray-700">
-                  Página {page} de {response.totalPages}
-                </span>
-              </div>
-              <Button
-                onClick={() => setPage(Math.min(response.totalPages, page + 1))}
-                disabled={page === response.totalPages}
-                variant="secondary"
-                className="flex items-center gap-2"
-              >
-                Próxima <FiChevronRight size={18} />
+              <Button type="submit" variant="primary" loading={payMutation.isPending}>
+                Confirmar Pagamento
               </Button>
             </div>
-          </div>
-        )}
+          </form>
+        </Modal>
+
+        <Modal
+          isOpen={isEditDateModalOpen}
+          onClose={() => setIsEditDateModalOpen(false)}
+          title="Editar Data de Vencimento"
+        >
+          <form onSubmit={handleConfirmEditDate} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nova Data de Vencimento</label>
+              <Input
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setIsEditDateModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="primary" loading={editDateMutation.isPending}>
+                Salvar Data
+              </Button>
+            </div>
+          </form>
+        </Modal>
       </div>
-
-      {/* Modal de Pagamento */}
-      <Modal
-        isOpen={isPaymentModalOpen}
-        onClose={() => {
-          setIsPaymentModalOpen(false);
-          setSelectedInstallment(null);
-        }}
-        title="Registrar Pagamento"
-      >
-        <form onSubmit={handleConfirmPayment} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Parcela {selectedInstallment?.installmentNumber}
-            </label>
-            <p className="text-gray-600">
-              Vencimento: {selectedInstallment && format(new Date(selectedInstallment.dueDate), 'dd/MM/yyyy')}
-            </p>
-          </div>
-
-          <Input
-            label="Valor Pago (R$)"
-            type="number"
-            step="0.01"
-            value={paidAmount}
-            onChange={(e) => setPaidAmount(Number(e.target.value))}
-            required
-          />
-
-          <Input
-            label="Data do Pagamento"
-            type="date"
-            value={paymentDate}
-            onChange={(e) => setPaymentDate(e.target.value)}
-            required
-          />
-
-          <div className="flex gap-3 pt-4">
-            <Button type="submit" loading={payMutation.isPending} className="flex-1">
-              Confirmar Pagamento
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setIsPaymentModalOpen(false);
-                setSelectedInstallment(null);
-              }}
-              className="flex-1"
-            >
-              Cancelar
-            </Button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 };

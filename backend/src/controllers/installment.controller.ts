@@ -43,6 +43,18 @@ export class InstallmentController {
     return res.json(result);
   }
 
+  async updateDueDate(req: Request, res: Response) {
+    const { id } = req.params;
+    const updateDueDateSchema = z.object({
+      dueDate: z.string().min(1, "Data de vencimento é obrigatória"),
+    });
+
+    const { dueDate } = updateDueDateSchema.parse(req.body);
+    const result = await installmentService.updateDueDate(id, dueDate);
+
+    return res.json(result);
+  }
+
   async listOverdue(req: Request, res: Response) {
     const result = await installmentService.listOverdue();
     return res.json(result);
@@ -67,6 +79,19 @@ export class InstallmentController {
 
   async getBillingList(req: Request, res: Response) {
     const result = await installmentService.getBillingList();
+    return res.json(result);
+  }
+
+  async sendManualBilling(req: Request, res: Response) {
+    const { customerId, installmentId } = req.body;
+    const sendManualBillingSchema = z.object({
+      customerId: z.string().min(1, "ID do cliente é obrigatório"),
+      installmentId: z.string().min(1, "ID da parcela é obrigatório"),
+    });
+
+    const { customerId: parsedCustomerId, installmentId: parsedInstallmentId } = sendManualBillingSchema.parse(req.body);
+    const result = await installmentService.sendManualBillingMessage(parsedCustomerId, parsedInstallmentId);
+
     return res.json(result);
   }
 }

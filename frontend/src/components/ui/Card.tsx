@@ -6,6 +6,7 @@ interface CardProps {
   children: React.ReactNode;
   className?: string;
   footer?: React.ReactNode;
+  onClick?: () => void;
 }
 
 const Card: React.FC<CardProps> = ({
@@ -14,9 +15,10 @@ const Card: React.FC<CardProps> = ({
   children,
   className = '',
   footer,
+  onClick,
 }) => {
   return (
-    <div className={`card ${className}`}>
+    <div className={`card ${className}`} onClick={onClick}>
       {(title || subtitle) && (
         <div className="mb-4">
           {title && <h3 className="text-lg font-semibold text-gray-900">{title}</h3>}

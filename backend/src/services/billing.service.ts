@@ -161,4 +161,46 @@ export class BillingService {
       });
     }
   }
+
+  async sendManualBillingMessage(customerId: string, installmentId: string) {
+    const installment = await installmentRepository.findById(installmentId);
+    if (!installment) {
+      throw new AppError("Parcela não encontrada", 404);
+    }
+
+    const customer = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
+    if (!customer[0]) {
+      throw new AppError("Cliente não encontrado", 404);
+    }
+
+    const templateName = "cobranca_parcela";
+    const components = [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: customer[0].name },
+          { type: "text", text: parseFloat(installment.originalAmount.toString()).toFixed(2) },
+          { type: "text", text: format(new Date(installment.dueDate), "dd/MM/yyyy") },
+        ],
+      },
+    ];
+
+    const result = await whatsAppService.sendTemplateMessage(customer[0].phone, templateName, components);
+
+    if (result && !result.error) {
+      await messageRepository.create({
+        metaMessageId: result.messages?.[0]?.id,
+        customerId: customer[0].id,
+        fromPhone: "SISTEMA",
+        toPhone: customer[0].phone,
+        type: "template",
+        content: `Template: ${templateName}`,
+        direction: "outbound",
+        status: "sent",
+        timestamp: new Date(),
+      });
+    }
+
+    return result;
+  }
 }

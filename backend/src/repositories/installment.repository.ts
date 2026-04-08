@@ -107,42 +107,50 @@ export class InstallmentRepository {
 
   async getStats() {
     const today = new Date();
-    const startOfToday = new Date(today.setHours(0, 0, 0, 0));
-    const endOfToday = new Date(today.setHours(23, 59, 59, 999));
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
 
     const overdueResult = await db
       .select({ 
-        count: sql<number>`count(distinct ${customers.id})`
+        count: sql<number>`count(distinct ${customers.id})`,
+        total: sql<number>`sum(${installments.originalAmount})`
       })
       .from(installments)
       .innerJoin(customers, eq(installments.customerId, customers.id))
       .where(and(eq(installments.status, 'pending'), lt(installments.dueDate, startOfToday), isNull(installments.deletedAt), isNull(customers.deletedAt)));
 
     const pendingTodayResult = await db
-      .select({ 
-        count: sql<number>`count(distinct ${customers.id})`
+      .select({
+        count: sql<number>`count(distinct ${customers.id})`,
+        total: sql<number>`sum(${installments.originalAmount})`
       })
       .from(installments)
       .innerJoin(customers, eq(installments.customerId, customers.id))
-      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} >= ${startOfToday} and ${installments.dueDate} <= ${endOfToday}`, isNull(installments.deletedAt), isNull(customers.deletedAt)));
+      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} >= ${startOfToday.toISOString()} and ${installments.dueDate} <= ${endOfToday.toISOString()}`, isNull(installments.deletedAt), isNull(customers.deletedAt)));
 
     const inDayResult = await db
-      .select({ 
-        count: sql<number>`count(distinct ${customers.id})`
+      .select({
+        count: sql<number>`count(distinct ${customers.id})`,
+        total: sql<number>`sum(${installments.originalAmount})`
       })
       .from(installments)
       .innerJoin(customers, eq(installments.customerId, customers.id))
-      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} > ${endOfToday}`, isNull(installments.deletedAt), isNull(customers.deletedAt)));
+      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} > ${endOfToday.toISOString()}`, isNull(installments.deletedAt), isNull(customers.deletedAt)));
+
+
 
     return {
       overdue: { 
-        count: overdueResult[0].count || 0
+        count: overdueResult[0].count || 0,
+        total: overdueResult[0].total || 0
       },
-      pendingToday: { 
-        count: pendingTodayResult[0].count || 0
+      pendingToday: {
+        count: pendingTodayResult[0].count || 0,
+        total: pendingTodayResult[0].total || 0
       },
-      inDay: { 
-        count: inDayResult[0].count || 0
+      inDay: {
+        count: inDayResult[0].count || 0,
+        total: inDayResult[0].total || 0
       }
     };
   }

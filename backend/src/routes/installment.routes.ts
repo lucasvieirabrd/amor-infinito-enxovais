@@ -22,5 +22,7 @@ installmentRouter.get('/customer/:customerId', installmentController.getByCustom
 installmentRouter.post('/:id/pay', installmentController.markAsPaid);
 installmentRouter.post('/:id/revert', ensureAuthorized(['admin']), installmentController.revertPayment);
 installmentRouter.put('/:id', ensureAuthorized(['admin']), installmentController.update);
+installmentRouter.patch("/:id/due-date", ensureAuthorized(["admin"]), installmentController.updateDueDate);
+installmentRouter.post("/billing/manual-send", ensureAuthorized(["admin"]), installmentController.sendManualBilling);
 
 export { installmentRouter };
