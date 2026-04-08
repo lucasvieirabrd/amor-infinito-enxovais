@@ -44,4 +44,4 @@ export class UserRepository {
     await db.update(users).set(data).where(eq(users.id, id));
     return this.findById(id);
   }
-}場で
+}
