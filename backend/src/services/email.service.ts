@@ -5,7 +5,7 @@ import dns from 'dns';
 dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
+  host: '74.125.20.108', // IP fixo IPv4 do smtp.gmail.com
   port: 587,
   secure: false,
   auth: {
@@ -13,7 +13,8 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
+    servername: 'smtp.gmail.com'
   },
   family: 4
 });
