@@ -148,7 +148,7 @@ export const Products: React.FC = () => {
             <Loading />
           ) : response?.data && response.data.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {response.data.map((product) => (
+              {(response?.data || []).map((product) => (
                 <Card key={product.id} className="p-4 hover:shadow-lg transition">
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">

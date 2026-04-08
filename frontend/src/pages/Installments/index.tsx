@@ -187,7 +187,7 @@ export const Installments: React.FC = () => {
             {isLoadingInstallments ? (
               <Loading />
             ) : customerInstallments && customerInstallments.length > 0 ? (
-              customerInstallments.map((inst) => {
+              (customerInstallments || []).map((inst) => {
                 const isOverdue = isBefore(new Date(inst.dueDate), startOfDay(new Date())) && inst.status === 'pending';
                 const isToday =
                   format(new Date(inst.dueDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') &&
@@ -343,7 +343,7 @@ export const Installments: React.FC = () => {
             <Loading />
           ) : response?.data && response.data.length > 0 ? (
             <div className="divide-y">
-              {response.data.map((customer) => (
+              {(response?.data || []).map((customer) => (
                 <div
                   key={customer.id}
                   onClick={() => setSelectedCustomer(customer)}
