@@ -166,3 +166,13 @@ seedRouter.post('/create-admin', async (req: Request, res: Response) => {
 });
 
 export { seedRouter };
+
+seedRouter.get("/reset-admin-password", async (req: Request, res: Response) => {
+  try {
+    const hash = await bcrypt.hash("AmorInfinito@2026", 10);
+    await db.update(users).set({ password: hash }).where(eq(users.role, "admin"));
+    res.json({ success: true, message: "Senha resetada com sucesso!" });
+  } catch (error) {
+    res.json({ success: false, error: String(error) });
+  }
+});
