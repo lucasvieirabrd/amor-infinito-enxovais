@@ -1,4 +1,8 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+
+// Forçar IPv4 para evitar bloqueio IPv6 do Railway
+dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
@@ -10,7 +14,8 @@ const transporter = nodemailer.createTransport({
   },
   tls: {
     rejectUnauthorized: false
-  }
+  },
+  family: 4
 });
 
 export async function sendPasswordResetEmail(email: string, token: string) {
@@ -35,5 +40,5 @@ export async function sendPasswordResetEmail(email: string, token: string) {
     `,
   });
   
-  console.log('Email enviado:', info.messageId);
+  console.log('Email enviado com sucesso:', info.messageId);
 }
