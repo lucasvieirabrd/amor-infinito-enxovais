@@ -6,7 +6,7 @@ import {
   FiSearch, FiSend, FiCheck, FiCheckCircle, FiTag, FiX, FiPlus
 } from 'react-icons/fi';
 import { Button, Card, Badge, Input } from '../../components/ui';
-import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 
 interface Customer {
   _id: string;
@@ -42,12 +42,19 @@ const tagColors: Record<string, { bg: string; text: string; label: string }> = {
   'none': { bg: 'bg-gray-200', text: 'text-gray-700', label: 'Sem Tag' },
 };
 
+const TZ = 'America/Sao_Paulo';
+
 const parseDate = (val: any): Date | null => {
   if (!val) return null;
-  // Handle MySQL "YYYY-MM-DD HH:MM:SS" format (not valid ISO)
-  const str = typeof val === 'string' ? val.replace(' ', 'T') : val;
+  // MySQL returns "YYYY-MM-DD HH:MM:SS" without timezone — treat as UTC
+  const str = typeof val === 'string' ? val.replace(' ', 'T') + (val.includes('T') || val.endsWith('Z') ? '' : 'Z') : val;
   const d = new Date(str);
   return isNaN(d.getTime()) ? null : d;
+};
+
+const formatTime = (val: any): string => {
+  const d = parseDate(val);
+  return d ? formatInTimeZone(d, TZ, 'HH:mm') : '';
 };
 
 export const Messages: React.FC = () => {
@@ -237,10 +244,7 @@ export const Messages: React.FC = () => {
                       </p>
                       <p className="text-xs text-gray-600 truncate">{conv.lastMessage || '—'}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {(() => {
-                          const date = parseDate(conv.lastMessageAt);
-                          return date ? format(date, 'HH:mm') : '';
-                        })()}
+                        {formatTime(conv.lastMessageAt)}
                       </p>
                     </div>
                     {conv.tag !== 'none' && (() => {
@@ -329,12 +333,7 @@ export const Messages: React.FC = () => {
                     <div className={`flex items-center gap-1 mt-1 text-xs ${
                       msg.direction === 'outbound' ? 'text-white text-opacity-70' : 'text-gray-500'
                     }`}>
-                      <span>
-                        {(() => {
-                          const date = parseDate(msg.timestamp);
-                          return date ? format(date, 'HH:mm') : '';
-                        })()}
-                      </span>
+                      <span>{formatTime(msg.timestamp)}</span>
                       {msg.direction === 'outbound' && (
                         msg.status === 'read' ? (
                           <FiCheckCircle size={14} />

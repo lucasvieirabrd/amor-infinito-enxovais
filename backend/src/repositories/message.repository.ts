@@ -82,14 +82,24 @@ export class MessageRepository {
 
   async listChatHistory(phone: string, page: number, limit: number) {
     const offset = (page - 1) * limit;
-    
+
+    // Build phone variants to handle stored numbers with/without 55 prefix
+    const digits = phone.replace(/\D/g, '');
+    const variants = new Set([digits]);
+    if (digits.startsWith('55')) variants.add(digits.slice(2));
+    else variants.add(`55${digits}`);
+    const phoneList = [...variants];
+
     return db
       .select()
       .from(messages)
       .where(
         and(
           isNull(messages.deletedAt),
-          or(eq(messages.fromPhone, phone), eq(messages.toPhone, phone))
+          or(
+            ...phoneList.map(p => eq(messages.fromPhone, p)),
+            ...phoneList.map(p => eq(messages.toPhone, p))
+          )
         )
       )
       .limit(limit)
