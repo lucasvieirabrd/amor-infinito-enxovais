@@ -128,50 +128,40 @@ export class InstallmentRepository {
 
   async getStats() {
     const [overdueResult, todayResult, inDayResult] = await Promise.all([
-      db.select({
-        count: sql<number>`count(*)`,
-        total: sql<string>`sum(${installments.originalAmount})`
-      }).from(installments)
-        .where(and(
-          eq(installments.status, 'pending'),
-          sql`DATE(${installments.dueDate}) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
-          isNull(installments.deletedAt)
-        )),
-
-      db.select({
-        count: sql<number>`count(*)`,
-        total: sql<string>`sum(${installments.originalAmount})`
-      }).from(installments)
-        .where(and(
-          eq(installments.status, 'pending'),
-          sql`DATE(${installments.dueDate}) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
-          isNull(installments.deletedAt)
-        )),
-
-      db.select({
-        count: sql<number>`count(*)`,
-        total: sql<string>`sum(${installments.originalAmount})`
-      }).from(installments)
-        .where(and(
-          eq(installments.status, 'pending'),
-          sql`DATE(${installments.dueDate}) > DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
-          isNull(installments.deletedAt)
-        )),
+      db.execute(sql`
+        SELECT COUNT(*) as count, SUM(original_amount) as total
+        FROM installments
+        WHERE status = 'pending'
+          AND DATE(due_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+          AND deleted_at IS NULL
+      `),
+      db.execute(sql`
+        SELECT COUNT(*) as count, SUM(original_amount) as total
+        FROM installments
+        WHERE status = 'pending'
+          AND DATE(due_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+          AND deleted_at IS NULL
+      `),
+      db.execute(sql`
+        SELECT COUNT(*) as count, SUM(original_amount) as total
+        FROM installments
+        WHERE status = 'pending'
+          AND DATE(due_date) > DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+          AND deleted_at IS NULL
+      `),
     ]);
 
+    const toNum = (v: any) => Number(v ?? 0);
+    const toFloat = (v: any) => parseFloat(v?.toString() ?? '0') || 0;
+
+    const o = (overdueResult[0] as any[])[0];
+    const t = (todayResult[0] as any[])[0];
+    const d = (inDayResult[0] as any[])[0];
+
     return {
-      overdue: {
-        count: Number(overdueResult[0]?.count ?? 0),
-        total: parseFloat(overdueResult[0]?.total?.toString() ?? '0') || 0,
-      },
-      pendingToday: {
-        count: Number(todayResult[0]?.count ?? 0),
-        total: parseFloat(todayResult[0]?.total?.toString() ?? '0') || 0,
-      },
-      inDay: {
-        count: Number(inDayResult[0]?.count ?? 0),
-        total: parseFloat(inDayResult[0]?.total?.toString() ?? '0') || 0,
-      },
+      overdue:      { count: toNum(o?.count),  total: toFloat(o?.total) },
+      pendingToday: { count: toNum(t?.count),  total: toFloat(t?.total) },
+      inDay:        { count: toNum(d?.count),  total: toFloat(d?.total) },
     };
   }
 }
