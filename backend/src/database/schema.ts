@@ -90,7 +90,7 @@ export const messages = mysqlTable('messages', {
   customerId: varchar('customer_id', { length: 36 }),
   fromPhone: varchar('from_phone', { length: 20 }).notNull(),
   toPhone: varchar('to_phone', { length: 20 }).notNull(),
-  type: mysqlEnum('type', ['text', 'template', 'image', 'audio', 'video', 'document', 'unknown']).notNull(),
+  type: mysqlEnum('type', ['text', 'template', 'image', 'audio', 'video', 'document', 'unknown', 'unsupported']).notNull(),
   content: text('content'),
   direction: mysqlEnum('direction', ['inbound', 'outbound']).notNull(),
   status: mysqlEnum('status', ['sent', 'delivered', 'read', 'failed', 'received']).notNull().default('received'),

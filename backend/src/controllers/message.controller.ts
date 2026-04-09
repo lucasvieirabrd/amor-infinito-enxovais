@@ -18,7 +18,7 @@ export class MessageController {
     }).parse(req.query);
 
     const history = await messageService.getChatHistory(phone, page, limit);
-    return res.json(history);
+    return res.json({ data: history });
   }
 
   async sendMessage(req: Request, res: Response) {

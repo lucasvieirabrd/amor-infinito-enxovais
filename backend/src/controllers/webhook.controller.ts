@@ -49,12 +49,13 @@ export class WebhookController {
         // Tentar vincular ao cliente pelo número de telefone
         const customer = await customerRepository.findByPhone(phone);
         
+        const ALLOWED_TYPES = ['text', 'template', 'image', 'audio', 'video', 'document', 'unknown', 'unsupported'];
         const messageData = {
           metaMessageId: msg.id,
           customerId: customer?.id || null,
           fromPhone: phone,
           toPhone: 'SISTEMA',
-          type: msg.type,
+          type: ALLOWED_TYPES.includes(msg.type) ? msg.type : 'unsupported',
           content: msg.text?.body || msg.image?.caption || msg.audio?.id || 'Conteúdo não suportado',
           direction: 'inbound',
           status: 'received',

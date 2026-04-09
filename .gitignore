@@ -10,8 +10,8 @@ frontend/dist
 backend/node_modules
 backend/dist
 
-# Drizzle
-backend/drizzle
+# Drizzle (metadata only — migration SQL files are tracked)
+backend/drizzle/meta
 
 # Google Credentials (MANTIDO PARA DEPLOY RAILWAY)
 !backend/src/config/amorinfinito-488020-0b15f07c25f0.json
