@@ -14,10 +14,17 @@ export class CustomerRepository {
   }
 
   async findByPhone(phone: string) {
+    const digits = phone.replace(/\D/g, '');
+    // Build variants: exact digits, with 55, without 55 — to handle format mismatches
+    const variants = new Set([digits]);
+    if (digits.startsWith('55')) variants.add(digits.slice(2));
+    else variants.add(`55${digits}`);
+
+    const conditions = [...variants].map(v => eq(customers.phone, v));
     const result = await db
       .select()
       .from(customers)
-      .where(and(eq(customers.phone, phone), isNull(customers.deletedAt)))
+      .where(and(isNull(customers.deletedAt), or(...conditions)))
       .limit(1);
     return result[0];
   }

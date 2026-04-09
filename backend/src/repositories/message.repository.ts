@@ -76,7 +76,8 @@ export class MessageRepository {
       ORDER BY m1.timestamp DESC
     `);
     
-    return result;
+    // db.execute returns [rows, fields] tuple with mysql2 driver — extract just the rows
+    return (result as any)[0] ?? result;
   }
 
   async listChatHistory(phone: string, page: number, limit: number) {

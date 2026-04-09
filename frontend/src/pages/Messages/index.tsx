@@ -73,15 +73,20 @@ export const Messages: React.FC = () => {
     },
   });
 
+  // Telefone de contato: para outbound (fromPhone=SISTEMA) usa toPhone
+  const contactPhone = selectedConversation
+    ? (selectedConversation.fromPhone !== 'SISTEMA' ? selectedConversation.fromPhone : selectedConversation.toPhone)
+    : undefined;
+
   // Buscar histórico de chat
   const { data: messages } = useQuery({
-    queryKey: ['chat-history', selectedConversation?.fromPhone],
+    queryKey: ['chat-history', contactPhone],
     queryFn: async () => {
-      if (!selectedConversation) return [];
-      const response = await api.get(`/messages/history/${selectedConversation.fromPhone}`);
+      if (!contactPhone) return [];
+      const response = await api.get(`/messages/history/${contactPhone}`);
       return response.data.data as Message[];
     },
-    enabled: !!selectedConversation,
+    enabled: !!contactPhone,
   });
 
   // Mutação para enviar mensagem
@@ -89,7 +94,7 @@ export const Messages: React.FC = () => {
     mutationFn: (data: { to: string, content: string }) => api.post('/messages/send', data),
     onSuccess: () => {
       setNewMessage('');
-      queryClient.invalidateQueries({ queryKey: ['chat-history', selectedConversation?.fromPhone] });
+      queryClient.invalidateQueries({ queryKey: ['chat-history', contactPhone] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
   });
@@ -154,7 +159,7 @@ export const Messages: React.FC = () => {
     if (!selectedConversation || !newMessage.trim()) return;
 
     sendMutation.mutate({
-      to: selectedConversation.fromPhone,
+      to: contactPhone!,
       content: newMessage,
     });
   };
