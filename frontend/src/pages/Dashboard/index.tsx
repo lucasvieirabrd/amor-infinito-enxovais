@@ -91,7 +91,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600 font-medium">Total a Receber</p>
-              <p className="text-2xl font-bold text-gray-900">R$ {Number(installmentStats?.inDay?.total || 0).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-gray-900">R$ {Number((installmentStats?.inDay?.total || 0) + (installmentStats?.overdue?.total || 0)).toFixed(2)}</p>
             </div>
           </div>
         </Card>

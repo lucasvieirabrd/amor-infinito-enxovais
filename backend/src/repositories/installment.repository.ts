@@ -1,6 +1,6 @@
 import { db } from '../database';
 import { installments, customers, sales } from '../database/schema';
-import { eq, and, isNull, lt, sql, or } from 'drizzle-orm';
+import { eq, and, isNull, lt, gte, sql, or } from 'drizzle-orm';
 
 export class InstallmentRepository {
   async findById(id: string) {
@@ -127,6 +127,12 @@ export class InstallmentRepository {
   }
 
   async getStats() {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startOfTomorrow = new Date(startOfToday);
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+
     const overdueResult = await db
       .select({
         count: sql<number>`count(distinct ${customers.id})`,
@@ -136,7 +142,7 @@ export class InstallmentRepository {
       .innerJoin(customers, eq(installments.customerId, customers.id))
       .where(and(
         eq(installments.status, 'pending'),
-        sql`DATE(${installments.dueDate}) < CURDATE()`,
+        lt(installments.dueDate, startOfToday),
         isNull(installments.deletedAt),
         isNull(customers.deletedAt)
       ));
@@ -150,7 +156,8 @@ export class InstallmentRepository {
       .innerJoin(customers, eq(installments.customerId, customers.id))
       .where(and(
         eq(installments.status, 'pending'),
-        sql`DATE(${installments.dueDate}) = CURDATE()`,
+        gte(installments.dueDate, startOfToday),
+        lt(installments.dueDate, startOfTomorrow),
         isNull(installments.deletedAt),
         isNull(customers.deletedAt)
       ));
@@ -164,7 +171,7 @@ export class InstallmentRepository {
       .innerJoin(customers, eq(installments.customerId, customers.id))
       .where(and(
         eq(installments.status, 'pending'),
-        sql`DATE(${installments.dueDate}) > CURDATE()`,
+        gte(installments.dueDate, startOfTomorrow),
         isNull(installments.deletedAt),
         isNull(customers.deletedAt)
       ));

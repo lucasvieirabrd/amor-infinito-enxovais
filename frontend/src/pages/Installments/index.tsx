@@ -211,7 +211,8 @@ export const Installments: React.FC = () => {
             ) : customerInstallments && customerInstallments.length > 0 ? (
               (customerInstallments || []).map((inst) => {
                 const isOverdue =
-                  isBefore(new Date(inst.dueDate), startOfDay(new Date())) && inst.status === 'pending';
+                  inst.status === 'overdue' ||
+                  (inst.status === 'pending' && isBefore(new Date(inst.dueDate), startOfDay(new Date())));
                 const isToday =
                   format(new Date(inst.dueDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') &&
                   inst.status === 'pending';
@@ -268,7 +269,7 @@ export const Installments: React.FC = () => {
                           <FiEdit size={16} />
                           Editar Data
                         </Button>
-                        {inst.status === 'pending' && (
+                        {inst.status !== 'paid' && (
                           <Button
                             onClick={() => handleOpenPayment(inst)}
                             className="ml-4 flex items-center gap-2"
@@ -297,6 +298,68 @@ export const Installments: React.FC = () => {
             )}
           </div>
         </div>
+
+        <Modal
+          isOpen={isPaymentModalOpen}
+          onClose={() => setIsPaymentModalOpen(false)}
+          title="Registrar Pagamento"
+        >
+          <form onSubmit={handleConfirmPayment} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Valor Pago</label>
+              <Input
+                type="number"
+                value={paidAmount}
+                onChange={(e) => setPaidAmount(Number(e.target.value))}
+                step="0.01"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Data do Pagamento</label>
+              <Input
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setIsPaymentModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="primary" loading={payMutation.isPending}>
+                Confirmar Pagamento
+              </Button>
+            </div>
+          </form>
+        </Modal>
+
+        <Modal
+          isOpen={isEditDateModalOpen}
+          onClose={() => setIsEditDateModalOpen(false)}
+          title="Editar Data de Vencimento"
+        >
+          <form onSubmit={handleConfirmEditDate} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nova Data de Vencimento</label>
+              <Input
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setIsEditDateModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="primary" loading={editDateMutation.isPending}>
+                Salvar Data
+              </Button>
+            </div>
+          </form>
+        </Modal>
       </div>
     );
   }
