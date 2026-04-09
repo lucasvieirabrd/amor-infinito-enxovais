@@ -16,10 +16,14 @@ export class WhatsAppService {
   /**
    * Envia uma mensagem baseada em template oficial.
    */
+  private normalizePhone(phone: string): string {
+    const digits = phone.replace(/\D/g, '');
+    return digits.startsWith('55') ? digits : `55${digits}`;
+  }
+
   async sendTemplateMessage(to: string, templateName: string, components: any[]) {
     try {
-      // Limpar o número de telefone (apenas dígitos)
-      const cleanPhone = to.replace(/\D/g, '');
+      const cleanPhone = this.normalizePhone(to);
       
       const response = await axios.post(
         `${this.apiUrl}/messages`,
@@ -54,7 +58,7 @@ export class WhatsAppService {
    */
   async sendTextMessage(to: string, text: string) {
     try {
-      const cleanPhone = to.replace(/\D/g, '');
+      const cleanPhone = this.normalizePhone(to);
       
       const response = await axios.post(
         `${this.apiUrl}/messages`,
