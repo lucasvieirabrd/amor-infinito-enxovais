@@ -6,10 +6,7 @@ import { ensureAuthorized } from '../middlewares/ensureAuthorized';
 const installmentRouter = Router();
 const installmentController = new InstallmentController();
 
-// Todas as rotas de crediário requerem autenticação
-installmentRouter.use(ensureAuthenticated);
-
-// Debug temporário
+// Debug temporário (sem autenticação)
 installmentRouter.get('/debug-stats', async (req, res) => {
   const { db } = require('../database');
   const { sql } = require('drizzle-orm');
@@ -28,6 +25,9 @@ installmentRouter.get('/debug-stats', async (req, res) => {
   `);
   res.json(result[0]);
 });
+
+// Todas as rotas de crediário requerem autenticação
+installmentRouter.use(ensureAuthenticated);
 
 // Listagens gerais
 installmentRouter.get('/stats', installmentController.getStats);
