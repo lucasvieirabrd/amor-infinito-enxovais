@@ -138,9 +138,9 @@ export class InstallmentService {
   }
 
   async getBillingList() {
-    const overdue = await installmentRepository.listOverdue();
-    
-    return overdue.map(row => ({
+    const rows = await installmentRepository.listPendingOverdue();
+
+    return rows.map(row => ({
       id: row.installment.id,
       customerId: row.customer.id,
       customerName: row.customer.name,

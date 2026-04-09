@@ -105,19 +105,41 @@ export class InstallmentRepository {
     };
   }
 
-  async getStats() {
+  async listPendingOverdue() {
     const today = new Date();
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    today.setHours(0, 0, 0, 0);
 
+    return db
+      .select({
+        installment: installments,
+        customer: customers,
+      })
+      .from(installments)
+      .innerJoin(customers, eq(installments.customerId, customers.id))
+      .where(
+        and(
+          eq(installments.status, 'pending'),
+          lt(installments.dueDate, today),
+          isNull(installments.deletedAt)
+        )
+      )
+      .orderBy(installments.dueDate);
+  }
+
+  async getStats() {
     const overdueResult = await db
-      .select({ 
+      .select({
         count: sql<number>`count(distinct ${customers.id})`,
         total: sql<number>`sum(${installments.originalAmount})`
       })
       .from(installments)
       .innerJoin(customers, eq(installments.customerId, customers.id))
-      .where(and(eq(installments.status, 'pending'), lt(installments.dueDate, startOfToday), isNull(installments.deletedAt), isNull(customers.deletedAt)));
+      .where(and(
+        eq(installments.status, 'pending'),
+        sql`DATE(${installments.dueDate}) < CURDATE()`,
+        isNull(installments.deletedAt),
+        isNull(customers.deletedAt)
+      ));
 
     const pendingTodayResult = await db
       .select({
@@ -126,7 +148,12 @@ export class InstallmentRepository {
       })
       .from(installments)
       .innerJoin(customers, eq(installments.customerId, customers.id))
-      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} >= ${startOfToday.toISOString()} and ${installments.dueDate} <= ${endOfToday.toISOString()}`, isNull(installments.deletedAt), isNull(customers.deletedAt)));
+      .where(and(
+        eq(installments.status, 'pending'),
+        sql`DATE(${installments.dueDate}) = CURDATE()`,
+        isNull(installments.deletedAt),
+        isNull(customers.deletedAt)
+      ));
 
     const inDayResult = await db
       .select({
@@ -135,12 +162,15 @@ export class InstallmentRepository {
       })
       .from(installments)
       .innerJoin(customers, eq(installments.customerId, customers.id))
-      .where(and(eq(installments.status, 'pending'), sql`${installments.dueDate} > ${endOfToday.toISOString()}`, isNull(installments.deletedAt), isNull(customers.deletedAt)));
-
-
+      .where(and(
+        eq(installments.status, 'pending'),
+        sql`DATE(${installments.dueDate}) > CURDATE()`,
+        isNull(installments.deletedAt),
+        isNull(customers.deletedAt)
+      ));
 
     return {
-      overdue: { 
+      overdue: {
         count: overdueResult[0].count || 0,
         total: overdueResult[0].total || 0
       },
