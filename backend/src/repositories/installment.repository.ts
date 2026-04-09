@@ -134,7 +134,7 @@ export class InstallmentRepository {
       }).from(installments)
         .where(and(
           eq(installments.status, 'pending'),
-          sql`DATE(${installments.dueDate}) < CURDATE()`,
+          sql`DATE(${installments.dueDate}) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
           isNull(installments.deletedAt)
         )),
 
@@ -144,7 +144,7 @@ export class InstallmentRepository {
       }).from(installments)
         .where(and(
           eq(installments.status, 'pending'),
-          sql`DATE(${installments.dueDate}) = CURDATE()`,
+          sql`DATE(${installments.dueDate}) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
           isNull(installments.deletedAt)
         )),
 
@@ -154,7 +154,7 @@ export class InstallmentRepository {
       }).from(installments)
         .where(and(
           eq(installments.status, 'pending'),
-          sql`DATE(${installments.dueDate}) > CURDATE()`,
+          sql`DATE(${installments.dueDate}) > DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
           isNull(installments.deletedAt)
         )),
     ]);

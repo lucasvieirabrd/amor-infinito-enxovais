@@ -13,13 +13,13 @@ installmentRouter.get('/debug-stats', async (req, res) => {
   const result = await db.execute(sql`
     SELECT
       COUNT(*) as total_pending,
-      SUM(CASE WHEN DATE(due_date) < CURDATE() THEN 1 ELSE 0 END) as overdue,
-      SUM(CASE WHEN DATE(due_date) = CURDATE() THEN 1 ELSE 0 END) as today,
-      SUM(CASE WHEN DATE(due_date) > CURDATE() THEN 1 ELSE 0 END) as inday,
+      SUM(CASE WHEN DATE(due_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) THEN 1 ELSE 0 END) as overdue,
+      SUM(CASE WHEN DATE(due_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) THEN 1 ELSE 0 END) as today,
+      SUM(CASE WHEN DATE(due_date) > DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) THEN 1 ELSE 0 END) as inday,
       MIN(due_date) as oldest_due,
       MAX(due_date) as newest_due,
-      CURDATE() as server_curdate,
-      NOW() as server_now
+      DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) as server_curdate,
+      CONVERT_TZ(NOW(), '+00:00', '-03:00') as server_now
     FROM installments
     WHERE status = 'pending' AND deleted_at IS NULL
   `);
