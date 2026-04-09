@@ -131,8 +131,7 @@ export class InstallmentRepository {
       db.execute(sql`
         SELECT COUNT(*) as count, SUM(original_amount) as total
         FROM installments
-        WHERE status = 'pending'
-          AND DATE(due_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+        WHERE status = 'overdue'
           AND deleted_at IS NULL
       `),
       db.execute(sql`
