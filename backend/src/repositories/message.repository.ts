@@ -109,6 +109,42 @@ export class MessageRepository {
     await db.execute(sql`DELETE FROM conversations WHERE phone = ${digits} OR phone = ${alt}`);
   }
 
+  async getStatsToday() {
+    // "today" in America/Sao_Paulo = UTC-3; compute start/end in UTC
+    const todayResult = await db.execute(sql`
+      SELECT
+        SUM(CASE WHEN direction='outbound' THEN 1 ELSE 0 END) AS outboundToday,
+        SUM(CASE WHEN direction='inbound'  THEN 1 ELSE 0 END) AS inboundToday
+      FROM messages
+      WHERE deleted_at IS NULL
+        AND timestamp >= DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+        AND timestamp <  DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) + INTERVAL 1 DAY
+    `);
+
+    const tagResult = await db.execute(sql`
+      SELECT COALESCE(conv.tag, 'none') AS tag, COUNT(*) AS cnt
+      FROM messages m
+      LEFT JOIN conversations conv
+        ON conv.phone = CASE WHEN m.direction='inbound' THEN m.from_phone ELSE m.to_phone END
+      WHERE m.deleted_at IS NULL
+        AND m.direction = 'inbound'
+        AND m.timestamp >= DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+        AND m.timestamp <  DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) + INTERVAL 1 DAY
+      GROUP BY conv.tag
+    `);
+
+    const totals = ((todayResult as any)[0]?.[0]) ?? { outboundToday: 0, inboundToday: 0 };
+    const tagRows: any[] = (tagResult as any)[0] ?? [];
+    const inboundByTag: Record<string, number> = {};
+    for (const row of tagRows) inboundByTag[row.tag ?? 'none'] = Number(row.cnt);
+
+    return {
+      outboundToday: Number(totals.outboundToday ?? 0),
+      inboundToday:  Number(totals.inboundToday  ?? 0),
+      inboundByTag,
+    };
+  }
+
   async listChatHistory(phone: string, page: number, limit: number) {
     const offset = (page - 1) * limit;
 

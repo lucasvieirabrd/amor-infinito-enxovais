@@ -11,6 +11,9 @@ messageRouter.use(ensureAuthenticated);
 // Listar conversas ativas
 messageRouter.get('/conversations', messageController.listConversations);
 
+// Estatísticas do dia
+messageRouter.get('/stats/today', messageController.getStatsToday);
+
 // Histórico de chat por telefone
 messageRouter.get('/history/:phone', messageController.getChatHistory);
 

@@ -46,4 +46,8 @@ export class MessageService {
   async deleteConversation(phone: string) {
     return messageRepository.deleteConversationMessages(phone);
   }
+
+  async getStatsToday() {
+    return messageRepository.getStatsToday();
+  }
 }

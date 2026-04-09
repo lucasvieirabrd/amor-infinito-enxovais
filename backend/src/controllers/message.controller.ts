@@ -59,4 +59,9 @@ export class MessageController {
     await messageService.deleteConversation(phone);
     return res.status(204).send();
   }
+
+  async getStatsToday(req: Request, res: Response) {
+    const stats = await messageService.getStatsToday();
+    return res.json(stats);
+  }
 }
