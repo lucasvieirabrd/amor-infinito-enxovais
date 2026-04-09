@@ -1,3 +1,5 @@
+process.env.TZ = 'America/Sao_Paulo';
+
 import 'express-async-errors';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -18,9 +20,6 @@ const allowedOrigins = [
 
 // Carregar variáveis de ambiente
 dotenv.config();
-
-// Definir timezone
-process.env.TZ = 'America/Sao_Paulo';
 
 const app = express();
 const port = process.env.PORT || 3000;
