@@ -106,9 +106,6 @@ export class InstallmentRepository {
   }
 
   async listPendingOverdue() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     return db
       .select({
         installment: installments,
@@ -118,8 +115,7 @@ export class InstallmentRepository {
       .innerJoin(customers, eq(installments.customerId, customers.id))
       .where(
         and(
-          eq(installments.status, 'pending'),
-          lt(installments.dueDate, today),
+          or(eq(installments.status, 'pending'), eq(installments.status, 'overdue')),
           isNull(installments.deletedAt)
         )
       )

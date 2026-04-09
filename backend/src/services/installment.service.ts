@@ -145,7 +145,10 @@ export class InstallmentService {
       customerId: row.customer.id,
       customerName: row.customer.name,
       customerPhone: row.customer.phone,
-      amount: Number(row.installment.originalAmount),
+      installmentNumber: row.installment.installmentNumber,
+      originalAmount: Number(row.installment.originalAmount),
+      paidAmount: row.installment.paidAmount ? Number(row.installment.paidAmount) : null,
+      paymentDate: row.installment.paymentDate,
       dueDate: row.installment.dueDate,
       status: row.installment.status,
       daysOverdue: Math.floor(
