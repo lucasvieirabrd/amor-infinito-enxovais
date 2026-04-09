@@ -31,7 +31,31 @@ installmentRouter.get('/debug-stats', async (req, res) => {
     ORDER BY due_date ASC
     LIMIT 20
   `);
-  res.json({ summary: result[0], sample: result2[0] });
+  const result3 = await db.execute(sql`
+    SELECT @@time_zone as session_tz, @@global.time_zone as global_tz
+  `);
+  const result4 = await db.execute(sql`
+    SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+    FROM information_schema.COLUMNS
+    WHERE TABLE_NAME = 'installments' AND COLUMN_NAME = 'due_date'
+  `);
+  const result5 = await db.execute(sql`
+    SELECT
+      due_date as raw_due_date,
+      DATE(due_date) as date_due_date,
+      DATE(CONVERT_TZ(due_date, '+00:00', '-03:00')) as date_converted,
+      DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) as today_br
+    FROM installments
+    WHERE status = 'pending' AND deleted_at IS NULL
+    LIMIT 5
+  `);
+  res.json({
+    summary: result[0],
+    sample: result2[0],
+    timezone: result3[0],
+    column_type: result4[0],
+    date_comparison: result5[0],
+  });
 });
 
 // Todas as rotas de crediário requerem autenticação
