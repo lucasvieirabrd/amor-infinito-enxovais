@@ -23,7 +23,15 @@ installmentRouter.get('/debug-stats', async (req, res) => {
     FROM installments
     WHERE status = 'pending' AND deleted_at IS NULL
   `);
-  res.json(result[0]);
+  const result2 = await db.execute(sql`
+    SELECT due_date, status, COUNT(*) as qty
+    FROM installments
+    WHERE deleted_at IS NULL
+    GROUP BY due_date, status
+    ORDER BY due_date ASC
+    LIMIT 20
+  `);
+  res.json({ summary: result[0], sample: result2[0] });
 });
 
 // Todas as rotas de crediário requerem autenticação
