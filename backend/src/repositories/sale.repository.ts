@@ -1,5 +1,5 @@
 import { db } from '../database';
-import { sales, saleItems, installments, saleSequence, customers } from '../database/schema';
+import { sales, saleItems, installments, saleSequence, customers, products } from '../database/schema';
 import { eq, and, isNull, sql, ne } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { MySqlTransaction } from 'drizzle-orm/mysql-core';
@@ -201,6 +201,32 @@ export class SaleRepository {
       );
 
     return parseFloat(String(result[0].total)) || 0;
+  }
+
+  async getTopProductsThisMonth() {
+    const result = await db.execute(sql`
+      SELECT
+        p.name,
+        p.sku,
+        SUM(si.quantity) as total_qty,
+        SUM(si.total_price) as total_revenue
+      FROM sale_items si
+      JOIN products p ON si.product_id = p.id
+      JOIN sales s ON si.sale_id = s.id
+      WHERE s.deleted_at IS NULL
+        AND s.is_imported = 0
+        AND YEAR(CONVERT_TZ(s.sale_date, '+00:00', '-03:00')) = YEAR(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+        AND MONTH(CONVERT_TZ(s.sale_date, '+00:00', '-03:00')) = MONTH(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+      GROUP BY p.id, p.name, p.sku
+      ORDER BY total_qty DESC
+      LIMIT 5
+    `);
+    return (result[0] as any[]).map(row => ({
+      name: row.name,
+      sku: row.sku ?? '',
+      totalQty: Number(row.total_qty) || 0,
+      totalRevenue: parseFloat(row.total_revenue?.toString() ?? '0') || 0,
+    }));
   }
 
   async getSalesLast7Days() {

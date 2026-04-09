@@ -180,4 +180,8 @@ export class SaleService {
   async getSalesLast7Days() {
     return saleRepository.getSalesLast7Days();
   }
+
+  async getTopProductsThisMonth() {
+    return saleRepository.getTopProductsThisMonth();
+  }
 }

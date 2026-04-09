@@ -83,6 +83,7 @@ installmentRouter.use(ensureAuthenticated);
 
 // Listagens gerais
 installmentRouter.get('/stats', installmentController.getStats);
+installmentRouter.get('/payments-last-30-days', installmentController.getPaymentsLast30Days);
 installmentRouter.get('/billing', installmentController.getBillingList);
 installmentRouter.get('/active', installmentController.listActiveCrediarios);
 installmentRouter.get('/overdue', installmentController.listOverdue);

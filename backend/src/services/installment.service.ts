@@ -133,8 +133,11 @@ export class InstallmentService {
   }
 
   async getStats() {
-    const stats = await installmentRepository.getStats();
-    return stats;
+    return installmentRepository.getStats();
+  }
+
+  async getPaymentsLast30Days() {
+    return installmentRepository.getPaymentsLast30Days();
   }
 
   async getBillingList() {

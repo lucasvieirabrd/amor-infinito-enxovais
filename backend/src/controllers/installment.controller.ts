@@ -77,6 +77,11 @@ export class InstallmentController {
     return res.json(result);
   }
 
+  async getPaymentsLast30Days(req: Request, res: Response) {
+    const result = await installmentService.getPaymentsLast30Days();
+    return res.json({ payments: result });
+  }
+
   async getBillingList(req: Request, res: Response) {
     const result = await installmentService.getBillingList();
     return res.json(result);

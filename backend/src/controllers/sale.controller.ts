@@ -88,4 +88,9 @@ export class SaleController {
     const salesLast7Days = await saleService.getSalesLast7Days();
     return res.json({ salesLast7Days });
   }
+
+  async getTopProductsThisMonth(req: Request, res: Response) {
+    const topProducts = await saleService.getTopProductsThisMonth();
+    return res.json({ topProducts });
+  }
 }
