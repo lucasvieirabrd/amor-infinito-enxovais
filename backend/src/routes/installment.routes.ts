@@ -56,6 +56,16 @@ installmentRouter.get('/debug-stats', async (req, res) => {
     ORDER BY due_date ASC
     LIMIT 10
   `);
+  const result7 = await db.execute(sql`
+    SELECT COUNT(*) as total_overdue, SUM(original_amount) as valor
+    FROM installments
+    WHERE status = 'pending'
+    AND deleted_at IS NULL
+    AND DATE(due_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+  `);
+  const result8 = await db.execute(sql`
+    SELECT DISTINCT status FROM installments
+  `);
   res.json({
     summary: result[0],
     sample: result2[0],
@@ -63,6 +73,8 @@ installmentRouter.get('/debug-stats', async (req, res) => {
     column_type: result4[0],
     date_comparison: result5[0],
     past_due_installments: result6[0],
+    overdue_count: result7[0],
+    all_statuses: result8[0],
   });
 });
 
