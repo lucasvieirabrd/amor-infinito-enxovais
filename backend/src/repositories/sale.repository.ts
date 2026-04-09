@@ -199,7 +199,7 @@ export class SaleRepository {
         )
       );
 
-    return result[0].total || 0;
+    return parseFloat(String(result[0].total)) || 0;
   }
 
   async getSalesLast7Days() {
@@ -217,6 +217,9 @@ export class SaleRepository {
       .groupBy(sql`DATE(${sales.saleDate})`)
       .orderBy(sql`DATE(${sales.saleDate}) ASC`);
 
-    return result;
+    return result.map(row => ({
+      saleDate: row.saleDate,
+      totalSales: parseFloat(String(row.totalSales)) || 0,
+    }));
   }
 }
