@@ -1,6 +1,6 @@
 import { db } from '../database';
 import { sales, saleItems, installments, saleSequence, customers } from '../database/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql, ne } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { MySqlTransaction } from 'drizzle-orm/mysql-core';
 
@@ -194,6 +194,7 @@ export class SaleRepository {
       .where(
         and(
           isNull(sales.deletedAt),
+          ne(sales.isImported, true),
           sql`${sales.saleDate} >= ${startOfMonth}`,
           sql`${sales.saleDate} <= ${endOfMonth}`
         )

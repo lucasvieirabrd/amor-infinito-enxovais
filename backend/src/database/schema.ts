@@ -1,4 +1,4 @@
-import { mysqlTable, varchar, datetime, int, decimal, mysqlEnum, text, json } from 'drizzle-orm/mysql-core';
+import { mysqlTable, varchar, datetime, int, decimal, mysqlEnum, text, json, boolean } from 'drizzle-orm/mysql-core';
 import { sql } from 'drizzle-orm';
 
 // Tabelas principais
@@ -52,6 +52,7 @@ export const sales = mysqlTable("sales", {
   totalAmount: decimal('total_amount', { precision: 10, scale: 2 }).notNull(),
   saleDate: datetime('sale_date').notNull().default(sql`CURRENT_TIMESTAMP`),
   installmentsCount: int('installments_count'),
+  isImported: boolean('is_imported').notNull().default(false),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime('deleted_at'),
