@@ -12,6 +12,7 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiSearch,
+  FiTrendingUp,
 } from 'react-icons/fi';
 import { Button, Card, Badge, Modal, Input, Loading } from '../../components/ui';
 import { format, isBefore, startOfDay } from 'date-fns';
@@ -184,44 +185,63 @@ export const Billing: React.FC = () => {
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Cobrança</h1>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-4 border-l-4 border-red-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Em Atraso</p>
-                  <p className="text-2xl font-bold text-red-600">{stats?.overdue?.count || 0}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card>
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-primary bg-opacity-10 text-primary rounded-lg">
+                  <FiTrendingUp size={24} />
                 </div>
-                <FiAlertTriangle className="text-red-500" size={32} />
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Total a Receber</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    R$ {((stats?.overdue?.total || 0) + (stats?.pendingToday?.total || 0) + (stats?.inDay?.total || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                R$ {(stats?.overdue?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
             </Card>
 
-            <Card className="p-4 border-l-4 border-yellow-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Vencendo Hoje</p>
-                  <p className="text-2xl font-bold text-yellow-600">{stats?.pendingToday?.count || 0}</p>
+            <Card>
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-error bg-opacity-10 text-error rounded-lg">
+                  <FiAlertTriangle size={24} />
                 </div>
-                <FiClock className="text-yellow-500" size={32} />
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Em Atraso</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    R$ {(stats?.overdue?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">{stats?.overdue?.count || 0} parcelas</p>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                R$ {(stats?.pendingToday?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
             </Card>
 
-            <Card className="p-4 border-l-4 border-green-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Em Dia</p>
-                  <p className="text-2xl font-bold text-green-600">{stats?.inDay?.count || 0}</p>
+            <Card>
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-success bg-opacity-10 text-success rounded-lg">
+                  <FiCheckCircle size={24} />
                 </div>
-                <FiCheckCircle className="text-green-500" size={32} />
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Recebido</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    R$ {(billingRecords || []).reduce((sum, r) => sum + (r.status === 'paid' ? Number(r.paidAmount || 0) : 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                R$ {(stats?.inDay?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
+            </Card>
+
+            <Card>
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-secondary bg-opacity-10 text-secondary rounded-lg">
+                  <FiClock size={24} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 font-medium">Pendente</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {(stats?.pendingToday?.count || 0) + (stats?.inDay?.count || 0)}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">parcelas</p>
+                </div>
+              </div>
             </Card>
           </div>
         </div>
