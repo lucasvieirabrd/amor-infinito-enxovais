@@ -38,4 +38,12 @@ export class MessageService {
   async updateConversationCRM(messageId: string, tag: 'cobrança' | 'lead' | 'suporte' | 'none', notes?: string) {
     return messageRepository.updateTagAndNotes(messageId, tag, notes);
   }
+
+  async updateConversationTag(phone: string, tag: string) {
+    return messageRepository.upsertConversationTag(phone, tag);
+  }
+
+  async deleteConversation(phone: string) {
+    return messageRepository.deleteConversationMessages(phone);
+  }
 }

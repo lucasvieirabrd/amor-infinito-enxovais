@@ -102,6 +102,13 @@ export const messages = mysqlTable('messages', {
   deletedAt: datetime('deleted_at'),
 });
 
+export const conversations = mysqlTable('conversations', {
+  phone: varchar('phone', { length: 20 }).primaryKey(),
+  tag: varchar('tag', { length: 50 }).notNull().default('none'),
+  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+});
+
 export const auditLogs = mysqlTable('audit_logs', {
   id: varchar('id', { length: 36 }).primaryKey(),
   userId: varchar('user_id', { length: 36 }).notNull(),

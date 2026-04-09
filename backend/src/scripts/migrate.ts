@@ -12,6 +12,15 @@ const migrations: { name: string; sql: string }[] = [
     name: '0001_add_unsupported_message_type',
     sql: `ALTER TABLE messages MODIFY COLUMN type ENUM('text','template','image','audio','video','document','unknown','unsupported') NOT NULL DEFAULT 'text'`,
   },
+  {
+    name: '0002_create_conversations_table',
+    sql: `CREATE TABLE IF NOT EXISTS conversations (
+      phone VARCHAR(20) NOT NULL PRIMARY KEY,
+      tag VARCHAR(50) NOT NULL DEFAULT 'none',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`,
+  },
 ];
 
 async function run() {

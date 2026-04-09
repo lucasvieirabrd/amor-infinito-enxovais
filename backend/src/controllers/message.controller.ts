@@ -46,4 +46,17 @@ export class MessageController {
 
     return res.status(204).send();
   }
+
+  async updateConversationTag(req: Request, res: Response) {
+    const { phone } = req.params;
+    const { tag } = z.object({ tag: z.string().min(1) }).parse(req.body);
+    await messageService.updateConversationTag(phone, tag);
+    return res.status(204).send();
+  }
+
+  async deleteConversation(req: Request, res: Response) {
+    const { phone } = req.params;
+    await messageService.deleteConversation(phone);
+    return res.status(204).send();
+  }
 }
