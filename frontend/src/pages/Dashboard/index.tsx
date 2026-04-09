@@ -24,12 +24,12 @@ interface InstallmentStats {
 
 const fetchTotalSales = async (): Promise<number> => {
   const { data } = await api.get<{ totalSales: number }>("/sales/total-sales");
-  return data.totalSales;
+  return Number(data.totalSales) || 0;
 };
 
 const fetchSalesLast7Days = async (): Promise<SalesDataPoint[]> => {
   const { data } = await api.get<{ salesLast7Days: SalesDataPoint[] }>("/sales/sales-last-7-days");
-  return data.salesLast7Days;
+  return data.salesLast7Days.map(item => ({ ...item, totalSales: Number(item.totalSales) || 0 }));
 };
 
 const fetchInstallmentStats = async (): Promise<InstallmentStats> => {
@@ -79,7 +79,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600 font-medium">Total de Vendas do Mês</p>
-              <p className="text-2xl font-bold text-gray-900">R$ {totalSales?.toFixed(2) ?? '0.00'}</p>
+              <p className="text-2xl font-bold text-gray-900">R$ {Number(totalSales || 0).toFixed(2)}</p>
             </div>
           </div>
         </Card>
@@ -91,7 +91,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600 font-medium">Total a Receber</p>
-              <p className="text-2xl font-bold text-gray-900">R$ {installmentStats?.inDay?.total?.toFixed(2) ?? '0.00'}</p>
+              <p className="text-2xl font-bold text-gray-900">R$ {Number(installmentStats?.inDay?.total || 0).toFixed(2)}</p>
             </div>
           </div>
         </Card>
