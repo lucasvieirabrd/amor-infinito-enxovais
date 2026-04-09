@@ -1,6 +1,7 @@
 import { WhatsAppService } from '../integrations/whatsapp.service';
 import { InstallmentRepository } from '../repositories/installment.repository';
 import { MessageRepository } from '../repositories/message.repository';
+import { AppError } from '../utils/AppError';
 import { db } from '../database';
 import { settings, customers, installments } from '../database/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
@@ -47,6 +48,9 @@ export class BillingService {
       let templateName = '';
       let components: any[] = [];
 
+      const amountFmt = `R$ ${parseFloat(installment.originalAmount.toString()).toFixed(2)}`;
+      const dateFmt   = format(dueDate, 'dd/MM/yyyy');
+
       if (daysDiff === 0) {
         // Lembrete de vencimento (vence hoje)
         templateName = 'lembrete_vencimento';
@@ -55,12 +59,11 @@ export class BillingService {
             type: 'body',
             parameters: [
               { type: 'text', text: customer.name },
-              { type: 'text', text: `R$ ${parseFloat(installment.originalAmount.toString()).toFixed(2)}` },
-              { type: 'text', text: format(dueDate, 'dd/MM/yyyy') },
+              { type: 'text', text: amountFmt },
+              { type: 'text', text: dateFmt },
             ],
           },
         ];
-        // Adicionar chave PIX se configurada (pode ser um parâmetro adicional ou no corpo do template se permitido)
       } else if ([2, 3, 5, 10, 20].includes(daysDiff)) {
         // Régua de cobrança (venceu há X dias)
         templateName = 'cobranca_parcela';
@@ -70,7 +73,7 @@ export class BillingService {
             parameters: [
               { type: 'text', text: customer.name },
               { type: 'text', text: parseFloat(installment.originalAmount.toString()).toFixed(2) },
-              { type: 'text', text: format(dueDate, 'dd/MM/yyyy') },
+              { type: 'text', text: dateFmt },
             ],
           },
         ];
@@ -79,19 +82,22 @@ export class BillingService {
       if (templateName) {
         stats.sent++;
         const result = await whatsAppService.sendTemplateMessage(customer.phone, templateName, components);
-        
+
         if (result && !result.error) {
           stats.success++;
           stats.notifiedClients.push(customer.name);
-          
-          // Registrar mensagem enviada
+
+          const contentText = templateName === 'lembrete_vencimento'
+            ? `Olá ${customer.name}, sua parcela de ${amountFmt} vence hoje (${dateFmt}). Por favor efetue o pagamento. 😊`
+            : `Olá ${customer.name}, sua parcela de ${amountFmt} venceu em ${dateFmt}. Entre em contato para regularizar. 🙏`;
+
           await messageRepository.create({
             metaMessageId: result.messages?.[0]?.id,
             customerId: customer.id,
             fromPhone: 'SISTEMA',
             toPhone: customer.phone,
             type: 'template',
-            content: `Template: ${templateName}`,
+            content: contentText,
             direction: 'outbound',
             status: 'sent',
             timestamp: new Date(),
@@ -154,7 +160,7 @@ export class BillingService {
         fromPhone: 'SISTEMA',
         toPhone: customer[0].phone,
         type: 'template',
-        content: `Template: ${templateName}`,
+        content: `Olá ${customer[0].name}, confirmamos o recebimento do seu pagamento de R$ ${amount.toFixed(2)}. Obrigado! ✅`,
         direction: 'outbound',
         status: 'sent',
         timestamp: new Date(),
@@ -188,13 +194,15 @@ export class BillingService {
     const result = await whatsAppService.sendTemplateMessage(customer[0].phone, templateName, components);
 
     if (result && !result.error) {
+      const amountFmt = `R$ ${parseFloat(installment.originalAmount.toString()).toFixed(2)}`;
+      const dateFmt   = format(new Date(installment.dueDate), 'dd/MM/yyyy');
       await messageRepository.create({
         metaMessageId: result.messages?.[0]?.id,
         customerId: customer[0].id,
         fromPhone: "SISTEMA",
         toPhone: customer[0].phone,
         type: "template",
-        content: `Template: ${templateName}`,
+        content: `Olá ${customer[0].name}, sua parcela de ${amountFmt} venceu em ${dateFmt}. Entre em contato para regularizar. 🙏`,
         direction: "outbound",
         status: "sent",
         timestamp: new Date(),
