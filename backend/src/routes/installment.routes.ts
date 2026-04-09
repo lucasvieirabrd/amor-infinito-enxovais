@@ -49,12 +49,20 @@ installmentRouter.get('/debug-stats', async (req, res) => {
     WHERE status = 'pending' AND deleted_at IS NULL
     LIMIT 5
   `);
+  const result6 = await db.execute(sql`
+    SELECT due_date, status, original_amount as amount
+    FROM installments
+    WHERE due_date < '2026-04-09' AND deleted_at IS NULL
+    ORDER BY due_date ASC
+    LIMIT 10
+  `);
   res.json({
     summary: result[0],
     sample: result2[0],
     timezone: result3[0],
     column_type: result4[0],
     date_comparison: result5[0],
+    past_due_installments: result6[0],
   });
 });
 
