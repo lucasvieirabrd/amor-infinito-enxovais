@@ -57,28 +57,34 @@ export class WhatsAppService {
    * Envia uma mensagem de texto simples (usada para respostas e relatórios).
    */
   async sendTextMessage(to: string, text: string) {
-    try {
-      const cleanPhone = this.normalizePhone(to);
-      
-      const response = await axios.post(
-        `${this.apiUrl}/messages`,
-        {
-          messaging_product: 'whatsapp',
-          to: cleanPhone,
-          type: 'text',
-          text: { body: text },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${this.token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+    const cleanPhone = this.normalizePhone(to);
+    const url = `${this.apiUrl}/messages`;
+    const body = {
+      messaging_product: 'whatsapp',
+      to: cleanPhone,
+      type: 'text',
+      text: { body: text },
+    };
 
+    console.log('[WhatsApp] sendTextMessage →', {
+      url,
+      body: JSON.stringify(body),
+      tokenPrefix: this.token ? this.token.slice(0, 10) + '...' : '(vazio)',
+    });
+
+    try {
+      const response = await axios.post(url, body, {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('[WhatsApp] sendTextMessage ✓ status:', response.status, 'data:', JSON.stringify(response.data));
       return response.data;
     } catch (error: any) {
-      console.error(`Erro ao enviar mensagem de texto para ${to}:`, error.response?.data || error.message);
+      console.error('[WhatsApp] sendTextMessage ✗ status:', error.response?.status);
+      console.error('[WhatsApp] sendTextMessage ✗ error completo:', JSON.stringify(error.response?.data ?? error.message));
       return { error: true, message: error.message };
     }
   }
