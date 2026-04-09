@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { AppError } from '../utils/AppError';
 import dotenv from 'dotenv';
 
 dotenv.config();
