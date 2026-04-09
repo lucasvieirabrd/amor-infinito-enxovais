@@ -8,7 +8,7 @@
     "build": "tsup src/app.ts --out-dir dist",
     "start": "NODE_ENV=production npm run migrate && node dist/app.js",
     "lint": "eslint src/**/*.ts",
-    "migrate": "drizzle-kit push",
+    "migrate": "tsx src/scripts/migrate.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
