@@ -34,14 +34,18 @@ export class InstallmentService {
     }
 
     const updated = await installmentRepository.update(id, {
-      paymentDate: new Date(data.paymentDate),
+      paymentDate: new Date(data.paymentDate + 'T12:00:00'),
       paidAmount: data.paidAmount.toFixed(2),
       status: 'paid',
     });
 
     // Disparar template 'confirmacao_pagamento' via WhatsApp API automaticamente
     if (updated) {
-      await billingService.sendPaymentConfirmation(updated.customerId, data.paidAmount);
+      await billingService.sendPaymentConfirmation(
+        updated.customerId,
+        data.paidAmount,
+        installment.installmentNumber,
+      );
     }
 
     return updated;
@@ -71,7 +75,7 @@ export class InstallmentService {
     }
 
     const updateData: any = {};
-    if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
+    if (data.dueDate) updateData.dueDate = new Date(data.dueDate + 'T12:00:00');
     if (data.originalAmount !== undefined) updateData.originalAmount = data.originalAmount.toFixed(2);
 
     return installmentRepository.update(id, updateData);
@@ -85,12 +89,13 @@ export class InstallmentService {
     // Se a nova data de vencimento for anterior à data atual e o status for 'pending', mudar para 'overdue'
     let status = existingInstallment.status;
     const today = startOfDay(new Date());
-    const newDate = startOfDay(new Date(newDueDate));
+    const newDate = new Date(newDueDate + 'T12:00:00');
+    const newDateMidnight = startOfDay(newDate);
 
-    if (newDate < today && existingInstallment.status === 'pending') {
+    if (newDateMidnight < today && existingInstallment.status === 'pending') {
       status = 'overdue';
-    } else if (newDate >= today && existingInstallment.status === 'overdue') {
-      status = 'pending'; // Se a data for para o futuro, e estava atrasada, volta a ser pendente
+    } else if (newDateMidnight >= today && existingInstallment.status === 'overdue') {
+      status = 'pending';
     }
 
     return installmentRepository.update(id, { dueDate: newDate, status });

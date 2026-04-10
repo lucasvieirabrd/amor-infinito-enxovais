@@ -136,7 +136,7 @@ export class BillingService {
   /**
    * Envia confirmação de pagamento.
    */
-  async sendPaymentConfirmation(customerId: string, amount: number) {
+  async sendPaymentConfirmation(customerId: string, amount: number, installmentNumber?: number) {
     const customer = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
     if (!customer[0]) return;
 
@@ -147,12 +147,13 @@ export class BillingService {
         parameters: [
           { type: 'text', text: customer[0].name },
           { type: 'text', text: amount.toFixed(2) },
+          ...(installmentNumber ? [{ type: 'text', text: String(installmentNumber) }] : []),
         ],
       },
     ];
 
     const result = await whatsAppService.sendTemplateMessage(customer[0].phone, templateName, components);
-    
+
     if (result && !result.error) {
       await messageRepository.create({
         metaMessageId: result.messages?.[0]?.id,
@@ -165,6 +166,24 @@ export class BillingService {
         status: 'sent',
         timestamp: new Date(),
       });
+    } else {
+      // Fallback: mensagem de texto simples
+      const installmentInfo = installmentNumber ? ` da parcela ${installmentNumber}` : '';
+      const text = `Olá ${customer[0].name}! Confirmamos o recebimento do seu pagamento${installmentInfo} no valor de R$ ${amount.toFixed(2)}. Obrigada pela preferência! 💜 Amor Infinito Enxovais`;
+      const fallbackResult = await whatsAppService.sendTextMessage(customer[0].phone, text);
+      if (fallbackResult && !fallbackResult.error) {
+        await messageRepository.create({
+          metaMessageId: fallbackResult.messages?.[0]?.id,
+          customerId: customer[0].id,
+          fromPhone: 'SISTEMA',
+          toPhone: customer[0].phone,
+          type: 'text',
+          content: text,
+          direction: 'outbound',
+          status: 'sent',
+          timestamp: new Date(),
+        });
+      }
     }
   }
 
