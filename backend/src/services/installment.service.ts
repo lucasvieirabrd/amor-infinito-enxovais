@@ -165,6 +165,39 @@ export class InstallmentService {
     }));
   }
 
+  async bulkUpdateDay(params: {
+    customerId: string;
+    saleId?: string;
+    newDay: number;
+    onlyPending: boolean;
+  }) {
+    const { customerId, saleId, newDay, onlyPending } = params;
+
+    const list = await installmentRepository.findByCustomerFiltered(customerId, saleId, onlyPending);
+    if (list.length === 0) {
+      throw new AppError('Nenhuma parcela encontrada para atualizar', 404);
+    }
+
+    const today = startOfDay(new Date());
+    const updated = [];
+
+    for (const inst of list) {
+      const current = new Date(inst.dueDate);
+      // Mantém ano e mês, troca apenas o dia
+      const newDate = new Date(current.getFullYear(), current.getMonth(), newDay, 12, 0, 0);
+      const newDateMidnight = startOfDay(newDate);
+
+      let status = inst.status;
+      if (newDateMidnight < today && inst.status === 'pending') status = 'overdue';
+      else if (newDateMidnight >= today && inst.status === 'overdue') status = 'pending';
+
+      const result = await installmentRepository.update(inst.id, { dueDate: newDate, status });
+      if (result) updated.push(result);
+    }
+
+    return { updated: updated.length };
+  }
+
   async sendManualBillingMessage(customerId: string, installmentId: string) {
     const installment = await installmentRepository.findById(installmentId);
     if (!installment) {

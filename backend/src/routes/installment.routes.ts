@@ -91,6 +91,9 @@ installmentRouter.get('/overdue', installmentController.listOverdue);
 // Por cliente
 installmentRouter.get('/customer/:customerId', installmentController.getByCustomer);
 
+// Edição em lote
+installmentRouter.patch('/bulk-update-day', ensureAuthorized(['admin']), installmentController.bulkUpdateDay);
+
 // Operações por parcela
 installmentRouter.post('/:id/pay', installmentController.markAsPaid);
 installmentRouter.post('/:id/revert', ensureAuthorized(['admin']), installmentController.revertPayment);

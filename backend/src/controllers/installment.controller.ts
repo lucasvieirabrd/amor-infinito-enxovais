@@ -87,6 +87,19 @@ export class InstallmentController {
     return res.json(result);
   }
 
+  async bulkUpdateDay(req: Request, res: Response) {
+    const schema = z.object({
+      customerId: z.string().min(1, 'ID do cliente é obrigatório'),
+      saleId: z.string().optional(),
+      newDay: z.number().int().min(1).max(28, 'Dia deve ser entre 1 e 28'),
+      onlyPending: z.boolean().default(true),
+    });
+
+    const data = schema.parse(req.body);
+    const result = await installmentService.bulkUpdateDay(data);
+    return res.json(result);
+  }
+
   async sendManualBilling(req: Request, res: Response) {
     const { customerId, installmentId } = req.body;
     const sendManualBillingSchema = z.object({

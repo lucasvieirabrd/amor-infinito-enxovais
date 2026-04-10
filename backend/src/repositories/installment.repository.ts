@@ -69,40 +69,81 @@ export class InstallmentRepository {
 
   async listActiveCrediariosPaginated(page: number, limit: number, search?: string) {
     const offset = (page - 1) * limit;
-    
-    let whereClause = and(
-      or(eq(installments.status, 'pending'), eq(installments.status, 'overdue')),
-      isNull(installments.deletedAt),
-      isNull(customers.deletedAt)
-    );
 
-    const data = await db
-      .selectDistinct({
-        id: customers.id,
-        name: customers.name,
-        phone: customers.phone,
-      })
-      .from(customers)
-      .innerJoin(installments, eq(customers.id, installments.customerId))
-      .where(whereClause)
-      .limit(limit)
-      .offset(offset);
+    const searchCond = search
+      ? sql`AND (c.name LIKE ${'%' + search + '%'} OR c.phone LIKE ${'%' + search + '%'})`
+      : sql``;
 
-    const countResult = await db
-      .select({ count: sql<number>`count(distinct ${customers.id})` })
-      .from(customers)
-      .innerJoin(installments, eq(customers.id, installments.customerId))
-      .where(whereClause);
+    const dataResult = await db.execute(sql`
+      SELECT
+        c.id,
+        c.name,
+        c.phone,
+        COUNT(i.id) AS installmentCount,
+        COALESCE(SUM(i.original_amount), 0) AS totalPending,
+        SUM(CASE
+          WHEN i.status = 'overdue'
+            OR (i.status = 'pending' AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')))
+          THEN 1 ELSE 0 END) AS overdueCount,
+        SUM(CASE
+          WHEN i.status = 'pending'
+            AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+          THEN 1 ELSE 0 END) AS todayCount
+      FROM customers c
+      INNER JOIN installments i ON c.id = i.customer_id
+      WHERE (i.status = 'pending' OR i.status = 'overdue')
+        AND i.deleted_at IS NULL
+        AND c.deleted_at IS NULL
+        ${searchCond}
+      GROUP BY c.id, c.name, c.phone
+      ORDER BY overdueCount DESC, c.name ASC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
 
-    const totalPages = Math.ceil(countResult[0].count / limit);
+    const countResult = await db.execute(sql`
+      SELECT COUNT(DISTINCT c.id) AS total
+      FROM customers c
+      INNER JOIN installments i ON c.id = i.customer_id
+      WHERE (i.status = 'pending' OR i.status = 'overdue')
+        AND i.deleted_at IS NULL
+        AND c.deleted_at IS NULL
+        ${searchCond}
+    `);
+
+    const rows = dataResult[0] as any[];
+    const total = Number((countResult[0] as any[])[0]?.total ?? 0);
+    const totalPages = Math.ceil(total / limit);
 
     return {
-      data,
-      total: countResult[0].count,
+      data: rows.map(r => ({
+        id: String(r.id),
+        name: String(r.name),
+        phone: String(r.phone),
+        installmentCount: Number(r.installmentCount),
+        totalPending: parseFloat(r.totalPending?.toString() ?? '0'),
+        overdueCount: Number(r.overdueCount),
+        todayCount: Number(r.todayCount),
+      })),
+      total,
       page,
       limit,
       totalPages,
     };
+  }
+
+  async findByCustomerFiltered(customerId: string, saleId?: string, onlyPending?: boolean) {
+    const conditions: any[] = [
+      eq(installments.customerId, customerId),
+      isNull(installments.deletedAt),
+    ];
+    if (saleId) conditions.push(eq(installments.saleId, saleId));
+    if (onlyPending) conditions.push(sql`${installments.status} IN ('pending', 'overdue')`);
+
+    return db
+      .select()
+      .from(installments)
+      .where(and(...conditions))
+      .orderBy(installments.dueDate);
   }
 
   async listPendingOverdue() {
