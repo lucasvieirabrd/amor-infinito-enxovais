@@ -45,12 +45,21 @@ app.use(cors({
 }));
 
 // Rate Limiting
+// Rate Limiting geral: 200 requisições por IP por minuto
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // limite de 100 requisições por IP
-  message: 'Muitas requisições deste IP, por favor tente novamente após 15 minutos',
+  windowMs: 60 * 1000, // 1 minuto
+  max: 200,
+  message: 'Muitas requisições deste IP, por favor tente novamente em alguns instantes',
 });
 app.use('/api/', limiter);
+
+// Rate Limiting para login: 20 tentativas por IP a cada 15 minutos
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 20,
+  message: 'Muitas tentativas de login deste IP, por favor tente novamente após 15 minutos',
+});
+app.use('/api/auth/login', loginLimiter);
 
 // Rota raiz
 app.get('/', (req: Request, res: Response) => {
