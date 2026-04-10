@@ -54,7 +54,6 @@ export class BillingService {
    * Template 2 (cobranca_parcela): atrasadas nos dias 2,3,5,10,20
    */
   async processDailyBilling() {
-    const today = startOfDay(new Date());
     const stats = { sent: 0, success: 0, failed: 0, notifiedClients: [] as string[] };
 
     const pendingInstallments = await db
@@ -63,7 +62,8 @@ export class BillingService {
       .innerJoin(customers, eq(installments.customerId, customers.id))
       .where(
         and(
-          eq(installments.status, 'pending'),
+          sql`${installments.status} IN ('pending', 'overdue')`,
+          sql`DATE(CONVERT_TZ(${installments.dueDate}, '+00:00', '-03:00')) <= DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
           isNull(installments.deletedAt),
           isNull(customers.deletedAt)
         )
@@ -71,8 +71,11 @@ export class BillingService {
 
     for (const row of pendingInstallments) {
       const { installment, customer } = row;
-      const dueDate = startOfDay(new Date(installment.dueDate));
-      const daysDiff = differenceInDays(today, dueDate);
+      // Converte explicitamente para SP para evitar ambiguidade do mysql2 ao interpretar datetime sem TZ
+      const dueDateSP = new Date(new Date(installment.dueDate).toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const todaySP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const dueDate = startOfDay(dueDateSP);
+      const daysDiff = differenceInDays(startOfDay(todaySP), dueDate);
       const dateFmt = format(dueDate, 'dd/MM/yyyy');
       const amountNum = formatAmount(installment.originalAmount); // "150,00"
 

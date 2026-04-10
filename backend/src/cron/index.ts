@@ -15,10 +15,17 @@ function resetDailyStats() {
  * Fuso horário: America/Sao_Paulo
  */
 export function setupCronJobs() {
+  // 00h00: Resetar estatísticas do dia (separado do 08h00 para sobreviver a restarts)
+  cron.schedule('0 0 * * *', () => {
+    resetDailyStats();
+    console.log('[CRON] Estatísticas diárias resetadas (00h00).');
+  }, {
+    timezone: 'America/Sao_Paulo'
+  });
+
   // 08h00: Disparar régua de cobrança automática (vencendo hoje)
   cron.schedule('0 8 * * *', async () => {
     console.log('[CRON] Iniciando régua de cobrança diária (08h00)...');
-    resetDailyStats();
     try {
       const stats = await billingService.processDailyBilling();
       dailyStats.sent += stats.sent;
