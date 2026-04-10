@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { FiUpload, FiCheck, FiX, FiAlertCircle } from 'react-icons/fi';
+import { FiUpload, FiCheck, FiX, FiAlertCircle, FiInfo } from 'react-icons/fi';
 import { Button, Modal, Loading } from './ui';
 import api from '../services/api';
 
@@ -10,9 +10,15 @@ interface CSVImporterProps {
 }
 
 interface ImportResult {
-  success: number;
-  failed: number;
-  errors: string[];
+  newCustomers: number;
+  existingCustomers: number;
+  totalDebts: number;
+  totalInstallments: number;
+  paidInstallments: number;
+  pendingInstallments: number;
+  overdueInstallments: number;
+  errors: Array<{ line: number; customer: string; reason: string }>;
+  notes: Array<{ line: number; customer: string; message: string }>;
 }
 
 const CSVImporter: React.FC<CSVImporterProps> = ({ isOpen, onClose, onSuccess }) => {
@@ -105,48 +111,62 @@ const CSVImporter: React.FC<CSVImporterProps> = ({ isOpen, onClose, onSuccess })
       }
     >
       {result ? (
-        <div className="space-y-6">
-          {/* Success Summary */}
-          <div className="bg-success bg-opacity-10 border border-success border-opacity-20 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <FiCheck className="text-success" size={24} />
-              <h3 className="text-lg font-semibold text-gray-900">Importação Concluída!</h3>
+        <div className="space-y-4">
+          {/* Resumo */}
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <FiCheck className="text-green-600" size={22} />
+              <h3 className="text-base font-semibold text-gray-900">Importação Concluída!</h3>
             </div>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-700">
-                <span className="font-semibold text-success">{result.success}</span> cliente{result.success !== 1 ? 's' : ''} importado{result.success !== 1 ? 's' : ''} com sucesso.
-              </p>
-              {result.failed > 0 && (
-                <p className="text-sm text-gray-700">
-                  <span className="font-semibold text-error">{result.failed}</span> cliente{result.failed !== 1 ? 's' : ''} com erro.
-                </p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
+              <span>Clientes novos: <strong className="text-green-700">{result.newCustomers}</strong></span>
+              <span>Clientes existentes: <strong>{result.existingCustomers}</strong></span>
+              <span>Dívidas importadas: <strong>{result.totalDebts}</strong></span>
+              <span>Parcelas no total: <strong>{result.totalInstallments}</strong></span>
+              <span>Pagas: <strong className="text-green-700">{result.paidInstallments}</strong></span>
+              <span>Pendentes: <strong className="text-yellow-700">{result.pendingInstallments}</strong></span>
+              <span>Atrasadas: <strong className="text-red-600">{result.overdueInstallments}</strong></span>
+              {result.errors.length > 0 && (
+                <span>Linhas com erro: <strong className="text-red-600">{result.errors.length}</strong></span>
               )}
             </div>
           </div>
 
-          {/* Errors */}
-          {result.errors.length > 0 && (
-            <div className="bg-error bg-opacity-10 border border-error border-opacity-20 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <FiAlertCircle className="text-error" size={20} />
-                <h4 className="font-semibold text-gray-900">Erros Encontrados:</h4>
+          {/* Avisos informativos (CPF provisório, duplicatas) */}
+          {result.notes && result.notes.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <FiInfo className="text-blue-600" size={18} />
+                <h4 className="font-semibold text-gray-900 text-sm">Avisos ({result.notes.length}):</h4>
               </div>
-              <ul className="space-y-1 max-h-48 overflow-y-auto">
-                {result.errors.map((err, idx) => (
+              <ul className="space-y-1 max-h-40 overflow-y-auto">
+                {result.notes.map((n, idx) => (
                   <li key={idx} className="text-sm text-gray-700">
-                    • {err}
+                    <span className="font-medium text-blue-700">Linha {n.line}</span> — {n.customer}: {n.message}
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Reset Button */}
-          <Button
-            variant="secondary"
-            onClick={handleReset}
-            className="w-full"
-          >
+          {/* Erros */}
+          {result.errors.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <FiAlertCircle className="text-red-600" size={18} />
+                <h4 className="font-semibold text-gray-900 text-sm">Erros ({result.errors.length}):</h4>
+              </div>
+              <ul className="space-y-1 max-h-40 overflow-y-auto">
+                {result.errors.map((err, idx) => (
+                  <li key={idx} className="text-sm text-gray-700">
+                    <span className="font-medium text-red-700">Linha {err.line}</span> — {err.customer}: {err.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <Button variant="secondary" onClick={handleReset} className="w-full">
             Importar Outro Arquivo
           </Button>
         </div>

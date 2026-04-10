@@ -2,13 +2,10 @@ import { parse } from 'csv-parse/sync';
 import { db } from '../database';
 import { customers, sales, installments } from '../database/schema';
 import { eq } from 'drizzle-orm';
-import { CustomerRepository } from '../repositories/customer.repository';
 import { SaleRepository } from '../repositories/sale.repository';
-import { AppError } from '../utils/AppError';
-import { addMonths, subMonths, isAfter, isBefore, startOfDay } from 'date-fns';
+import { addMonths, subMonths, isBefore, startOfDay } from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
 
-const customerRepository = new CustomerRepository();
 const saleRepository = new SaleRepository();
 
 interface ImportResult {
@@ -20,6 +17,13 @@ interface ImportResult {
   pendingInstallments: number;
   overdueInstallments: number;
   errors: Array<{ line: number; customer: string; reason: string }>;
+  notes: Array<{ line: number; customer: string; message: string }>;
+}
+
+interface FindOrCreateResult {
+  id: string;
+  isNew: boolean;
+  note?: string;
 }
 
 export class CustomerImportService {
@@ -33,9 +37,9 @@ export class CustomerImportService {
       pendingInstallments: 0,
       overdueInstallments: 0,
       errors: [],
+      notes: [],
     };
 
-    // Parse CSV
     const records = parse(fileBuffer, {
       columns: [
         'name',
@@ -78,22 +82,27 @@ export class CustomerImportService {
         const row = batch[i];
 
         try {
-          // Validar dados obrigatórios
           if (!row.name || !row.phone) {
             throw new Error('Nome e telefone são obrigatórios');
           }
 
-          // Limpar dados
           const cleanPhone = this.cleanPhone(row.phone);
-          const cleanCPF = this.cleanCPF(row.cpf);
+          let cleanCPF = this.cleanCPF(row.cpf);
 
-          // Buscar ou criar cliente
-          let customer = await this.findOrCreateCustomer(
+          // CPF vazio → gera CPF provisório baseado no telefone
+          // Formato: 'F' + phone (máx 14 chars, cabe em varchar(14))
+          let provisionalCpf = false;
+          if (!cleanCPF) {
+            cleanCPF = `F${cleanPhone}`.slice(0, 14);
+            provisionalCpf = true;
+          }
+
+          const customer = await this.findOrCreateCustomer(
             {
               name: row.name,
               phone: cleanPhone,
               email: row.email || null,
-              cpf: cleanCPF || null,
+              cpf: cleanCPF,
               address: row.address || null,
               city: row.city || null,
               state: row.state || null,
@@ -104,8 +113,22 @@ export class CustomerImportService {
 
           if (customer.isNew) {
             result.newCustomers++;
+            if (provisionalCpf) {
+              result.notes.push({
+                line: lineNumber,
+                customer: row.name,
+                message: `CPF vazio — cliente importado com CPF provisório (${cleanCPF})`,
+              });
+            }
           } else {
             result.existingCustomers++;
+            if (customer.note) {
+              result.notes.push({
+                line: lineNumber,
+                customer: row.name,
+                message: customer.note,
+              });
+            }
           }
 
           // Criar venda e parcelas
@@ -119,25 +142,23 @@ export class CustomerImportService {
             throw new Error('Valores de dívida, parcelas ou valor da parcela inválidos');
           }
 
-          // Criar venda
           const saleNumber = await saleRepository.generateSaleNumber(tx);
           const saleId = uuidv4();
 
-          await db.insert(sales).values({
+          await tx.insert(sales).values({
             id: saleId,
-            saleNumber: `IMP-${saleNumber.split('-')[1]}`, // Usar formato IMP-XXXXXX
+            saleNumber: `IMP-${saleNumber.split('-')[1]}`,
             customerId: customer.id,
-            userId: 'system', // Importação do sistema
+            userId: 'system',
             paymentMethod: 'installment',
             totalAmount: totalDebt.toFixed(2),
             installmentsCount: totalInstallmentsCount,
             saleDate: new Date(),
-            status: 'active',
+            isImported: true,
           });
 
           result.totalDebts++;
 
-          // Criar parcelas
           for (let j = 1; j <= totalInstallmentsCount; j++) {
             const installmentId = uuidv4();
             let dueDateTime: Date;
@@ -146,17 +167,15 @@ export class CustomerImportService {
             let paymentDate: Date | null = null;
 
             if (j <= paidInstallmentsCount) {
-              // Parcelas já pagas
               dueDateTime = subMonths(dueDate, totalInstallmentsCount - j);
               status = 'paid';
               paidAmount = installmentValue;
               paymentDate = dueDateTime;
               result.paidInstallments++;
             } else {
-              // Parcelas pendentes
               dueDateTime = addMonths(dueDate, j - paidInstallmentsCount - 1);
               const today = startOfDay(new Date());
-              
+
               if (isBefore(dueDateTime, today)) {
                 status = 'overdue';
                 result.overdueInstallments++;
@@ -166,7 +185,7 @@ export class CustomerImportService {
               }
             }
 
-            await db.insert(installments).values({
+            await tx.insert(installments).values({
               id: installmentId,
               saleId,
               customerId: customer.id,
@@ -201,48 +220,51 @@ export class CustomerImportService {
   }
 
   private parseDate(dateStr: string): Date {
-    // Formato esperado: DD/MM/YYYY
     const [day, month, year] = dateStr.split('/');
     return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
   }
 
   private async findOrCreateCustomer(
     data: any,
-    tx: typeof db
-  ): Promise<{ id: string; isNew: boolean }> {
-    // Buscar por CPF (se preenchido)
+    tx: any
+  ): Promise<FindOrCreateResult> {
+    // Buscar por CPF (cobre tanto CPF real quanto CPF provisório gerado da linha anterior)
     if (data.cpf) {
-      const existing = await tx
+      const byCpf = await tx
         .select()
         .from(customers)
         .where(eq(customers.cpf, data.cpf))
         .limit(1);
 
-      if (existing.length > 0) {
-        return { id: existing[0].id, isNew: false };
+      if (byCpf.length > 0) {
+        return {
+          id: byCpf[0].id,
+          isNew: false,
+          note: `Telefone duplicado — parcelas adicionadas ao cliente existente (encontrado por CPF)`,
+        };
       }
     }
 
-    // Buscar por telefone
+    // Buscar por telefone (cliente com dívida diferente no mesmo CSV)
     if (data.phone) {
-      const existing = await tx
+      const byPhone = await tx
         .select()
         .from(customers)
         .where(eq(customers.phone, data.phone))
         .limit(1);
 
-      if (existing.length > 0) {
-        return { id: existing[0].id, isNew: false };
+      if (byPhone.length > 0) {
+        return {
+          id: byPhone[0].id,
+          isNew: false,
+          note: `Telefone duplicado — parcelas adicionadas ao cliente existente`,
+        };
       }
     }
 
     // Criar novo cliente
     const customerId = uuidv4();
-    await tx.insert(customers).values({
-      id: customerId,
-      ...data,
-    });
-
+    await tx.insert(customers).values({ id: customerId, ...data });
     return { id: customerId, isNew: true };
   }
 }
