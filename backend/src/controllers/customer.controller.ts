@@ -51,12 +51,12 @@ export class CustomerController {
       name: z.string().min(3).optional(),
       phone: z.string().min(10).optional(),
       cpf: z.string().regex(/^\d{11}$/, 'CPF deve ter 11 dígitos').optional(),
-      email: z.string().email().optional().or(z.literal('')),
-      cep: z.string().regex(/^\d{8}$/, 'CEP deve ter 8 dígitos').optional().or(z.literal('')),
-      addressStreet: z.string().optional().or(z.literal('')),
-      addressNeighborhood: z.string().optional().or(z.literal('')),
-      addressCity: z.string().optional().or(z.literal('')),
-      addressState: z.string().length(2).optional().or(z.literal('')),
+      email: z.union([z.string().email(), z.literal(''), z.null()]).optional(),
+      cep: z.union([z.string().regex(/^\d{8}$/, 'CEP deve ter 8 dígitos'), z.literal(''), z.null()]).optional(),
+      addressStreet: z.string().nullable().optional(),
+      addressNeighborhood: z.string().nullable().optional(),
+      addressCity: z.string().nullable().optional(),
+      addressState: z.union([z.string().length(2), z.literal(''), z.null()]).optional(),
     });
 
     const data = updateSchema.parse(req.body);
