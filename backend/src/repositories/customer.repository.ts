@@ -1,30 +1,35 @@
 import { db } from '../database';
 import { customers } from '../database/schema';
-import { eq, and, isNull, or, like, sql } from 'drizzle-orm';
+import { eq, and, isNull, or, ne, like, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export class CustomerRepository {
-  async findByCpf(cpf: string) {
+  async findByCpf(cpf: string, excludeId?: string) {
+    const conditions = [eq(customers.cpf, cpf), isNull(customers.deletedAt)];
+    if (excludeId) conditions.push(ne(customers.id, excludeId));
     const result = await db
       .select()
       .from(customers)
-      .where(and(eq(customers.cpf, cpf), isNull(customers.deletedAt)))
+      .where(and(...conditions))
       .limit(1);
     return result[0];
   }
 
-  async findByPhone(phone: string) {
+  async findByPhone(phone: string, excludeId?: string) {
     const digits = phone.replace(/\D/g, '');
     // Build variants: exact digits, with 55, without 55 — to handle format mismatches
     const variants = new Set([digits]);
     if (digits.startsWith('55')) variants.add(digits.slice(2));
     else variants.add(`55${digits}`);
 
-    const conditions = [...variants].map(v => eq(customers.phone, v));
+    const phoneConditions = [...variants].map(v => eq(customers.phone, v));
+    const whereClause = excludeId
+      ? and(isNull(customers.deletedAt), ne(customers.id, excludeId), or(...phoneConditions))
+      : and(isNull(customers.deletedAt), or(...phoneConditions));
     const result = await db
       .select()
       .from(customers)
-      .where(and(isNull(customers.deletedAt), or(...conditions)))
+      .where(whereClause)
       .limit(1);
     return result[0];
   }

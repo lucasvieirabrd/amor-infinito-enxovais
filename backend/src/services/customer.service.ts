@@ -49,15 +49,15 @@ export class CustomerService {
       throw new AppError('Cliente não encontrado', 404);
     }
 
-    if (data.cpf && data.cpf !== customer.cpf) {
-      const customerExistsByCpf = await customerRepository.findByCpf(data.cpf);
+    if (data.cpf) {
+      const customerExistsByCpf = await customerRepository.findByCpf(data.cpf, id);
       if (customerExistsByCpf) {
         throw new AppError('Este CPF já está cadastrado para outro cliente', 400);
       }
     }
 
-    if (data.phone && data.phone !== customer.phone) {
-      const customerExistsByPhone = await customerRepository.findByPhone(data.phone);
+    if (data.phone) {
+      const customerExistsByPhone = await customerRepository.findByPhone(data.phone, id);
       if (customerExistsByPhone) {
         throw new AppError('Este telefone já está cadastrado para outro cliente', 400);
       }
