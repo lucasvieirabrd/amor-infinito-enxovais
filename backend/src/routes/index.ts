@@ -8,6 +8,7 @@ import { salesRoutes } from './sales.routes';
 import { webhookRouter } from './webhook.routes';
 import { messageRouter } from './message.routes';
 import { seedRouter } from './seed.routes';
+import { billingRouter } from './billing.routes';
 
 const routes = Router();
 
@@ -20,5 +21,6 @@ routes.use('/sales', salesRoutes);
 routes.use('/webhook', webhookRouter);
 routes.use('/messages', messageRouter);
 routes.use('/seed', seedRouter);
+routes.use('/billing', billingRouter);
 
 export { routes };

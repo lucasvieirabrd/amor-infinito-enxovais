@@ -21,6 +21,19 @@ export function setupCronJobs() {
     timezone: 'America/Sao_Paulo'
   });
 
+  // 08h30: Disparar cobrança para TODAS as parcelas atrasadas
+  cron.schedule('30 8 * * *', async () => {
+    console.log('[CRON] Iniciando cobrança de parcelas atrasadas (08h30)...');
+    try {
+      const stats = await billingService.processOverdueBilling();
+      console.log(`[CRON] Cobrança de atrasados concluída: ${stats.success} enviadas, ${stats.failed} falhas.`);
+    } catch (error: any) {
+      console.error('[CRON] Erro ao processar cobrança de atrasados:', error.message);
+    }
+  }, {
+    timezone: 'America/Sao_Paulo'
+  });
+
   // 11h00: Enviar resumo diário para administradores
   cron.schedule('0 11 * * *', async () => {
     console.log('[CRON] Iniciando envio do resumo diário (11h00)...');

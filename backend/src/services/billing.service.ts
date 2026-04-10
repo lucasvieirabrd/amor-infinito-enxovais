@@ -187,6 +187,139 @@ export class BillingService {
     }
   }
 
+  /**
+   * Envia cobrança para TODAS as parcelas atrasadas (vencimento < hoje, status pending ou overdue).
+   * Usado pelo cron das 08h30 e pelo botão manual do frontend.
+   */
+  async processOverdueBilling() {
+    const stats = { sent: 0, success: 0, failed: 0 };
+
+    const rows = await db
+      .select({ installment: installments, customer: customers })
+      .from(installments)
+      .innerJoin(customers, eq(installments.customerId, customers.id))
+      .where(
+        and(
+          sql`status IN ('pending', 'overdue')`,
+          sql`DATE(due_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
+          isNull(installments.deletedAt),
+          isNull(customers.deletedAt)
+        )
+      );
+
+    for (const row of rows) {
+      const { installment, customer } = row;
+      const dueDate = new Date(installment.dueDate);
+      const amountFmt = `R$ ${parseFloat(installment.originalAmount.toString()).toFixed(2)}`;
+      const dateFmt = format(dueDate, 'dd/MM/yyyy');
+
+      const components = [{
+        type: 'body',
+        parameters: [
+          { type: 'text', text: customer.name },
+          { type: 'text', text: parseFloat(installment.originalAmount.toString()).toFixed(2) },
+          { type: 'text', text: dateFmt },
+        ],
+      }];
+
+      stats.sent++;
+      const result = await whatsAppService.sendTemplateMessage(customer.phone, 'cobranca_parcela', components);
+
+      if (result && !result.error) {
+        stats.success++;
+        await messageRepository.create({
+          metaMessageId: result.messages?.[0]?.id,
+          customerId: customer.id,
+          fromPhone: 'SISTEMA',
+          toPhone: customer.phone,
+          type: 'template',
+          content: `Olá ${customer.name}, sua parcela de ${amountFmt} venceu em ${dateFmt}. Entre em contato para regularizar. 🙏`,
+          direction: 'outbound',
+          status: 'sent',
+          tag: 'cobrança',
+          timestamp: new Date(),
+        });
+      } else {
+        stats.failed++;
+      }
+    }
+
+    return stats;
+  }
+
+  /**
+   * Disparo manual completo: vencendo hoje + todas atrasadas.
+   */
+  async processAllBilling() {
+    const [todayStats, overdueStats] = await Promise.all([
+      this.processDailyBilling(),
+      this.processOverdueBilling(),
+    ]);
+    return {
+      sent: todayStats.sent + overdueStats.sent,
+      success: todayStats.success + overdueStats.success,
+      failed: todayStats.failed + overdueStats.failed,
+    };
+  }
+
+  /**
+   * Prévia: quantas mensagens seriam enviadas ao disparar manualmente.
+   */
+  async getChargesPreview() {
+    const result = await db.execute(sql`
+      SELECT
+        SUM(CASE WHEN DATE(due_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) AND status = 'pending' THEN 1 ELSE 0 END) as todayCount,
+        SUM(CASE WHEN DATE(due_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) AND status IN ('pending','overdue') THEN 1 ELSE 0 END) as overdueCount
+      FROM installments
+      WHERE deleted_at IS NULL
+    `);
+    const row = ((result as any)[0]?.[0]) ?? {};
+    return {
+      todayCount: Number(row.todayCount ?? 0),
+      overdueCount: Number(row.overdueCount ?? 0),
+      totalCount: Number(row.todayCount ?? 0) + Number(row.overdueCount ?? 0),
+    };
+  }
+
+  /**
+   * Lista mensagens de cobrança enviadas (outbound template com tag cobrança).
+   */
+  async getBillingMessages(period: string) {
+    const intervalMap: Record<string, string> = {
+      today: '0 DAY',
+      '7d': '6 DAY',
+      '30d': '29 DAY',
+    };
+    const interval = intervalMap[period] ?? '0 DAY';
+
+    const result = await db.execute(sql`
+      SELECT
+        m.id,
+        m.content,
+        m.status,
+        m.timestamp,
+        m.to_phone as phone,
+        c.name as customerName
+      FROM messages m
+      LEFT JOIN customers c ON m.customer_id = c.id
+      WHERE m.direction = 'outbound'
+        AND m.type = 'template'
+        AND m.deleted_at IS NULL
+        AND DATE(CONVERT_TZ(m.timestamp, '+00:00', '-03:00'))
+            >= DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) - INTERVAL ${sql.raw(interval)}
+      ORDER BY m.timestamp DESC
+      LIMIT 200
+    `);
+    return ((result as any)[0] ?? []).map((row: any) => ({
+      id: row.id,
+      customerName: row.customerName ?? 'Desconhecido',
+      phone: row.phone,
+      content: row.content,
+      status: row.status,
+      timestamp: row.timestamp,
+    }));
+  }
+
   async sendManualBillingMessage(customerId: string, installmentId: string) {
     const installment = await installmentRepository.findById(installmentId);
     if (!installment) {
