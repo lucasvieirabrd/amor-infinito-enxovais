@@ -3,17 +3,29 @@ import { BillingService } from '../services/billing.service';
 
 const billingService = new BillingService();
 
+// Acumula estatísticas do dia para o resumo das 11h00
+let dailyStats = { sent: 0, success: 0, failed: 0, notifiedClients: [] as string[] };
+
+function resetDailyStats() {
+  dailyStats = { sent: 0, success: 0, failed: 0, notifiedClients: [] };
+}
+
 /**
  * Agendamento de tarefas automáticas.
  * Fuso horário: America/Sao_Paulo
  */
 export function setupCronJobs() {
-  // 08h00: Disparar régua de cobrança automática
+  // 08h00: Disparar régua de cobrança automática (vencendo hoje)
   cron.schedule('0 8 * * *', async () => {
     console.log('[CRON] Iniciando régua de cobrança diária (08h00)...');
+    resetDailyStats();
     try {
-      await billingService.processDailyBilling();
-      console.log('[CRON] Régua de cobrança concluída com sucesso.');
+      const stats = await billingService.processDailyBilling();
+      dailyStats.sent += stats.sent;
+      dailyStats.success += stats.success;
+      dailyStats.failed += stats.failed;
+      dailyStats.notifiedClients.push(...stats.notifiedClients);
+      console.log(`[CRON] Régua de cobrança concluída: ${stats.success} enviadas, ${stats.failed} falhas.`);
     } catch (error: any) {
       console.error('[CRON] Erro ao processar régua de cobrança:', error.message);
     }
@@ -26,6 +38,9 @@ export function setupCronJobs() {
     console.log('[CRON] Iniciando cobrança de parcelas atrasadas (08h30)...');
     try {
       const stats = await billingService.processOverdueBilling();
+      dailyStats.sent += stats.sent;
+      dailyStats.success += stats.success;
+      dailyStats.failed += stats.failed;
       console.log(`[CRON] Cobrança de atrasados concluída: ${stats.success} enviadas, ${stats.failed} falhas.`);
     } catch (error: any) {
       console.error('[CRON] Erro ao processar cobrança de atrasados:', error.message);
@@ -34,14 +49,11 @@ export function setupCronJobs() {
     timezone: 'America/Sao_Paulo'
   });
 
-  // 11h00: Enviar resumo diário para administradores
+  // 11h00: Enviar resumo diário para administradores (usa stats acumuladas, sem re-enviar cobranças)
   cron.schedule('0 11 * * *', async () => {
     console.log('[CRON] Iniciando envio do resumo diário (11h00)...');
     try {
-      // Nota: Em um sistema real, as estatísticas do dia seriam buscadas no banco de dados
-      // Para simplificação, o serviço de cobrança pode ter um método que busca os envios de hoje
-      const stats = await billingService.processDailyBilling(); // Reaproveitando lógica ou criando uma específica
-      await billingService.sendDailySummary(stats);
+      await billingService.sendDailySummary(dailyStats);
       console.log('[CRON] Resumo diário enviado com sucesso.');
     } catch (error: any) {
       console.error('[CRON] Erro ao enviar resumo diário:', error.message);
