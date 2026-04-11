@@ -214,9 +214,9 @@ export class BillingService {
   }
 
   /**
-   * Envia cobrança para TODAS as parcelas atrasadas.
+   * Envia cobrança para TODAS as parcelas atrasadas (sem filtro de dias).
    * TEMPLATE 2 — cobranca_parcela
-   * Usado pelo cron das 08h30 e pelo botão manual.
+   * Usado pelo disparo manual completo (processAllBilling).
    */
   async processOverdueBilling() {
     const stats = { sent: 0, success: 0, failed: 0 };
