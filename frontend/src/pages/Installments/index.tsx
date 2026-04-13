@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useDebounce } from '../../hooks/useDebounce';
 import api from '../../services/api';
 import {
   FiSearch,
@@ -56,6 +57,7 @@ interface StatsResponse {
 
 export const Installments: React.FC = () => {
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(1);
 
   // Accordion — qual cliente está expandido
@@ -82,10 +84,10 @@ export const Installments: React.FC = () => {
   // ── Queries ────────────────────────────────────────────────────────────────
 
   const { data: response, isLoading: isLoadingCustomers } = useQuery({
-    queryKey: ['active-crediarios', search, page],
+    queryKey: ['active-crediarios', debouncedSearch, page],
     queryFn: async () => {
       const res = await api.get('/installments/active', {
-        params: { search, page, limit: ITEMS_PER_PAGE },
+        params: { search: debouncedSearch, page, limit: ITEMS_PER_PAGE },
       });
       return res.data as PaginatedResponse;
     },

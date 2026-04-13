@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useDebounce } from '../../hooks/useDebounce';
 import api from '../../services/api';
 import { FiSearch, FiPlus, FiMapPin, FiEdit, FiTrash2, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { Button, Input, Modal, Table, Card, Loading, Badge } from '../../components/ui';
@@ -28,6 +29,7 @@ interface PaginatedResponse {
 
 export const Customers: React.FC = () => {
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -42,10 +44,10 @@ export const Customers: React.FC = () => {
 
   // Busca de clientes via API com paginação
   const { data: response, isLoading } = useQuery({
-    queryKey: ['customers', search, page],
+    queryKey: ['customers', debouncedSearch, page],
     queryFn: async () => {
       const res = await api.get('/customers', {
-        params: { search, page, limit: ITEMS_PER_PAGE },
+        params: { search: debouncedSearch, page, limit: ITEMS_PER_PAGE },
       });
       return res.data as PaginatedResponse;
     },

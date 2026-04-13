@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useDebounce } from '../../hooks/useDebounce';
 import api from '../../services/api';
 import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { Button, Card, Badge, Loading, Modal, Input } from '../../components/ui';
@@ -24,6 +25,7 @@ interface PaginatedResponse {
 
 export const Products: React.FC = () => {
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(1);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editFormData, setEditFormData] = useState({ quantity: 0, price: 0 });
@@ -33,10 +35,10 @@ export const Products: React.FC = () => {
 
   // Busca de produtos via API com paginação
   const { data: response, isLoading } = useQuery({
-    queryKey: ['products', search, page],
+    queryKey: ['products', debouncedSearch, page],
     queryFn: async () => {
       const res = await api.get('/products', {
-        params: { search, page, limit: ITEMS_PER_PAGE },
+        params: { search: debouncedSearch, page, limit: ITEMS_PER_PAGE },
       });
       return res.data as PaginatedResponse;
     },

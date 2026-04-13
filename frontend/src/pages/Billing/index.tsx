@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useDebounce } from '../../hooks/useDebounce';
 import api from '../../services/api';
 import {
   FiAlertTriangle,
@@ -70,6 +71,7 @@ type Period = 'today' | '7d' | '30d';
 export const Billing: React.FC = () => {
   const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isEditDateModalOpen, setIsEditDateModalOpen] = useState(false);
   const [isSendChargesModalOpen, setIsSendChargesModalOpen] = useState(false);
@@ -212,10 +214,10 @@ export const Billing: React.FC = () => {
     });
     return Array.from(map.values()).filter(
       (g) =>
-        g.customerName.toLowerCase().includes(search.toLowerCase()) ||
-        g.customerPhone.includes(search)
+        g.customerName.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        g.customerPhone.includes(debouncedSearch)
     );
-  }, [billingRecords, search]);
+  }, [billingRecords, debouncedSearch]);
 
   if (isLoading) return <Loading />;
 
