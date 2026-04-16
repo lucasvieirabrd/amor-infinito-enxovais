@@ -16,6 +16,9 @@ export class SaleController {
       })).min(1, 'A venda deve ter pelo menos um item'),
       installmentsCount: z.number().int().min(1).max(30).optional(),
       saleDate: z.string().optional(),
+      firstDueDate: z.string().optional(),
+      downPayment: z.number().min(0).optional(),
+      downPaymentDate: z.string().optional(),
       customInstallments: z.array(z.object({
         dueDate: z.string(),
         amount: z.number().positive(),

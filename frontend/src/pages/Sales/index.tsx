@@ -39,6 +39,7 @@ export const Sales: React.FC = () => {
   const [installmentsCount, setInstallmentsCount] = useState(1);
   const [firstDueDate, setFirstDueDate] = useState(format(addMonths(new Date(), 1), 'yyyy-MM-dd'));
   const [downPayment, setDownPayment] = useState(0);
+  const [downPaymentDate, setDownPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isSuccess, setIsSuccess] = useState(false);
 
   const queryClient = useQueryClient();
@@ -136,6 +137,7 @@ export const Sales: React.FC = () => {
       installmentsCount: paymentMethod === 'installment' ? installmentsCount : undefined,
       saleDate: new Date().toISOString(),
       downPayment: paymentMethod === 'installment' ? downPayment : 0,
+      downPaymentDate: paymentMethod === 'installment' && downPayment > 0 ? downPaymentDate : undefined,
       firstDueDate: paymentMethod === 'installment' ? firstDueDate : undefined,
     };
 
@@ -357,7 +359,7 @@ export const Sales: React.FC = () => {
                 <div className="space-y-4 p-4 bg-background rounded-lg border border-gray-200">
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-2">Valor de Entrada (opcional)</label>
-                    <input 
+                    <input
                       type="number"
                       value={downPayment}
                       onChange={e => setDownPayment(Math.max(0, parseFloat(e.target.value) || 0))}
@@ -368,6 +370,17 @@ export const Sales: React.FC = () => {
                       step="0.01"
                     />
                   </div>
+                  {downPayment > 0 && (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-2">Data da Entrada</label>
+                      <input
+                        type="date"
+                        value={downPaymentDate}
+                        onChange={e => setDownPaymentDate(e.target.value)}
+                        className="input-base w-full"
+                      />
+                    </div>
+                  )}
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-2">Número de Parcelas</label>
                     <select 

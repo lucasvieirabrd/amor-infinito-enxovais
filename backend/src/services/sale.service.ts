@@ -12,7 +12,11 @@ const googleSheetsService = new GoogleSheetsService();
 
 export class SaleService {
   async register(data: any, userId: string) {
-    const { customerId, paymentMethod, items, installmentsCount, saleDate, customInstallments } = data;
+    const { customerId, paymentMethod, items, installmentsCount, saleDate, firstDueDate, downPayment, downPaymentDate, customInstallments } = data;
+
+    console.log('[sale.register] firstDueDate recebido:', firstDueDate);
+    console.log('[sale.register] downPayment recebido:', downPayment);
+    console.log('[sale.register] downPaymentDate recebido:', downPaymentDate);
 
     // Inicia transação de banco de dados
     return await db.transaction(async (tx) => {
@@ -72,6 +76,21 @@ export class SaleService {
       if (paymentMethod === 'installment') {
         const installmentsData = [];
 
+        // Parcela de entrada (número 0) — registrada como paga na data informada
+        if (downPayment && downPayment > 0) {
+          const entryDate = downPaymentDate ? new Date(downPaymentDate) : new Date(saleDate || Date.now());
+          installmentsData.push({
+            saleId,
+            customerId,
+            installmentNumber: 0,
+            dueDate: entryDate,
+            originalAmount: downPayment.toFixed(2),
+            paidAmount: downPayment.toFixed(2),
+            paymentDate: entryDate,
+            status: 'paid',
+          });
+        }
+
         if (customInstallments && customInstallments.length > 0) {
           // Parcelas personalizadas enviadas pelo frontend
           for (let i = 0; i < customInstallments.length; i++) {
@@ -86,14 +105,22 @@ export class SaleService {
             });
           }
         } else {
-          // Gerar parcelas automáticas se não houver personalização
-          const installmentValue = (totalAmount / installmentsCount).toFixed(2);
-          for (let i = 1; i <= installmentsCount; i++) {
+          // Gerar parcelas automáticas usando firstDueDate como base
+          // Parcela 1 = firstDueDate, parcela 2 = firstDueDate + 1 mês, etc.
+          const baseDate = firstDueDate
+            ? new Date(firstDueDate)
+            : addMonths(new Date(saleDate || Date.now()), 1);
+          const amountToFinance = downPayment && downPayment > 0
+            ? totalAmount - downPayment
+            : totalAmount;
+          const installmentValue = (amountToFinance / installmentsCount).toFixed(2);
+
+          for (let i = 0; i < installmentsCount; i++) {
             installmentsData.push({
               saleId,
               customerId,
-              installmentNumber: i,
-              dueDate: addMonths(new Date(saleDate || Date.now()), i),
+              installmentNumber: i + 1,
+              dueDate: addMonths(baseDate, i),
               originalAmount: installmentValue,
               status: 'pending',
             });
