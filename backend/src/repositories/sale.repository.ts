@@ -174,6 +174,13 @@ export class SaleRepository {
     await tx.update(sales).set({ deletedAt: new Date() }).where(eq(sales.id, saleId));
   }
 
+  async softDeleteInstallmentsBySaleId(tx: MySqlTransaction<any, any, any, any>, saleId: string) {
+    await tx
+      .update(installments)
+      .set({ status: 'canceled', deletedAt: new Date() })
+      .where(and(eq(installments.saleId, saleId), isNull(installments.deletedAt)));
+  }
+
   async updateInstallmentStatus(tx: MySqlTransaction<any, any, any, any>, installmentId: string, status: string) {
     await tx.update(installments).set({ status }).where(eq(installments.id, installmentId));
   }

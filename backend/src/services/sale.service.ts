@@ -159,12 +159,8 @@ export class SaleService {
         }
       }
 
-      // 3. Cancelar as parcelas do crediário
-      if (sale.installments && sale.installments.length > 0) {
-        for (const installment of sale.installments) {
-          await saleRepository.updateInstallmentStatus(tx, installment.id, 'canceled');
-        }
-      }
+      // 3. Cancelar e ocultar as parcelas do crediário (bulk — independente do findById)
+      await saleRepository.softDeleteInstallmentsBySaleId(tx, saleId);
 
       // 4. Soft delete da venda
       await saleRepository.softDelete(tx, saleId);
