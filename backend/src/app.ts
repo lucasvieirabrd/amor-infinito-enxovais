@@ -11,6 +11,7 @@ import { routes } from './routes';
 import { AppError } from './utils/AppError';
 import { setupCronJobs } from './cron';
 import { setupWebSocket } from './websocket';
+import { fixOrphanInstallmentsOnStartup } from './startup-fixes';
 
 // Definir allowedOrigins para uso no WebSocket e CORS
 const allowedOrigins = [
@@ -101,6 +102,9 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 // Inicializar Cron Jobs
 setupCronJobs();
+
+// Correções de dados executadas no startup (idempotentes)
+fixOrphanInstallmentsOnStartup();
 
 // Iniciar o servidor
 if (process.env.NODE_ENV !== 'test') {
