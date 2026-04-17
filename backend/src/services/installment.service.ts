@@ -1,7 +1,7 @@
 import { InstallmentRepository } from '../repositories/installment.repository';
 import { BillingService } from './billing.service';
 import { AppError } from '../utils/AppError';
-import { isBefore, startOfDay, isToday } from 'date-fns';
+import { isBefore, startOfDay, isToday, getDaysInMonth } from 'date-fns';
 import { customers, installments } from '../database/schema';
 
 const installmentRepository = new InstallmentRepository();
@@ -183,8 +183,10 @@ export class InstallmentService {
 
     for (const inst of list) {
       const current = new Date(inst.dueDate);
-      // Mantém ano e mês, troca apenas o dia
-      const newDate = new Date(current.getFullYear(), current.getMonth(), newDay, 12, 0, 0);
+      // Clamp: se o mês não tiver dias suficientes usa o último dia do mês
+      // Ex: dia 31 em abril → 30; dia 31 em fevereiro → 28/29
+      const diaReal = Math.min(newDay, getDaysInMonth(current));
+      const newDate = new Date(current.getFullYear(), current.getMonth(), diaReal, 12, 0, 0);
       const newDateMidnight = startOfDay(newDate);
 
       let status = inst.status;

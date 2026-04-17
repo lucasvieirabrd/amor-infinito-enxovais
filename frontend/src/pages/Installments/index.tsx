@@ -558,14 +558,14 @@ export const Installments: React.FC = () => {
           </p>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Novo dia do mês <span className="text-gray-400">(1 – 28)</span>
+              Novo dia do mês <span className="text-gray-400">(1 – 31)</span>
             </label>
             <Input
               type="number"
               value={bulkNewDay}
               onChange={(e) => setBulkNewDay(Number(e.target.value))}
               min={1}
-              max={28}
+              max={31}
               required
             />
           </div>
