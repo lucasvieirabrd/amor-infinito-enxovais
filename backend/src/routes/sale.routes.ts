@@ -20,6 +20,44 @@ saleRouter.get('/top-products', saleController.getTopProductsThisMonth);
 
 // DIAGNÓSTICO TEMPORÁRIO — apenas admin, remover após validação
 saleRouter.get('/diag-installments', ensureAuthorized(['admin']), async (req, res) => {
+
+  // Query 1: vendas com parcelas cuja due_date = sale_date (bug de data ignorada)
+  const [wrongDateRows] = await db.execute(sql`
+    SELECT
+      s.sale_number,
+      DATE(CONVERT_TZ(s.sale_date, '+00:00', '-03:00'))  AS sale_date,
+      c.name                                              AS cliente,
+      COUNT(i.id)                                         AS total_parcelas,
+      SUM(CASE WHEN DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00'))
+                    = DATE(CONVERT_TZ(s.sale_date, '+00:00', '-03:00'))
+               THEN 1 ELSE 0 END)                        AS parcelas_com_data_errada,
+      MIN(DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00'))) AS primeira_parcela,
+      MAX(DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00'))) AS ultima_parcela
+    FROM sales s
+    JOIN customers c  ON s.customer_id = c.id
+    JOIN installments i ON i.sale_id  = s.id
+    WHERE s.deleted_at IS NULL
+      AND i.deleted_at IS NULL
+      AND s.payment_method = 'installment'
+      AND i.installment_number > 0
+    GROUP BY s.id, s.sale_number, s.sale_date, c.name
+    HAVING parcelas_com_data_errada > 0
+    ORDER BY s.sale_date DESC
+  `);
+
+  const wrongDates = (wrongDateRows as any[]).map(r => ({
+    sale_number:              r.sale_number,
+    sale_date:                r.sale_date,
+    cliente:                  r.cliente,
+    total_parcelas:           Number(r.total_parcelas),
+    parcelas_com_data_errada: Number(r.parcelas_com_data_errada),
+    primeira_parcela:         r.primeira_parcela,
+    ultima_parcela:           r.ultima_parcela,
+  }));
+
+  const totalParcelasErradas = wrongDates.reduce((acc, r) => acc + r.parcelas_com_data_errada, 0);
+
+  // Query 2: detalhe completo das 50 parcelas mais recentes
   const [rows] = await db.execute(sql`
     SELECT
       s.sale_number,
@@ -94,10 +132,17 @@ saleRouter.get('/diag-installments', ensureAuthorized(['admin']), async (req, re
   const withIssues = sales.filter((s: any) => s.issues.length > 0);
 
   res.json({
-    total_sales_checked: sales.length,
-    sales_with_issues:   withIssues.length,
-    issues:              withIssues,
-    all:                 sales,
+    wrong_dates_summary: {
+      vendas_afetadas:          wrongDates.length,
+      total_parcelas_erradas:   totalParcelasErradas,
+      vendas:                   wrongDates,
+    },
+    detail: {
+      total_sales_checked: sales.length,
+      sales_with_issues:   withIssues.length,
+      issues:              withIssues,
+      all:                 sales,
+    },
   });
 });
 
