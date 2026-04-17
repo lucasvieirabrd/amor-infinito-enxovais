@@ -42,6 +42,7 @@ interface CustomerGroup {
   installments: BillingRecord[];
   overdueCount: number;
   totalOverdue: number;
+  todayCount: number;
 }
 
 interface StatsResponse {
@@ -200,6 +201,7 @@ export const Billing: React.FC = () => {
           installments: [],
           overdueCount: 0,
           totalOverdue: 0,
+          todayCount: 0,
         });
       }
       const group = map.get(rec.customerId)!;
@@ -207,9 +209,14 @@ export const Billing: React.FC = () => {
       const isOverdue =
         rec.status === 'overdue' ||
         (rec.status === 'pending' && isBefore(new Date(rec.dueDate), startOfDay(new Date())));
+      const isTodayRec =
+        rec.status === 'pending' &&
+        format(new Date(rec.dueDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
       if (isOverdue) {
         group.overdueCount += 1;
         group.totalOverdue += Number(rec.originalAmount);
+      } else if (isTodayRec) {
+        group.todayCount += 1;
       }
     });
     return Array.from(map.values()).filter(
@@ -371,6 +378,9 @@ export const Billing: React.FC = () => {
                                 R$ {group.totalOverdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </span>
                             </div>
+                          )}
+                          {group.overdueCount === 0 && group.todayCount > 0 && (
+                            <Badge variant="warning">Vence hoje</Badge>
                           )}
                         </div>
                         <div className="flex items-center gap-3 text-gray-400">
