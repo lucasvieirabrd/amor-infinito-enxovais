@@ -78,7 +78,10 @@ export class SaleService {
 
         // Parcela de entrada (número 0) — registrada como paga na data informada
         if (downPayment && downPayment > 0) {
-          const entryDate = downPaymentDate ? new Date(downPaymentDate) : new Date(saleDate || Date.now());
+          // T12:00:00 evita que meia-noite UTC seja interpretada como dia anterior em UTC-3
+          const entryDate = downPaymentDate
+            ? new Date(downPaymentDate + 'T12:00:00')
+            : new Date(saleDate || Date.now());
           installmentsData.push({
             saleId,
             customerId,
@@ -95,11 +98,12 @@ export class SaleService {
           // Parcelas personalizadas enviadas pelo frontend
           for (let i = 0; i < customInstallments.length; i++) {
             const inst = customInstallments[i];
+            // T12:00:00 evita regressão de 1 dia por timezone UTC-3
             installmentsData.push({
               saleId,
               customerId,
               installmentNumber: i + 1,
-              dueDate: new Date(inst.dueDate),
+              dueDate: new Date(inst.dueDate + 'T12:00:00'),
               originalAmount: inst.amount.toFixed(2),
               status: 'pending',
             });
@@ -107,8 +111,9 @@ export class SaleService {
         } else {
           // Gerar parcelas automáticas usando firstDueDate como base
           // Parcela 1 = firstDueDate, parcela 2 = firstDueDate + 1 mês, etc.
+          // T12:00:00 garante que addMonths preserve o dia correto em UTC-3
           const baseDate = firstDueDate
-            ? new Date(firstDueDate)
+            ? new Date(firstDueDate + 'T12:00:00')
             : addMonths(new Date(saleDate || Date.now()), 1);
           const amountToFinance = downPayment && downPayment > 0
             ? totalAmount - downPayment
