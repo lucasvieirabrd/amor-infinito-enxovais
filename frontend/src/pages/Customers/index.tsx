@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useDebounce } from '../../hooks/useDebounce';
 import api from '../../services/api';
 import { FiSearch, FiPlus, FiMapPin, FiEdit, FiTrash2, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { Button, Input, Modal, Table, Card, Loading, Badge } from '../../components/ui';
@@ -28,8 +27,8 @@ interface PaginatedResponse {
 }
 
 export const Customers: React.FC = () => {
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -44,10 +43,10 @@ export const Customers: React.FC = () => {
 
   // Busca de clientes via API com paginação
   const { data: response, isLoading } = useQuery({
-    queryKey: ['customers', debouncedSearch, page],
+    queryKey: ['customers', search, page],
     queryFn: async () => {
       const res = await api.get('/customers', {
-        params: { search: debouncedSearch, page, limit: ITEMS_PER_PAGE },
+        params: { search, page, limit: ITEMS_PER_PAGE },
       });
       return res.data as PaginatedResponse;
     },
@@ -269,10 +268,13 @@ export const Customers: React.FC = () => {
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <Input
                 placeholder="Buscar por nome, CPF ou telefone..."
-                value={search}
+                value={searchInput}
                 onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
+                  setSearchInput(e.target.value);
+                  if (e.target.value === '') { setSearch(''); setPage(1); }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { setSearch(searchInput); setPage(1); }
                 }}
                 className="pl-10"
               />

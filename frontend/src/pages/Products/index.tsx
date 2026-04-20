@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useDebounce } from '../../hooks/useDebounce';
 import api from '../../services/api';
 import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { Button, Card, Badge, Loading, Modal, Input } from '../../components/ui';
@@ -24,8 +23,8 @@ interface PaginatedResponse {
 }
 
 export const Products: React.FC = () => {
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(1);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editFormData, setEditFormData] = useState({ quantity: 0, price: 0 });
@@ -35,10 +34,10 @@ export const Products: React.FC = () => {
 
   // Busca de produtos via API com paginação
   const { data: response, isLoading } = useQuery({
-    queryKey: ['products', debouncedSearch, page],
+    queryKey: ['products', search, page],
     queryFn: async () => {
       const res = await api.get('/products', {
-        params: { search: debouncedSearch, page, limit: ITEMS_PER_PAGE },
+        params: { search, page, limit: ITEMS_PER_PAGE },
       });
       return res.data as PaginatedResponse;
     },
@@ -133,10 +132,13 @@ export const Products: React.FC = () => {
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <Input
                 placeholder="Buscar por nome ou SKU..."
-                value={search}
+                value={searchInput}
                 onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
+                  setSearchInput(e.target.value);
+                  if (e.target.value === '') { setSearch(''); setPage(1); }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { setSearch(searchInput); setPage(1); }
                 }}
                 className="pl-10"
               />

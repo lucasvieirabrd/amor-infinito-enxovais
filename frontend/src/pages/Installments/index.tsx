@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useDebounce } from '../../hooks/useDebounce';
 import api from '../../services/api';
 import {
   FiSearch,
@@ -56,8 +55,8 @@ interface StatsResponse {
 }
 
 export const Installments: React.FC = () => {
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(1);
 
   // Accordion — qual cliente está expandido
@@ -84,10 +83,10 @@ export const Installments: React.FC = () => {
   // ── Queries ────────────────────────────────────────────────────────────────
 
   const { data: response, isLoading: isLoadingCustomers } = useQuery({
-    queryKey: ['active-crediarios', debouncedSearch, page],
+    queryKey: ['active-crediarios', search, page],
     queryFn: async () => {
       const res = await api.get('/installments/active', {
-        params: { search: debouncedSearch, page, limit: ITEMS_PER_PAGE },
+        params: { search, page, limit: ITEMS_PER_PAGE },
       });
       return res.data as PaginatedResponse;
     },
@@ -284,8 +283,14 @@ export const Installments: React.FC = () => {
           <Input
             type="text"
             placeholder="Buscar cliente..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              if (e.target.value === '') { setSearch(''); setPage(1); }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { setSearch(searchInput); setPage(1); }
+            }}
             className="max-w-xs"
             icon={<FiSearch />}
           />
