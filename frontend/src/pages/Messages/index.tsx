@@ -4,7 +4,7 @@ import api from '../../services/api';
 import socket from '../../services/socket';
 import {
   FiSearch, FiSend, FiCheck, FiCheckCircle, FiTag, FiX, FiPlus, FiTrash2,
-  FiMessageSquare, FiArrowUp, FiArrowDown,
+  FiMessageSquare, FiArrowUp, FiArrowDown, FiList, FiGrid,
 } from 'react-icons/fi';
 import { Button, Badge } from '../../components/ui';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -43,6 +43,8 @@ interface StatsToday {
   inboundByTag: Record<string, number>;
 }
 
+type ViewMode = 'list' | 'kanban';
+
 // ─── Tag definitions ─────────────────────────────────────────────────────────
 
 const TAGS = [
@@ -55,11 +57,24 @@ const TAGS = [
   { value: 'none',      label: 'Sem tag',   badge: 'info'    as const, color: 'bg-gray-100 text-gray-500'   },
 ];
 
+// ─── Kanban column definitions ────────────────────────────────────────────────
+
+const KANBAN_COLUMNS = [
+  { value: 'Cobrança', label: 'Cobrança', color: 'bg-red-100 text-red-700',    header: 'bg-red-50 border-red-200'    },
+  { value: 'Venda',    label: 'Venda',    color: 'bg-green-100 text-green-700', header: 'bg-green-50 border-green-200' },
+  { value: 'Follow',   label: 'Follow',   color: 'bg-blue-100 text-blue-700',   header: 'bg-blue-50 border-blue-200'  },
+  { value: 'Anúncios', label: 'Anúncios', color: 'bg-purple-100 text-purple-700',header: 'bg-purple-50 border-purple-200'},
+  { value: 'none',     label: 'Sem tag',  color: 'bg-gray-100 text-gray-500',   header: 'bg-gray-50 border-gray-200'  },
+];
+
 const TAB_ALL = 'Todas';
 const TABS = [TAB_ALL, ...TAGS.map(t => t.label)];
 
 const tagBadge  = (tag: string) => TAGS.find(t => t.value === tag || t.label === tag)?.badge ?? 'info';
-const tagColor  = (tag: string) => TAGS.find(t => t.value === tag || t.label === tag)?.color ?? '';
+const tagColor  = (tag: string) => TAGS.find(t => t.value === tag || t.label === tag)?.color ?? 'bg-gray-100 text-gray-500';
+
+const kanbanColor = (tag: string) =>
+  KANBAN_COLUMNS.find(c => c.value === tag)?.color ?? tagColor(tag);
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -99,6 +114,9 @@ const isUnsupported = (msg: Message) =>
 export const Messages: React.FC = () => {
   const queryClient = useQueryClient();
 
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    (localStorage.getItem('messages-view-mode') as ViewMode) ?? 'list'
+  );
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [newMessage,    setNewMessage]    = useState('');
   const [chatSearch,    setChatSearch]    = useState('');
@@ -110,8 +128,18 @@ export const Messages: React.FC = () => {
   const [newConvSelected,  setNewConvSelected]  = useState<Customer | null>(null);
   const [newConvMessage,   setNewConvMessage]   = useState('');
 
+  // Kanban DnD state
+  const [dragConv,    setDragConv]    = useState<Conversation | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
   const tagMenuRef = useRef<HTMLDivElement>(null);
+
+  const switchView = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem('messages-view-mode', mode);
+    setSelectedConversation(null);
+  };
 
   // Close tag menu on outside click
   useEffect(() => {
@@ -147,7 +175,7 @@ export const Messages: React.FC = () => {
       const res = await api.get('/messages/stats/today');
       return res.data;
     },
-    refetchInterval: 60_000, // refresh every minute
+    refetchInterval: 60_000,
   });
 
   const { data: messages } = useQuery({
@@ -247,7 +275,30 @@ export const Messages: React.FC = () => {
     deleteMutation.mutate(contactPhone);
   };
 
-  // ── Filtered conversations ────────────────────────────────────────────────
+  // ── Kanban DnD handlers ───────────────────────────────────────────────────
+
+  const handleDragStart = (conv: Conversation) => setDragConv(conv);
+
+  const handleDragOver = (e: React.DragEvent, colValue: string) => {
+    e.preventDefault();
+    setDragOverCol(colValue);
+  };
+
+  const handleDrop = (colValue: string) => {
+    if (dragConv && dragConv.conversationTag !== colValue) {
+      const phone = dragConv.contactPhone || dragConv.fromPhone;
+      tagMutation.mutate({ phone, tag: colValue });
+    }
+    setDragConv(null);
+    setDragOverCol(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragConv(null);
+    setDragOverCol(null);
+  };
+
+  // ── Filtered conversations (list mode) ──────────────────────────────────
 
   const filtered = (conversations ?? []).filter(conv => {
     const name  = (conv.customerName ?? '').toLowerCase();
@@ -271,6 +322,122 @@ export const Messages: React.FC = () => {
   const activeTag = (conv: Conversation) =>
     conv.conversationTag && conv.conversationTag !== 'none' ? conv.conversationTag : null;
 
+  const convPhone = (conv: Conversation) =>
+    conv.contactPhone || (conv.fromPhone !== 'SISTEMA' ? conv.fromPhone : conv.toPhone) || '';
+
+  // ── Chat panel (shared between list right-panel and kanban modal) ────────
+
+  const ChatPanel = ({ onClose }: { onClose?: () => void }) => (
+    <>
+      {/* Chat header */}
+      <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-gray-200">
+        <div>
+          <h2 className="text-base font-bold text-gray-900">{selectedConversation ? displayName(selectedConversation) : ''}</h2>
+          <p className="text-xs text-gray-500">{contactPhone}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Tag button */}
+          <div className="relative" ref={tagMenuRef}>
+            <Button variant="secondary" size="sm"
+              onClick={() => setShowTagMenu(v => !v)}
+              className="flex items-center gap-1.5 text-sm"
+            >
+              <FiTag size={14} />
+              {selectedConversation && activeTag(selectedConversation)
+                ? <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${tagColor(selectedConversation.conversationTag)}`}>{selectedConversation.conversationTag}</span>
+                : 'Tag'
+              }
+            </Button>
+            {showTagMenu && (
+              <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-xl border border-gray-200 z-20 py-1">
+                {TAGS.map(t => (
+                  <button key={t.value}
+                    onClick={() => handleTag(t.value)}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between transition-colors"
+                  >
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.color}`}>{t.label}</span>
+                    {selectedConversation?.conversationTag === t.value && <span className="text-primary text-xs">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Delete button */}
+          <Button variant="secondary" size="sm"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="text-red-500 hover:bg-red-50 border-red-200"
+          >
+            <FiTrash2 size={15} />
+          </Button>
+
+          {/* Close button (kanban modal only) */}
+          {onClose && (
+            <button onClick={onClose} className="ml-1 text-gray-400 hover:text-gray-600 transition-colors">
+              <FiX size={20} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+        {!messages || messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-gray-400">
+              <FiMessageSquare size={40} className="mx-auto mb-2 opacity-40" />
+              <p className="text-sm">Nenhuma mensagem ainda</p>
+            </div>
+          </div>
+        ) : messages.map(msg => (
+          <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-sm px-4 py-2 rounded-2xl ${
+              msg.direction === 'outbound'
+                ? 'bg-primary text-white rounded-br-sm'
+                : 'bg-white border border-gray-200 text-gray-900 rounded-bl-sm shadow-sm'
+            }`}>
+              {isUnsupported(msg) ? (
+                <p className="text-sm italic opacity-70 flex items-center gap-1">
+                  📎 Mídia não suportada (áudio, figurinha, etc.)
+                </p>
+              ) : (
+                <p className="text-sm">{msg.content}</p>
+              )}
+              <div className={`flex items-center gap-1 mt-1 text-xs ${
+                msg.direction === 'outbound' ? 'text-white opacity-70 justify-end' : 'text-gray-400'
+              }`}>
+                <span>{formatRelativeTime(msg.timestamp)}</span>
+                {msg.direction === 'outbound' && (
+                  msg.status === 'read' ? <FiCheckCircle size={12} /> : <FiCheck size={12} />
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+        <div ref={chatEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className="flex-shrink-0 border-t border-gray-200 p-3">
+        <form onSubmit={handleSend} className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Digite uma mensagem..."
+            value={newMessage}
+            onChange={e => setNewMessage(e.target.value)}
+            className="input-base flex-1 text-sm"
+          />
+          <Button variant="primary" type="submit"
+            loading={sendMutation.isPending} disabled={!newMessage.trim()}
+            className="flex items-center gap-1.5"
+          >
+            <FiSend size={16} />
+          </Button>
+        </form>
+      </div>
+    </>
+  );
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] space-y-4 overflow-hidden">
@@ -282,233 +449,238 @@ export const Messages: React.FC = () => {
           <p className="text-gray-600 mt-1">Gerencie conversas com clientes via WhatsApp</p>
         </div>
 
-        {/* Stats today */}
-        {stats && (
-          <div className="flex gap-3 flex-shrink-0 mt-1">
-            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-sm">
-              <FiArrowUp size={14} className="text-green-600" />
-              <span className="font-semibold text-green-700">{stats.outboundToday}</span>
-              <span className="text-green-600">enviadas hoje</span>
-            </div>
-            <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm">
-              <FiArrowDown size={14} className="text-blue-600" />
-              <span className="font-semibold text-blue-700">{stats.inboundToday}</span>
-              <span className="text-blue-600">recebidas hoje</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Main layout ── */}
-      <div className="flex gap-6 flex-1 min-h-0">
-
-        {/* ── Left panel: list ── */}
-        <div className="w-full lg:w-80 flex-shrink-0 flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-
-          {/* Search + new button */}
-          <div className="flex-shrink-0 p-3 border-b border-gray-200 space-y-2">
-            <button
-              onClick={() => setShowNewConvModal(true)}
-              className="w-full flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2 px-3 text-sm font-medium hover:opacity-90 transition-opacity"
-            >
-              <FiPlus size={15} /> Nova Conversa
-            </button>
-            <div className="relative">
-              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input
-                type="text"
-                placeholder="Buscar..."
-                value={chatSearch}
-                onChange={e => setChatSearch(e.target.value)}
-                className="input-base pl-9 w-full text-sm"
-              />
-            </div>
-          </div>
-
-          {/* ── Tag tabs ── */}
-          <div className="flex-shrink-0 flex gap-0 overflow-x-auto border-b border-gray-200 bg-gray-50">
-            {TABS.map(tab => {
-              const tagVal = TAGS.find(t => t.label === tab)?.value ?? 'none';
-              const count  = tab !== TAB_ALL && stats?.inboundByTag
-                ? (stats.inboundByTag[tagVal] ?? 0)
-                : 0;
-              const isActive = activeTab === tab;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex-shrink-0 flex items-center gap-1 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    isActive
-                      ? 'border-primary text-primary bg-white'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  {tab}
-                  {count > 0 && (
-                    <span className="bg-red-500 text-white text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 leading-none">
-                      {count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* ── Conversation list (scrollable) ── */}
-          <div className="flex-1 overflow-y-auto">
-            {isLoading ? (
-              <p className="text-center text-gray-500 py-8 text-sm">Carregando...</p>
-            ) : filtered.length === 0 ? (
-              <p className="text-center text-gray-500 py-8 text-sm">Nenhuma conversa encontrada</p>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {filtered.map(conv => (
-                  <button
-                    key={conv.id}
-                    onClick={() => setSelectedConversation(conv)}
-                    className={`w-full text-left px-4 py-3 transition-colors ${
-                      selectedConversation?.id === conv.id
-                        ? 'bg-primary bg-opacity-10'
-                        : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 truncate text-sm">{displayName(conv)}</p>
-                        <p className="text-xs text-gray-500 truncate mt-0.5">{conv.lastMessage || '—'}</p>
-                      </div>
-                      <div className="flex-shrink-0 flex flex-col items-end gap-1">
-                        <span className="text-xs text-gray-400">{formatRelativeTime(conv.lastMessageAt)}</span>
-                        {activeTag(conv) && (
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${tagColor(conv.conversationTag)}`}>
-                            {conv.conversationTag}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))}
+        <div className="flex items-center gap-3 flex-shrink-0 mt-1">
+          {/* Stats today */}
+          {stats && (
+            <>
+              <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-sm">
+                <FiArrowUp size={14} className="text-green-600" />
+                <span className="font-semibold text-green-700">{stats.outboundToday}</span>
+                <span className="text-green-600">enviadas hoje</span>
               </div>
-            )}
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm">
+                <FiArrowDown size={14} className="text-blue-600" />
+                <span className="font-semibold text-blue-700">{stats.inboundToday}</span>
+                <span className="text-blue-600">recebidas hoje</span>
+              </div>
+            </>
+          )}
+
+          {/* View toggle */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+            <button
+              onClick={() => switchView('list')}
+              title="Modo lista"
+              className={`p-1.5 rounded-md transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-white text-primary shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <FiList size={16} />
+            </button>
+            <button
+              onClick={() => switchView('kanban')}
+              title="Modo kanban"
+              className={`p-1.5 rounded-md transition-colors ${
+                viewMode === 'kanban'
+                  ? 'bg-white text-primary shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <FiGrid size={16} />
+            </button>
           </div>
         </div>
+      </div>
 
-        {/* ── Right panel: chat ── */}
-        {selectedConversation ? (
-          <div className="flex-1 min-w-0 flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── LIST MODE ── */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'list' && (
+        <div className="flex gap-6 flex-1 min-h-0">
 
-            {/* Chat header */}
-            <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-gray-200">
-              <div>
-                <h2 className="text-base font-bold text-gray-900">{displayName(selectedConversation)}</h2>
-                <p className="text-xs text-gray-500">{contactPhone}</p>
-              </div>
-              <div className="flex items-center gap-2">
+          {/* ── Left panel: list ── */}
+          <div className="w-full lg:w-80 flex-shrink-0 flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
 
-                {/* Tag button */}
-                <div className="relative" ref={tagMenuRef}>
-                  <Button variant="secondary" size="sm"
-                    onClick={() => setShowTagMenu(v => !v)}
-                    className="flex items-center gap-1.5 text-sm"
-                  >
-                    <FiTag size={14} />
-                    {activeTag(selectedConversation)
-                      ? <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${tagColor(selectedConversation.conversationTag)}`}>{selectedConversation.conversationTag}</span>
-                      : 'Tag'
-                    }
-                  </Button>
-
-                  {showTagMenu && (
-                    <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-xl border border-gray-200 z-20 py-1">
-                      {TAGS.map(t => (
-                        <button key={t.value}
-                          onClick={() => handleTag(t.value)}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between transition-colors"
-                        >
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.color}`}>{t.label}</span>
-                          {selectedConversation.conversationTag === t.value && <span className="text-primary text-xs">✓</span>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Delete button */}
-                <Button variant="secondary" size="sm"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="text-red-500 hover:bg-red-50 border-red-200"
-                >
-                  <FiTrash2 size={15} />
-                </Button>
-              </div>
-            </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-              {!messages || messages.length === 0 ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center text-gray-400">
-                    <FiMessageSquare size={40} className="mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">Nenhuma mensagem ainda</p>
-                  </div>
-                </div>
-              ) : messages.map(msg => (
-                <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-sm px-4 py-2 rounded-2xl ${
-                    msg.direction === 'outbound'
-                      ? 'bg-primary text-white rounded-br-sm'
-                      : 'bg-white border border-gray-200 text-gray-900 rounded-bl-sm shadow-sm'
-                  }`}>
-                    {isUnsupported(msg) ? (
-                      <p className="text-sm italic opacity-70 flex items-center gap-1">
-                        📎 Mídia não suportada (áudio, figurinha, etc.)
-                      </p>
-                    ) : (
-                      <p className="text-sm">{msg.content}</p>
-                    )}
-                    <div className={`flex items-center gap-1 mt-1 text-xs ${
-                      msg.direction === 'outbound' ? 'text-white opacity-70 justify-end' : 'text-gray-400'
-                    }`}>
-                      <span>{formatRelativeTime(msg.timestamp)}</span>
-                      {msg.direction === 'outbound' && (
-                        msg.status === 'read' ? <FiCheckCircle size={12} /> : <FiCheck size={12} />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <div ref={chatEndRef} />
-            </div>
-
-            {/* Input */}
-            <div className="flex-shrink-0 border-t border-gray-200 p-3">
-              <form onSubmit={handleSend} className="flex gap-2">
+            {/* Search + new button */}
+            <div className="flex-shrink-0 p-3 border-b border-gray-200 space-y-2">
+              <button
+                onClick={() => setShowNewConvModal(true)}
+                className="w-full flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2 px-3 text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                <FiPlus size={15} /> Nova Conversa
+              </button>
+              <div className="relative">
+                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="text"
-                  placeholder="Digite uma mensagem..."
-                  value={newMessage}
-                  onChange={e => setNewMessage(e.target.value)}
-                  className="input-base flex-1 text-sm"
+                  placeholder="Buscar..."
+                  value={chatSearch}
+                  onChange={e => setChatSearch(e.target.value)}
+                  className="input-base pl-9 w-full text-sm"
                 />
-                <Button variant="primary" type="submit"
-                  loading={sendMutation.isPending} disabled={!newMessage.trim()}
-                  className="flex items-center gap-1.5"
-                >
-                  <FiSend size={16} />
-                </Button>
-              </form>
+              </div>
+            </div>
+
+            {/* ── Tag tabs ── */}
+            <div className="flex-shrink-0 flex gap-0 overflow-x-auto border-b border-gray-200 bg-gray-50">
+              {TABS.map(tab => {
+                const tagVal = TAGS.find(t => t.label === tab)?.value ?? 'none';
+                const count  = tab !== TAB_ALL && stats?.inboundByTag
+                  ? (stats.inboundByTag[tagVal] ?? 0)
+                  : 0;
+                const isActive = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`flex-shrink-0 flex items-center gap-1 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      isActive
+                        ? 'border-primary text-primary bg-white'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    {tab}
+                    {count > 0 && (
+                      <span className="bg-red-500 text-white text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 leading-none">
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Conversation list (scrollable) ── */}
+            <div className="flex-1 overflow-y-auto">
+              {isLoading ? (
+                <p className="text-center text-gray-500 py-8 text-sm">Carregando...</p>
+              ) : filtered.length === 0 ? (
+                <p className="text-center text-gray-500 py-8 text-sm">Nenhuma conversa encontrada</p>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {filtered.map(conv => (
+                    <button
+                      key={conv.id}
+                      onClick={() => setSelectedConversation(conv)}
+                      className={`w-full text-left px-4 py-3 transition-colors ${
+                        selectedConversation?.id === conv.id
+                          ? 'bg-primary bg-opacity-10'
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 truncate text-sm">{displayName(conv)}</p>
+                          <p className="text-xs text-gray-500 truncate mt-0.5">{conv.lastMessage || '—'}</p>
+                        </div>
+                        <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                          <span className="text-xs text-gray-400">{formatRelativeTime(conv.lastMessageAt)}</span>
+                          {activeTag(conv) && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${tagColor(conv.conversationTag)}`}>
+                              {conv.conversationTag}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center bg-white rounded-xl border-2 border-dashed border-gray-200">
-            <div className="text-center text-gray-400">
-              <FiMessageSquare size={48} className="mx-auto mb-3 opacity-30" />
-              <p className="text-base font-medium">Selecione uma conversa</p>
-              <p className="text-sm mt-1">ou inicie uma nova</p>
+
+          {/* ── Right panel: chat ── */}
+          {selectedConversation ? (
+            <div className="flex-1 min-w-0 flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <ChatPanel />
             </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center bg-white rounded-xl border-2 border-dashed border-gray-200">
+              <div className="text-center text-gray-400">
+                <FiMessageSquare size={48} className="mx-auto mb-3 opacity-30" />
+                <p className="text-base font-medium">Selecione uma conversa</p>
+                <p className="text-sm mt-1">ou inicie uma nova</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── KANBAN MODE ── */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'kanban' && (
+        <div className="flex-1 min-h-0 flex gap-3 overflow-x-auto pb-2">
+          {KANBAN_COLUMNS.map(col => {
+            const colConvs = (conversations ?? []).filter(c => {
+              const tag = c.conversationTag || 'none';
+              return col.value === 'none' ? tag === 'none' : tag === col.value;
+            });
+            const isOver = dragOverCol === col.value;
+
+            return (
+              <div
+                key={col.value}
+                className={`flex-shrink-0 w-64 flex flex-col rounded-xl border-2 transition-colors ${
+                  isOver ? 'border-primary bg-primary bg-opacity-5' : `border ${col.header}`
+                }`}
+                style={{ minHeight: 0 }}
+                onDragOver={e => handleDragOver(e, col.value)}
+                onDragLeave={() => setDragOverCol(null)}
+                onDrop={() => handleDrop(col.value)}
+              >
+                {/* Column header */}
+                <div className={`flex-shrink-0 flex items-center justify-between px-3 py-2.5 rounded-t-xl border-b ${col.header}`}>
+                  <span className={`text-xs font-semibold uppercase tracking-wide ${col.color}`}>
+                    {col.label}
+                  </span>
+                  <span className="text-xs font-bold text-gray-500 bg-white rounded-full px-2 py-0.5 border border-gray-200">
+                    {colConvs.length}
+                  </span>
+                </div>
+
+                {/* Cards (scrollable) */}
+                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                  {colConvs.length === 0 ? (
+                    <p className="text-center text-gray-400 text-xs py-6">Nenhuma conversa</p>
+                  ) : colConvs.map(conv => (
+                    <div
+                      key={conv.id}
+                      draggable
+                      onDragStart={() => handleDragStart(conv)}
+                      onDragEnd={handleDragEnd}
+                      onClick={() => setSelectedConversation(conv)}
+                      className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm cursor-pointer hover:shadow-md hover:border-primary transition-all select-none"
+                    >
+                      <div className="flex items-start justify-between gap-1 mb-1.5">
+                        <p className="font-medium text-gray-900 text-sm truncate flex-1">{displayName(conv)}</p>
+                        <span className="text-xs text-gray-400 flex-shrink-0">{formatRelativeTime(conv.lastMessageAt)}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 truncate mb-2">{conv.lastMessage || '—'}</p>
+                      {conv.conversationTag && conv.conversationTag !== 'none' && (
+                        <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${kanbanColor(conv.conversationTag)}`}>
+                          {conv.conversationTag}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Kanban chat modal ── */}
+      {viewMode === 'kanban' && selectedConversation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col overflow-hidden">
+            <ChatPanel onClose={() => { setSelectedConversation(null); setShowTagMenu(false); }} />
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── Nova Conversa modal ── */}
       {showNewConvModal && (
