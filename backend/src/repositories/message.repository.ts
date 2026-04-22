@@ -58,21 +58,32 @@ export class MessageRepository {
       LEFT JOIN customers c ON m1.customer_id = c.id
       INNER JOIN (
         SELECT
-          CASE WHEN direction = 'inbound' THEN from_phone ELSE to_phone END AS contact_phone,
+          CASE
+            WHEN LEFT(CASE WHEN direction='inbound' THEN from_phone ELSE to_phone END, 2) = '55'
+            THEN SUBSTR(CASE WHEN direction='inbound' THEN from_phone ELSE to_phone END, 3)
+            ELSE CASE WHEN direction='inbound' THEN from_phone ELSE to_phone END
+          END AS contact_phone,
           MAX(timestamp) AS max_ts
         FROM messages
         WHERE deleted_at IS NULL
         GROUP BY contact_phone
       ) m2
-        ON  (CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END) = m2.contact_phone
+        ON  CASE
+              WHEN LEFT(CASE WHEN m1.direction='inbound' THEN m1.from_phone ELSE m1.to_phone END, 2) = '55'
+              THEN SUBSTR(CASE WHEN m1.direction='inbound' THEN m1.from_phone ELSE m1.to_phone END, 3)
+              ELSE CASE WHEN m1.direction='inbound' THEN m1.from_phone ELSE m1.to_phone END
+            END = m2.contact_phone
         AND m1.timestamp = m2.max_ts
       LEFT JOIN customers c2
         ON  c.id IS NULL
         AND (
           c2.phone = m2.contact_phone
-          OR c2.phone = IF(LEFT(m2.contact_phone,2)='55', SUBSTR(m2.contact_phone,3), CONCAT('55',m2.contact_phone))
+          OR c2.phone = CONCAT('55', m2.contact_phone)
         )
-      LEFT JOIN conversations conv ON conv.phone = m2.contact_phone
+      LEFT JOIN conversations conv ON (
+        conv.phone = m2.contact_phone
+        OR conv.phone = CONCAT('55', m2.contact_phone)
+      )
       WHERE m1.deleted_at IS NULL
       ORDER BY m1.timestamp DESC
     `);

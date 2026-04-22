@@ -75,9 +75,16 @@ const parseDate = (val: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-const formatTime = (val: any): string => {
+const formatRelativeTime = (val: any): string => {
   const d = parseDate(val);
-  return d ? formatInTimeZone(d, TZ, 'HH:mm') : '';
+  if (!d) return '';
+  const timeStr = formatInTimeZone(d, TZ, 'HH:mm');
+  const today = formatInTimeZone(new Date(), TZ, 'yyyy-MM-dd');
+  const yesterday = formatInTimeZone(new Date(Date.now() - 86_400_000), TZ, 'yyyy-MM-dd');
+  const msgDay = formatInTimeZone(d, TZ, 'yyyy-MM-dd');
+  if (msgDay === today) return timeStr;
+  if (msgDay === yesterday) return `Ontem ${timeStr}`;
+  return `${formatInTimeZone(d, TZ, 'dd/MM')} ${timeStr}`;
 };
 
 // ─── Unsupported message helper ───────────────────────────────────────────────
@@ -371,7 +378,7 @@ export const Messages: React.FC = () => {
                         <p className="text-xs text-gray-500 truncate mt-0.5">{conv.lastMessage || '—'}</p>
                       </div>
                       <div className="flex-shrink-0 flex flex-col items-end gap-1">
-                        <span className="text-xs text-gray-400">{formatTime(conv.lastMessageAt)}</span>
+                        <span className="text-xs text-gray-400">{formatRelativeTime(conv.lastMessageAt)}</span>
                         {activeTag(conv) && (
                           <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${tagColor(conv.conversationTag)}`}>
                             {conv.conversationTag}
@@ -462,7 +469,7 @@ export const Messages: React.FC = () => {
                     <div className={`flex items-center gap-1 mt-1 text-xs ${
                       msg.direction === 'outbound' ? 'text-white opacity-70 justify-end' : 'text-gray-400'
                     }`}>
-                      <span>{formatTime(msg.timestamp)}</span>
+                      <span>{formatRelativeTime(msg.timestamp)}</span>
                       {msg.direction === 'outbound' && (
                         msg.status === 'read' ? <FiCheckCircle size={12} /> : <FiCheck size={12} />
                       )}

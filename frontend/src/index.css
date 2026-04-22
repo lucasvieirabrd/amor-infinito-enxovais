@@ -66,7 +66,7 @@
   }
 
   .badge-warning {
-    @apply badge bg-secondary bg-opacity-20 text-secondary;
+    @apply badge bg-orange-100 text-orange-700;
   }
 
   .badge-info {
