@@ -467,28 +467,30 @@ export const Messages: React.FC = () => {
           )}
 
           {/* View toggle */}
-          <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+          <div className="flex items-center bg-white border border-gray-300 rounded-lg p-1 gap-0.5 shadow-sm">
             <button
               onClick={() => switchView('list')}
               title="Modo lista"
-              className={`p-1.5 rounded-md transition-colors ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 viewMode === 'list'
-                  ? 'bg-white text-primary shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
               }`}
             >
-              <FiList size={16} />
+              <FiList size={14} />
+              Lista
             </button>
             <button
               onClick={() => switchView('kanban')}
               title="Modo kanban"
-              className={`p-1.5 rounded-md transition-colors ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 viewMode === 'kanban'
-                  ? 'bg-white text-primary shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
               }`}
             >
-              <FiGrid size={16} />
+              <FiGrid size={14} />
+              Kanban
             </button>
           </div>
         </div>
