@@ -1,13 +1,8 @@
 import { CustomerRepository } from '../repositories/customer.repository';
 import { AppError } from '../utils/AppError';
+import { normalizePhone } from '../utils/normalizePhone';
 
 const customerRepository = new CustomerRepository();
-
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 13 && digits.startsWith('55')) return digits.slice(2);
-  return digits;
-}
 
 export class CustomerService {
   async register(data: any) {
@@ -21,9 +16,10 @@ export class CustomerService {
       throw new AppError('Este telefone já está cadastrado para outro cliente', 400);
     }
 
-    // Formatar CPF e CEP antes de salvar
+    // Formatar CPF, CEP e normalizar telefone antes de salvar
     const formattedData = {
       ...data,
+      phone: normalizePhone(data.phone),
       cpf: data.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'),
       cep: (data.cep && data.cep !== '00000000') ? data.cep.replace(/(\d{5})(\d{3})/, '$1-$2') : null,
     };

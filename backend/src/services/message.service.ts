@@ -1,6 +1,7 @@
 import { MessageRepository } from '../repositories/message.repository';
 import { WhatsAppService } from '../integrations/whatsapp.service';
 import { AppError } from '../utils/AppError';
+import { normalizePhone } from '../utils/normalizePhone';
 
 const messageRepository = new MessageRepository();
 const whatsAppService = new WhatsAppService();
@@ -15,14 +16,15 @@ export class MessageService {
   }
 
   async sendMessage(to: string, content: string, customerId?: string) {
-    const result = await whatsAppService.sendTextMessage(to, content);
-    
+    const normalizedTo = normalizePhone(to);
+    const result = await whatsAppService.sendTextMessage(normalizedTo, content);
+
     if (result && !result.error) {
       const id = await messageRepository.create({
         metaMessageId: result.messages?.[0]?.id,
         customerId: customerId || null,
         fromPhone: 'SISTEMA',
-        toPhone: to,
+        toPhone: normalizedTo,
         type: 'text',
         content,
         direction: 'outbound',

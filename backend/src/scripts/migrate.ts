@@ -21,6 +21,22 @@ const migrations: { name: string; sql: string }[] = [
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`,
   },
+  {
+    name: '0003a_normalize_messages_from_phone',
+    sql: `UPDATE messages SET from_phone = CONCAT('55', from_phone) WHERE from_phone REGEXP '^[0-9]{11}$'`,
+  },
+  {
+    name: '0003b_normalize_messages_to_phone',
+    sql: `UPDATE messages SET to_phone = CONCAT('55', to_phone) WHERE to_phone REGEXP '^[0-9]{11}$'`,
+  },
+  {
+    name: '0003c_normalize_conversations_phone',
+    sql: `UPDATE conversations SET phone = CONCAT('55', phone) WHERE phone REGEXP '^[0-9]{11}$'`,
+  },
+  {
+    name: '0003d_normalize_customers_phone',
+    sql: `UPDATE customers SET phone = CONCAT('55', phone) WHERE phone REGEXP '^[0-9]{11}$'`,
+  },
 ];
 
 async function run() {

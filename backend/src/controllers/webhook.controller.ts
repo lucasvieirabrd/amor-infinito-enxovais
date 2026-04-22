@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { MessageRepository } from '../repositories/message.repository';
 import { CustomerRepository } from '../repositories/customer.repository';
 import { notifyNewMessage } from '../websocket';
+import { normalizePhone } from '../utils/normalizePhone';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -44,11 +45,11 @@ export class WebhookController {
       if (value?.messages) {
         const msg = value.messages[0];
         const contact = value.contacts?.[0];
-        const phone = msg.from;
+        const phone = normalizePhone(msg.from);
 
         // Tentar vincular ao cliente pelo número de telefone
         const customer = await customerRepository.findByPhone(phone);
-        
+
         const ALLOWED_TYPES = ['text', 'template', 'image', 'audio', 'video', 'document', 'unknown', 'unsupported'];
         const messageData = {
           metaMessageId: msg.id,
