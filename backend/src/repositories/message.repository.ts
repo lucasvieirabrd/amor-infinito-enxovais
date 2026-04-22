@@ -37,31 +37,37 @@ export class MessageRepository {
   }
 
   /**
-   * Lista as últimas conversas agrupadas por número de telefone.
+   * Lista as últimas conversas agrupadas por número de telefone normalizado.
+   * Normalização: remove prefixo '55' de números com 13 dígitos (DDI brasileiro).
    */
   async listConversations() {
     const result = await db.execute(sql`
       SELECT
         m1.id,
-        m1.from_phone   AS fromPhone,
-        m1.to_phone     AS toPhone,
+        m1.from_phone                AS fromPhone,
+        m1.to_phone                  AS toPhone,
         m1.direction,
         m1.status,
         m1.tag,
         m1.notes,
-        COALESCE(c.name, c2.name) AS customerName,
-        m1.content      AS lastMessage,
-        m1.timestamp    AS lastMessageAt,
-        m2.contact_phone AS contactPhone,
-        COALESCE(conv.tag, 'none') AS conversationTag
+        COALESCE(c.name, c2.name)    AS customerName,
+        m1.content                   AS lastMessage,
+        m1.timestamp                 AS lastMessageAt,
+        m2.contact_phone             AS contactPhone,
+        COALESCE(conv.tag, 'none')   AS conversationTag
       FROM messages m1
       LEFT JOIN customers c ON m1.customer_id = c.id
       INNER JOIN (
         SELECT
           CASE
-            WHEN LEFT(CASE WHEN direction='inbound' THEN from_phone ELSE to_phone END, 2) = '55'
-            THEN SUBSTR(CASE WHEN direction='inbound' THEN from_phone ELSE to_phone END, 3)
-            ELSE CASE WHEN direction='inbound' THEN from_phone ELSE to_phone END
+            WHEN direction = 'inbound' THEN
+              CASE WHEN LENGTH(from_phone) = 13 AND from_phone LIKE '55%'
+                   THEN SUBSTRING(from_phone, 3)
+                   ELSE from_phone END
+            ELSE
+              CASE WHEN LENGTH(to_phone) = 13 AND to_phone LIKE '55%'
+                   THEN SUBSTRING(to_phone, 3)
+                   ELSE to_phone END
           END AS contact_phone,
           MAX(timestamp) AS max_ts
         FROM messages
@@ -69,9 +75,14 @@ export class MessageRepository {
         GROUP BY contact_phone
       ) m2
         ON  CASE
-              WHEN LEFT(CASE WHEN m1.direction='inbound' THEN m1.from_phone ELSE m1.to_phone END, 2) = '55'
-              THEN SUBSTR(CASE WHEN m1.direction='inbound' THEN m1.from_phone ELSE m1.to_phone END, 3)
-              ELSE CASE WHEN m1.direction='inbound' THEN m1.from_phone ELSE m1.to_phone END
+              WHEN m1.direction = 'inbound' THEN
+                CASE WHEN LENGTH(m1.from_phone) = 13 AND m1.from_phone LIKE '55%'
+                     THEN SUBSTRING(m1.from_phone, 3)
+                     ELSE m1.from_phone END
+              ELSE
+                CASE WHEN LENGTH(m1.to_phone) = 13 AND m1.to_phone LIKE '55%'
+                     THEN SUBSTRING(m1.to_phone, 3)
+                     ELSE m1.to_phone END
             END = m2.contact_phone
         AND m1.timestamp = m2.max_ts
       LEFT JOIN customers c2
@@ -80,10 +91,10 @@ export class MessageRepository {
           c2.phone = m2.contact_phone
           OR c2.phone = CONCAT('55', m2.contact_phone)
         )
-      LEFT JOIN conversations conv ON (
-        conv.phone = m2.contact_phone
-        OR conv.phone = CONCAT('55', m2.contact_phone)
-      )
+      LEFT JOIN conversations conv
+        ON  CASE WHEN LENGTH(conv.phone) = 13 AND conv.phone LIKE '55%'
+                 THEN SUBSTRING(conv.phone, 3)
+                 ELSE conv.phone END = m2.contact_phone
       WHERE m1.deleted_at IS NULL
       ORDER BY m1.timestamp DESC
     `);
