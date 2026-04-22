@@ -30,7 +30,16 @@ const migrations: { name: string; sql: string }[] = [
     sql: `UPDATE messages SET to_phone = CONCAT('55', to_phone) WHERE to_phone REGEXP '^[0-9]{11}$'`,
   },
   {
-    name: '0003c_normalize_conversations_phone',
+    // Remove 11-digit entries that already have a 13-digit (55-prefixed) counterpart.
+    // Handles partial state if a previous normalization attempt crashed mid-run.
+    name: '0003c_dedup_conversations_phone',
+    sql: `DELETE c1 FROM conversations c1
+          INNER JOIN conversations c2
+          WHERE c1.phone < c2.phone
+            AND (CONCAT('55', c1.phone) = c2.phone OR c1.phone = CONCAT('55', c2.phone))`,
+  },
+  {
+    name: '0003c2_normalize_conversations_phone',
     sql: `UPDATE conversations SET phone = CONCAT('55', phone) WHERE phone REGEXP '^[0-9]{11}$'`,
   },
   {
