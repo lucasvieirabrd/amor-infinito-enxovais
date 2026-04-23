@@ -27,7 +27,7 @@ interface Installment {
   originalAmount: string | number;
   paidAmount: string | number | null;
   paymentDate: string | null;
-  status: 'pending' | 'paid' | 'overdue';
+  status: 'pending' | 'paid' | 'overdue' | 'partial';
 }
 
 interface CustomerCrediario {
@@ -176,7 +176,8 @@ export const Installments: React.FC = () => {
 
   const handleOpenPayment = (inst: Installment) => {
     setSelectedInstallment(inst);
-    setPaidAmount(Number(inst.originalAmount));
+    const remaining = Number(inst.originalAmount) - Number(inst.paidAmount || 0);
+    setPaidAmount(inst.status === 'partial' ? remaining : Number(inst.originalAmount));
     setIsPaymentModalOpen(true);
   };
 
@@ -406,6 +407,8 @@ export const Installments: React.FC = () => {
                                         variant={
                                           inst.status === 'paid'
                                             ? 'success'
+                                            : inst.status === 'partial'
+                                            ? 'warning'
                                             : isOverdue
                                             ? 'error'
                                             : isToday
@@ -415,6 +418,8 @@ export const Installments: React.FC = () => {
                                       >
                                         {inst.status === 'paid'
                                           ? 'Paga'
+                                          : inst.status === 'partial'
+                                          ? `Parcial - Pago R$ ${Number(inst.paidAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ ${Number(inst.originalAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
                                           : isOverdue
                                           ? 'Atrasada'
                                           : isToday
@@ -493,8 +498,25 @@ export const Installments: React.FC = () => {
         title="Registrar Pagamento"
       >
         <form onSubmit={handleConfirmPayment} className="space-y-4">
+          {selectedInstallment && (
+            <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+              <p className="text-gray-700">
+                <span className="font-medium">Valor da parcela:</span>{' '}
+                R$ {Number(selectedInstallment.originalAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+              {selectedInstallment.status === 'partial' && (
+                <p className="text-orange-600">
+                  <span className="font-medium">Já pago:</span>{' '}
+                  R$ {Number(selectedInstallment.paidAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{' '}
+                  <span className="mx-1">|</span>
+                  <span className="font-medium">Restante:</span>{' '}
+                  R$ {(Number(selectedInstallment.originalAmount) - Number(selectedInstallment.paidAmount)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              )}
+            </div>
+          )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Valor Pago</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Valor recebido</label>
             <Input
               type="number"
               value={paidAmount}
@@ -504,7 +526,7 @@ export const Installments: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Data do Pagamento</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Data do pagamento</label>
             <Input
               type="date"
               value={paymentDate}

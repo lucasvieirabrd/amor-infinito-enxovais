@@ -60,7 +60,7 @@ export class InstallmentRepository {
       .innerJoin(installments, eq(customers.id, installments.customerId))
       .where(
         and(
-          or(eq(installments.status, 'pending'), eq(installments.status, 'overdue')),
+          or(eq(installments.status, 'pending'), eq(installments.status, 'overdue'), eq(installments.status, 'partial')),
           isNull(installments.deletedAt),
           isNull(customers.deletedAt)
         )
@@ -80,18 +80,18 @@ export class InstallmentRepository {
         c.name,
         c.phone,
         COUNT(i.id) AS installmentCount,
-        COALESCE(SUM(i.original_amount), 0) AS totalPending,
+        COALESCE(SUM(i.original_amount - COALESCE(i.paid_amount, 0)), 0) AS totalPending,
         SUM(CASE
           WHEN i.status = 'overdue'
-            OR (i.status = 'pending' AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')))
+            OR (i.status IN ('pending','partial') AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')))
           THEN 1 ELSE 0 END) AS overdueCount,
         SUM(CASE
-          WHEN i.status = 'pending'
+          WHEN i.status IN ('pending','partial')
             AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
           THEN 1 ELSE 0 END) AS todayCount
       FROM customers c
       INNER JOIN installments i ON c.id = i.customer_id
-      WHERE (i.status = 'pending' OR i.status = 'overdue')
+      WHERE (i.status IN ('pending', 'overdue', 'partial'))
         AND i.deleted_at IS NULL
         AND c.deleted_at IS NULL
         ${searchCond}
@@ -104,7 +104,7 @@ export class InstallmentRepository {
       SELECT COUNT(DISTINCT c.id) AS total
       FROM customers c
       INNER JOIN installments i ON c.id = i.customer_id
-      WHERE (i.status = 'pending' OR i.status = 'overdue')
+      WHERE (i.status IN ('pending', 'overdue', 'partial'))
         AND i.deleted_at IS NULL
         AND c.deleted_at IS NULL
         ${searchCond}
@@ -156,7 +156,7 @@ export class InstallmentRepository {
       .innerJoin(customers, eq(installments.customerId, customers.id))
       .where(
         and(
-          or(eq(installments.status, 'pending'), eq(installments.status, 'overdue')),
+          or(eq(installments.status, 'pending'), eq(installments.status, 'overdue'), eq(installments.status, 'partial')),
           isNull(installments.deletedAt)
         )
       )
@@ -189,9 +189,9 @@ export class InstallmentRepository {
           AND deleted_at IS NULL
       `),
       db.execute(sql`
-        SELECT COUNT(*) as count, COALESCE(SUM(original_amount - paid_amount), 0) as total
+        SELECT COUNT(*) as count, COALESCE(SUM(original_amount - COALESCE(paid_amount, 0)), 0) as total
         FROM installments
-        WHERE status IN ('pending', 'overdue')
+        WHERE status IN ('pending', 'overdue', 'partial')
           AND deleted_at IS NULL
       `),
       db.execute(sql`

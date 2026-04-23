@@ -30,7 +30,7 @@ interface BillingRecord {
   originalAmount: number;
   paidAmount: number | null;
   paymentDate: string | null;
-  status: 'pending' | 'paid' | 'overdue';
+  status: 'pending' | 'paid' | 'overdue' | 'partial';
   daysOverdue?: number;
 }
 
@@ -167,7 +167,8 @@ export const Billing: React.FC = () => {
   // ── handlers ─────────────────────────────────────────────
   const handleOpenPayment = (inst: BillingRecord) => {
     setSelectedInstallment(inst);
-    setPaidAmount(Number(inst.originalAmount));
+    const remaining = Number(inst.originalAmount) - Number(inst.paidAmount || 0);
+    setPaidAmount(inst.status === 'partial' ? remaining : Number(inst.originalAmount));
     setIsPaymentModalOpen(true);
   };
 
@@ -207,9 +208,9 @@ export const Billing: React.FC = () => {
       group.installments.push(rec);
       const isOverdue =
         rec.status === 'overdue' ||
-        (rec.status === 'pending' && isBefore(new Date(rec.dueDate), startOfDay(new Date())));
+        ((rec.status === 'pending' || rec.status === 'partial') && isBefore(new Date(rec.dueDate), startOfDay(new Date())));
       const isTodayRec =
-        rec.status === 'pending' &&
+        (rec.status === 'pending' || rec.status === 'partial') &&
         format(new Date(rec.dueDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
       if (isOverdue) {
         group.overdueCount += 1;
@@ -399,10 +400,10 @@ export const Billing: React.FC = () => {
                           {group.installments.map((inst) => {
                             const isOverdue =
                               inst.status === 'overdue' ||
-                              (inst.status === 'pending' && isBefore(new Date(inst.dueDate), startOfDay(new Date())));
+                              ((inst.status === 'pending' || inst.status === 'partial') && isBefore(new Date(inst.dueDate), startOfDay(new Date())));
                             const isToday =
                               format(new Date(inst.dueDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') &&
-                              inst.status === 'pending';
+                              (inst.status === 'pending' || inst.status === 'partial');
                             return (
                               <Card key={inst.id} className="p-4 hover:shadow-md transition">
                                 <div className="flex items-center justify-between">
@@ -412,12 +413,14 @@ export const Billing: React.FC = () => {
                                       <Badge
                                         variant={
                                           inst.status === 'paid' ? 'success'
+                                          : inst.status === 'partial' ? 'warning'
                                           : isOverdue ? 'error'
                                           : isToday ? 'warning'
                                           : 'default'
                                         }
                                       >
                                         {inst.status === 'paid' ? 'Paga'
+                                          : inst.status === 'partial' ? `Parcial - Pago R$ ${Number(inst.paidAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de R$ ${Number(inst.originalAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
                                           : isOverdue ? 'Atrasada'
                                           : isToday ? 'Vence hoje'
                                           : 'Pendente'}
@@ -586,12 +589,29 @@ export const Billing: React.FC = () => {
         {/* ─── Modal: Pagamento ─── */}
         <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Registrar Pagamento">
           <form onSubmit={handleConfirmPayment} className="space-y-4">
+            {selectedInstallment && (
+              <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+                <p className="text-gray-700">
+                  <span className="font-medium">Valor da parcela:</span>{' '}
+                  R$ {Number(selectedInstallment.originalAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+                {selectedInstallment.status === 'partial' && (
+                  <p className="text-orange-600">
+                    <span className="font-medium">Já pago:</span>{' '}
+                    R$ {Number(selectedInstallment.paidAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{' '}
+                    <span className="mx-1">|</span>
+                    <span className="font-medium">Restante:</span>{' '}
+                    R$ {(Number(selectedInstallment.originalAmount) - Number(selectedInstallment.paidAmount)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                )}
+              </div>
+            )}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Valor Pago</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Valor recebido</label>
               <Input type="number" value={paidAmount} onChange={(e) => setPaidAmount(Number(e.target.value))} step="0.01" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Data do Pagamento</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Data do pagamento</label>
               <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required />
             </div>
             <div className="flex justify-end gap-2">

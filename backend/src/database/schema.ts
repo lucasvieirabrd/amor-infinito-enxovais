@@ -78,7 +78,7 @@ export const installments = mysqlTable('installments', {
   originalAmount: decimal('original_amount', { precision: 10, scale: 2 }).notNull(),
   paidAmount: decimal('paid_amount', { precision: 10, scale: 2 }).notNull().default('0.00'),
   paymentDate: datetime('payment_date'),
-  status: mysqlEnum('status', ['pending', 'paid', 'overdue', 'canceled']).notNull().default('pending'),
+  status: mysqlEnum('status', ['pending', 'paid', 'overdue', 'canceled', 'partial']).notNull().default('pending'),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime('deleted_at'),

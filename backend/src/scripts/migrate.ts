@@ -46,6 +46,10 @@ const migrations: { name: string; sql: string }[] = [
     name: '0003d_normalize_customers_phone',
     sql: `UPDATE customers SET phone = CONCAT('55', phone) WHERE phone REGEXP '^[0-9]{11}$'`,
   },
+  {
+    name: '0004_add_partial_installment_status',
+    sql: `ALTER TABLE installments MODIFY COLUMN status ENUM('pending','paid','overdue','canceled','partial') NOT NULL DEFAULT 'pending'`,
+  },
 ];
 
 async function run() {

@@ -33,19 +33,19 @@ export class InstallmentService {
       throw new AppError('Esta parcela já está paga', 400);
     }
 
+    const previousPaid = installment.status === 'partial' ? Number(installment.paidAmount) : 0;
+    const newPaidTotal = previousPaid + data.paidAmount;
+    const originalAmount = Number(installment.originalAmount);
+    const isFullyPaid = newPaidTotal >= originalAmount;
+
     const updated = await installmentRepository.update(id, {
       paymentDate: new Date(data.paymentDate + 'T12:00:00'),
-      paidAmount: data.paidAmount.toFixed(2),
-      status: 'paid',
+      paidAmount: newPaidTotal.toFixed(2),
+      status: isFullyPaid ? 'paid' : 'partial',
     });
 
-    // Disparar template 'confirmacao_pagamento' via WhatsApp API automaticamente
-    if (updated) {
-      await billingService.sendPaymentConfirmation(
-        updated.customerId,
-        data.paidAmount,
-        installment.installmentNumber,
-      );
+    if (updated && isFullyPaid) {
+      await billingService.sendPaymentConfirmation(updated.customerId, newPaidTotal);
     }
 
     return updated;
@@ -57,8 +57,8 @@ export class InstallmentService {
       throw new AppError('Parcela não encontrada', 404);
     }
 
-    if (installment.status !== 'paid') {
-      throw new AppError('Apenas parcelas pagas podem ser revertidas', 400);
+    if (installment.status !== 'paid' && installment.status !== 'partial') {
+      throw new AppError('Apenas parcelas pagas ou parciais podem ser revertidas', 400);
     }
 
     return installmentRepository.update(id, {

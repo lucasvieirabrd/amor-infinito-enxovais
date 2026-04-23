@@ -62,7 +62,7 @@ export class BillingService {
       .innerJoin(customers, eq(installments.customerId, customers.id))
       .where(
         and(
-          sql`${installments.status} IN ('pending', 'overdue')`,
+          sql`${installments.status} IN ('pending', 'overdue', 'partial')`,
           sql`DATE(CONVERT_TZ(${installments.dueDate}, '+00:00', '-03:00')) <= DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
           isNull(installments.deletedAt),
           isNull(customers.deletedAt)
@@ -71,13 +71,13 @@ export class BillingService {
 
     for (const row of pendingInstallments) {
       const { installment, customer } = row;
-      // Converte explicitamente para SP para evitar ambiguidade do mysql2 ao interpretar datetime sem TZ
       const dueDateSP = new Date(new Date(installment.dueDate).toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
       const todaySP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
       const dueDate = startOfDay(dueDateSP);
       const daysDiff = differenceInDays(startOfDay(todaySP), dueDate);
       const dateFmt = format(dueDate, 'dd/MM/yyyy');
-      const amountNum = formatAmount(installment.originalAmount); // "150,00"
+      const remaining = Number(installment.originalAmount) - Number(installment.paidAmount || 0);
+      const amountNum = formatAmount(remaining);
 
       let templateName = '';
       let components: any[] = [];
@@ -227,7 +227,7 @@ export class BillingService {
       .innerJoin(customers, eq(installments.customerId, customers.id))
       .where(
         and(
-          sql`${installments.status} IN ('pending', 'overdue')`,
+          sql`${installments.status} IN ('pending', 'overdue', 'partial')`,
           sql`DATE(${installments.dueDate}) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
           isNull(installments.deletedAt),
           isNull(customers.deletedAt)
@@ -237,7 +237,8 @@ export class BillingService {
     for (const row of rows) {
       const { installment, customer } = row;
       const dateFmt = format(new Date(installment.dueDate), 'dd/MM/yyyy');
-      const amountNum = formatAmount(installment.originalAmount); // "150,00"
+      const remaining = Number(installment.originalAmount) - Number(installment.paidAmount || 0);
+      const amountNum = formatAmount(remaining);
 
       // TEMPLATE 2: {{1}}=nome, {{2}}="150,00" (sem R$), {{3}}=data
       const components = [{
@@ -285,8 +286,8 @@ export class BillingService {
   async getChargesPreview() {
     const result = await db.execute(sql`
       SELECT
-        SUM(CASE WHEN DATE(due_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) AND status = 'pending' THEN 1 ELSE 0 END) as todayCount,
-        SUM(CASE WHEN DATE(due_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) AND status IN ('pending','overdue') THEN 1 ELSE 0 END) as overdueCount
+        SUM(CASE WHEN DATE(due_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) AND status IN ('pending','partial') THEN 1 ELSE 0 END) as todayCount,
+        SUM(CASE WHEN DATE(due_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) AND status IN ('pending','overdue','partial') THEN 1 ELSE 0 END) as overdueCount
       FROM installments
       WHERE deleted_at IS NULL
     `);
