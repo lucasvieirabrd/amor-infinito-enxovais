@@ -12,6 +12,7 @@ import {
   format, parseISO, startOfMonth, endOfMonth,
   startOfWeek, startOfYear, subDays,
 } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import api from '../../services/api';
 
@@ -128,8 +129,16 @@ export const Dashboard: React.FC = () => {
 
   const topProducts = metrics?.topProducts ?? [];
 
+  const today = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+
   return (
     <div className="space-y-6">
+
+      {/* ── Banner ── */}
+      <div className="bg-gradient-to-r from-primary to-secondary rounded-card shadow-card p-8 text-white">
+        <h1 className="text-3xl font-bold mb-2">Bem-vindo ao Amor Infinito!</h1>
+        <p className="text-white text-opacity-90">Hoje é {today}. Aqui está um resumo do seu negócio.</p>
+      </div>
 
       {/* ── Filtro de Período ── */}
       <Card>
