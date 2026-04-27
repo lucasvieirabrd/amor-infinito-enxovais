@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
 import {
@@ -43,8 +43,10 @@ interface Sale {
 
 export const SalesHistory: React.FC = () => {
   const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'credit_card' | 'installment'>('all');
+  const [originFilter, setOriginFilter] = useState<'all' | 'sales' | 'imported'>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -55,15 +57,23 @@ export const SalesHistory: React.FC = () => {
 
   const limit = 10;
 
-  // Buscar histórico de vendas com filtros
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const { data: salesData, isLoading, refetch } = useQuery({
-    queryKey: ['sales-history', page, search, paymentFilter, startDate, endDate],
+    queryKey: ['sales-history', page, search, paymentFilter, originFilter, startDate, endDate],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
         ...(search && { search }),
         ...(paymentFilter !== 'all' && { paymentMethod: paymentFilter }),
+        ...(originFilter !== 'all' && { origin: originFilter }),
         ...(startDate && { startDate }),
         ...(endDate && { endDate }),
       });
@@ -161,17 +171,14 @@ export const SalesHistory: React.FC = () => {
             <h3 className="font-semibold text-gray-900">Filtros</h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             <div className="relative">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
                 placeholder="Buscar por cliente ou nº venda..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="input-base pl-10 w-full"
               />
             </div>
@@ -188,6 +195,19 @@ export const SalesHistory: React.FC = () => {
               <option value="cash">À Vista</option>
               <option value="credit_card">Cartão</option>
               <option value="installment">Crediário</option>
+            </select>
+
+            <select
+              value={originFilter}
+              onChange={(e) => {
+                setOriginFilter(e.target.value as any);
+                setPage(1);
+              }}
+              className="input-base w-full"
+            >
+              <option value="all">Todas as origens</option>
+              <option value="sales">Vendas</option>
+              <option value="imported">Importados</option>
             </select>
 
             <Input
@@ -215,8 +235,10 @@ export const SalesHistory: React.FC = () => {
             <Button
               variant="secondary"
               onClick={() => {
+                setSearchInput('');
                 setSearch('');
                 setPaymentFilter('all');
+                setOriginFilter('all');
                 setStartDate('');
                 setEndDate('');
                 setPage(1);

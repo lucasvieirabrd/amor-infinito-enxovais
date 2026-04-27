@@ -152,7 +152,7 @@ export class SaleService {
   }
 
   async listWithFilters(filters: any) {
-    const { page = 1, limit = 10, customerId, paymentMethod, startDate, endDate, search } = filters;
+    const { page = 1, limit = 10, customerId, paymentMethod, startDate, endDate, search, origin } = filters;
     return saleRepository.listWithFilters({
       page,
       limit,
@@ -161,6 +161,7 @@ export class SaleService {
       startDate: startDate ? new Date(startDate) : undefined,
       endDate: endDate ? new Date(endDate) : undefined,
       search,
+      origin,
     });
   }
 

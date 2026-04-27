@@ -1,6 +1,6 @@
 import { db } from '../database';
 import { sales, saleItems, installments, saleSequence, customers, products } from '../database/schema';
-import { eq, and, isNull, sql, ne } from 'drizzle-orm';
+import { eq, and, isNull, sql, ne, or, like } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { MySqlTransaction } from 'drizzle-orm/mysql-core';
 
@@ -132,10 +132,46 @@ export class SaleRepository {
   }
 
   async listWithFilters(filters: any) {
-    const { page = 1, limit = 10, customerId, paymentMethod, startDate, endDate, search } = filters;
+    const { page = 1, limit = 10, customerId, paymentMethod, startDate, endDate, search, origin } = filters;
     const offset = (page - 1) * limit;
 
-    let query = db
+    const conditions: any[] = [isNull(sales.deletedAt), isNull(customers.deletedAt)];
+
+    if (customerId) {
+      conditions.push(eq(sales.customerId, customerId));
+    }
+
+    if (paymentMethod) {
+      conditions.push(eq(sales.paymentMethod, paymentMethod));
+    }
+
+    if (startDate) {
+      conditions.push(sql`${sales.saleDate} >= ${startDate}`);
+    }
+
+    if (endDate) {
+      conditions.push(sql`${sales.saleDate} <= ${endDate}`);
+    }
+
+    if (search) {
+      const term = `%${search}%`;
+      conditions.push(
+        or(
+          sql`LOWER(${sales.saleNumber}) LIKE LOWER(${term})`,
+          sql`LOWER(${customers.name}) LIKE LOWER(${term})`
+        )
+      );
+    }
+
+    if (origin === 'sales') {
+      conditions.push(sql`${sales.saleNumber} LIKE 'VEN-%'`);
+    } else if (origin === 'imported') {
+      conditions.push(sql`${sales.saleNumber} LIKE 'IMP-%'`);
+    }
+
+    const whereClause = and(...conditions);
+
+    const data = await db
       .select({
         id: sales.id,
         saleNumber: sales.saleNumber,
@@ -152,30 +188,11 @@ export class SaleRepository {
       })
       .from(sales)
       .leftJoin(customers, eq(sales.customerId, customers.id))
-      .where(isNull(sales.deletedAt));
-
-    if (customerId) {
-      query = query.where(eq(sales.customerId, customerId));
-    }
-
-    if (paymentMethod) {
-      query = query.where(eq(sales.paymentMethod, paymentMethod));
-    }
-
-    if (startDate) {
-      query = query.where(sql`${sales.saleDate} >= ${startDate}`);
-    }
-
-    if (endDate) {
-      query = query.where(sql`${sales.saleDate} <= ${endDate}`);
-    }
-
-    const data = await query
+      .where(whereClause)
       .limit(limit)
       .offset(offset)
       .orderBy(sql`${sales.createdAt} DESC`);
 
-    // Mapear os dados para incluir status derivado
     const mappedData = data.map((row: any) => ({
       ...row,
       status: row.deletedAt ? 'canceled' : 'completed',
@@ -184,7 +201,8 @@ export class SaleRepository {
     const countResult = await db
       .select({ count: sql<number>`count(*)` })
       .from(sales)
-      .where(isNull(sales.deletedAt));
+      .leftJoin(customers, eq(sales.customerId, customers.id))
+      .where(whereClause);
 
     return {
       data: mappedData,
