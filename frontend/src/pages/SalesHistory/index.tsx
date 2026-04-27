@@ -1,23 +1,44 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
-import { 
-  FiSearch, FiFilter, FiChevronLeft, FiChevronRight, FiEye, FiTrash2, FiAlertCircle
+import {
+  FiSearch, FiFilter, FiChevronLeft, FiChevronRight, FiEye, FiTrash2, FiAlertCircle, FiLoader
 } from 'react-icons/fi';
 import { Button, Card, Badge, Input, Modal, Loading } from '../../components/ui';
-import { format } from 'date-fns';
+import { format, isToday } from 'date-fns';
+
+interface SaleItem {
+  id: string;
+  productId: string;
+  productName?: string;
+  quantity: number;
+  unitPrice: number | string;
+  totalPrice: number | string;
+}
+
+interface Installment {
+  id: string;
+  installmentNumber: number;
+  dueDate: string;
+  originalAmount: number | string;
+  paidAmount: number | string;
+  paymentDate?: string;
+  status: 'pending' | 'paid' | 'overdue' | 'canceled' | 'partial';
+}
 
 interface Sale {
   id: string;
   saleNumber: string;
+  saleDate?: string;
   createdAt: string;
   customer?: { name: string };
   customerName?: string;
   paymentMethod: 'cash' | 'credit_card' | 'installment';
   totalAmount: number;
+  installmentsCount?: number;
   status: 'completed' | 'canceled';
-  items?: any[];
-  installments?: any[];
+  items?: SaleItem[];
+  installments?: Installment[];
 }
 
 export const SalesHistory: React.FC = () => {
@@ -30,6 +51,7 @@ export const SalesHistory: React.FC = () => {
   const [showDetails, setShowDetails] = useState<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [saleToDelete, setSaleToDelete] = useState<string | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   const limit = 10;
 
@@ -50,9 +72,16 @@ export const SalesHistory: React.FC = () => {
     },
   });
 
-  const handleViewDetails = (sale: Sale) => {
+  const handleViewDetails = async (sale: Sale) => {
     setSelectedSale(sale);
     setShowDetails(true);
+    setDetailsLoading(true);
+    try {
+      const { data } = await api.get(`/sales/${sale.id}`);
+      setSelectedSale(data);
+    } finally {
+      setDetailsLoading(false);
+    }
   };
 
   const handleDeleteClick = (saleId: string) => {
@@ -95,6 +124,24 @@ export const SalesHistory: React.FC = () => {
         return 'warning';
       default:
         return 'info';
+    }
+  };
+
+  const getInstallmentStatusStyle = (inst: Installment) => {
+    switch (inst.status) {
+      case 'paid':
+        return { label: 'Paga', bgClass: 'bg-green-50', textClass: 'text-green-700' };
+      case 'overdue':
+        return { label: 'Atrasada', bgClass: 'bg-red-50', textClass: 'text-red-700' };
+      case 'canceled':
+        return { label: 'Cancelada', bgClass: 'bg-gray-100', textClass: 'text-gray-400' };
+      case 'partial':
+        return { label: 'Parcial', bgClass: 'bg-orange-50', textClass: 'text-orange-600' };
+      default:
+        if (isToday(new Date(inst.dueDate))) {
+          return { label: 'Vencendo hoje', bgClass: 'bg-orange-50', textClass: 'text-orange-600' };
+        }
+        return { label: 'Pendente', bgClass: 'bg-gray-50', textClass: 'text-gray-500' };
     }
   };
 
@@ -302,89 +349,198 @@ export const SalesHistory: React.FC = () => {
         isOpen={showDetails && !!selectedSale}
         title={selectedSale ? `Detalhes da Venda ${selectedSale.saleNumber}` : ''}
         onClose={() => setShowDetails(false)}
+        size="lg"
       >
         {selectedSale && (
           <div className="space-y-6">
-            {/* Sale Info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-600 font-semibold uppercase">Nº Venda</p>
-                <p className="text-lg font-bold text-gray-900">{selectedSale.saleNumber}</p>
+            {detailsLoading ? (
+              <div className="flex justify-center py-8">
+                <FiLoader size={24} className="animate-spin text-primary" />
               </div>
-              <div>
-                <p className="text-xs text-gray-600 font-semibold uppercase">Data</p>
-                <p className="text-lg font-bold text-gray-900">
-                  {format(new Date(selectedSale.createdAt), 'dd/MM/yyyy HH:mm')}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 font-semibold uppercase">Cliente</p>
-                <p className="text-lg font-bold text-gray-900">{selectedSale.customer?.name || 'N/A'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 font-semibold uppercase">Forma Pagamento</p>
-                <Badge variant={getPaymentMethodVariant(selectedSale.paymentMethod)}>
-                  {getPaymentMethodLabel(selectedSale.paymentMethod)}
-                </Badge>
-              </div>
-            </div>
+            ) : (
+              <>
+                {/* Informações básicas */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-600 font-semibold uppercase">Nº Venda</p>
+                    <p className="text-lg font-bold text-gray-900">{selectedSale.saleNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 font-semibold uppercase">Data</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {format(new Date(selectedSale.saleDate || selectedSale.createdAt), 'dd/MM/yyyy HH:mm')}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 font-semibold uppercase">Cliente</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {selectedSale.customerName || selectedSale.customer?.name || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 font-semibold uppercase">Forma de Pagamento</p>
+                    <Badge variant={getPaymentMethodVariant(selectedSale.paymentMethod)}>
+                      {getPaymentMethodLabel(selectedSale.paymentMethod)}
+                    </Badge>
+                  </div>
+                </div>
 
-            {/* Items */}
-            {selectedSale.items && selectedSale.items.length > 0 && (
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Produtos</h4>
-                <div className="space-y-2">
-                  {selectedSale.items.map((item: any, idx: number) => (
-                    <div key={idx} className="flex justify-between p-3 bg-background rounded-lg">
-                      <div>
-                        <p className="font-semibold text-gray-900">Produto {idx + 1}</p>
-                        <p className="text-xs text-gray-600">Quantidade: {item.quantity}</p>
-                      </div>
-                      <p className="font-bold text-gray-900">
-                        R$ {parseFloat(item.totalPrice || 0).toFixed(2)}
+                {/* Detalhamento da forma de pagamento */}
+                <div className="p-4 bg-background rounded-lg border border-gray-100">
+                  {selectedSale.paymentMethod === 'cash' && (
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">
+                        À vista —{' '}
+                        <span className="text-gray-900">
+                          R$ {parseFloat(selectedSale.totalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Data: {format(new Date(selectedSale.saleDate || selectedSale.createdAt), 'dd/MM/yyyy')}
                       </p>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  )}
 
-            {/* Installments */}
-            {selectedSale.installments && selectedSale.installments.length > 0 && (
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Parcelas</h4>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {selectedSale.installments.map((inst: any, idx: number) => (
-                    <div key={idx} className="flex justify-between items-center p-3 bg-background rounded-lg">
-                      <div>
-                        <p className="font-semibold text-gray-900">{inst.installmentNumber}ª Parcela</p>
-                        <p className="text-xs text-gray-600">
-                          Vencimento: {format(new Date(inst.dueDate), 'dd/MM/yyyy')}
+                  {selectedSale.paymentMethod === 'credit_card' && (
+                    <div>
+                      {selectedSale.installmentsCount && selectedSale.installmentsCount > 1 ? (
+                        <>
+                          <p className="text-sm font-semibold text-gray-700">
+                            Cartão —{' '}
+                            <span className="text-gray-900">
+                              {selectedSale.installmentsCount}x de R${' '}
+                              {(parseFloat(selectedSale.totalAmount.toString()) / selectedSale.installmentsCount)
+                                .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Total: R$ {parseFloat(selectedSale.totalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm font-semibold text-gray-700">
+                          Cartão à vista —{' '}
+                          <span className="text-gray-900">
+                            R$ {parseFloat(selectedSale.totalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
                         </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900">R$ {parseFloat(inst.originalAmount).toFixed(2)}</p>
-                        <Badge variant={inst.status === 'paid' ? 'success' : inst.status === 'overdue' ? 'error' : 'warning'}>
-                          {inst.status === 'paid' ? 'Paga' : inst.status === 'overdue' ? 'Atrasada' : 'Pendente'}
-                        </Badge>
-                      </div>
+                      )}
                     </div>
-                  ))}
+                  )}
+
+                  {selectedSale.paymentMethod === 'installment' && (
+                    <div className="space-y-1">
+                      {selectedSale.installments?.find(i => i.installmentNumber === 0) && (() => {
+                        const entrada = selectedSale.installments!.find(i => i.installmentNumber === 0)!;
+                        return (
+                          <p className="text-sm text-gray-700">
+                            <span className="font-semibold">Entrada:</span>{' '}
+                            R$ {parseFloat(entrada.originalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            {entrada.paymentDate && (
+                              <span className="text-gray-500">
+                                {' '}em {format(new Date(entrada.paymentDate), 'dd/MM/yyyy')}
+                              </span>
+                            )}
+                          </p>
+                        );
+                      })()}
+                      <p className="text-sm font-semibold text-gray-700">
+                        Crediário em {selectedSale.installments?.filter(i => i.installmentNumber > 0).length ?? 0}x parcelas
+                      </p>
+                    </div>
+                  )}
                 </div>
-              </div>
+
+                {/* Produtos */}
+                {selectedSale.items && selectedSale.items.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-3">Produtos</h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="pb-2 text-left text-xs font-semibold text-gray-500 uppercase">Produto</th>
+                            <th className="pb-2 text-center text-xs font-semibold text-gray-500 uppercase">Qtd</th>
+                            <th className="pb-2 text-right text-xs font-semibold text-gray-500 uppercase">Unitário</th>
+                            <th className="pb-2 text-right text-xs font-semibold text-gray-500 uppercase">Subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {selectedSale.items.map((item, idx) => (
+                            <tr key={idx}>
+                              <td className="py-2 pr-4 font-medium text-gray-900">
+                                {item.productName || `Produto ${idx + 1}`}
+                              </td>
+                              <td className="py-2 text-center text-gray-600">{item.quantity}</td>
+                              <td className="py-2 text-right text-gray-600">
+                                R$ {parseFloat(item.unitPrice.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-2 text-right font-semibold text-gray-900">
+                                R$ {parseFloat(item.totalPrice.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Parcelas do crediário */}
+                {selectedSale.paymentMethod === 'installment' &&
+                  selectedSale.installments &&
+                  selectedSale.installments.filter(i => i.installmentNumber > 0).length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-3">Parcelas do Crediário</h4>
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                      {(() => {
+                        const regularInstallments = selectedSale.installments!.filter(i => i.installmentNumber > 0);
+                        const total = regularInstallments.length;
+                        return regularInstallments.map((inst, idx) => {
+                          const { label, bgClass, textClass } = getInstallmentStatusStyle(inst);
+                          return (
+                            <div key={idx} className="flex justify-between items-center p-3 bg-background rounded-lg">
+                              <div>
+                                <p className="font-semibold text-gray-900 text-sm">
+                                  Parcela {inst.installmentNumber}/{total}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Venc.: {format(new Date(inst.dueDate), 'dd/MM/yyyy')}
+                                </p>
+                                {inst.status === 'paid' && inst.paymentDate && (
+                                  <p className="text-xs text-green-600">
+                                    Paga em {format(new Date(inst.paymentDate), 'dd/MM/yyyy')}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-right space-y-1">
+                                <p className="font-bold text-gray-900 text-sm">
+                                  R$ {parseFloat(inst.originalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                                <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${bgClass} ${textClass}`}>
+                                  {label}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Total */}
+                <div className="pt-4 border-t border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <p className="text-lg font-bold text-gray-900">Total</p>
+                    <p className="text-2xl font-bold text-primary">
+                      R$ {parseFloat(selectedSale.totalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              </>
             )}
 
-            {/* Total */}
-            <div className="pt-4 border-t border-gray-200">
-              <div className="flex justify-between items-center">
-                <p className="text-lg font-bold text-gray-900">Total</p>
-                <p className="text-2xl font-bold text-primary">
-                  R$ {parseFloat(selectedSale.totalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
-              </div>
-            </div>
-
-            {/* Close Button */}
             <Button variant="secondary" onClick={() => setShowDetails(false)} className="w-full">
               Fechar
             </Button>

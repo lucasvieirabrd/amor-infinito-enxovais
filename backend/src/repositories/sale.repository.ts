@@ -58,17 +58,41 @@ export class SaleRepository {
   }
 
   async findById(id: string) {
-    const sale = await db
-      .select()
+    const saleRows = await db
+      .select({
+        id: sales.id,
+        saleNumber: sales.saleNumber,
+        customerId: sales.customerId,
+        userId: sales.userId,
+        paymentMethod: sales.paymentMethod,
+        totalAmount: sales.totalAmount,
+        saleDate: sales.saleDate,
+        installmentsCount: sales.installmentsCount,
+        isImported: sales.isImported,
+        createdAt: sales.createdAt,
+        updatedAt: sales.updatedAt,
+        deletedAt: sales.deletedAt,
+        customerName: customers.name,
+      })
       .from(sales)
+      .leftJoin(customers, eq(sales.customerId, customers.id))
       .where(and(eq(sales.id, id), isNull(sales.deletedAt)))
       .limit(1);
-    
-    if (sale.length === 0) return null;
+
+    if (saleRows.length === 0) return null;
 
     const items = await db
-      .select()
+      .select({
+        id: saleItems.id,
+        saleId: saleItems.saleId,
+        productId: saleItems.productId,
+        productName: products.name,
+        quantity: saleItems.quantity,
+        unitPrice: saleItems.unitPrice,
+        totalPrice: saleItems.totalPrice,
+      })
       .from(saleItems)
+      .leftJoin(products, eq(saleItems.productId, products.id))
       .where(eq(saleItems.saleId, id));
 
     const insts = await db
@@ -77,7 +101,7 @@ export class SaleRepository {
       .where(and(eq(installments.saleId, id), isNull(installments.deletedAt)));
 
     return {
-      ...sale[0],
+      ...saleRows[0],
       items,
       installments: insts,
     };
