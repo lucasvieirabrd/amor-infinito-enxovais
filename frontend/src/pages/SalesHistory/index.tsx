@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
 import {
-  FiSearch, FiFilter, FiChevronLeft, FiChevronRight, FiEye, FiTrash2, FiAlertCircle, FiLoader
+  FiSearch, FiFilter, FiChevronLeft, FiChevronRight, FiEye, FiTrash2, FiAlertCircle, FiLoader,
+  FiDownload
 } from 'react-icons/fi';
 import { Button, Card, Badge, Input, Modal, Loading } from '../../components/ui';
 import { format, isToday } from 'date-fns';
@@ -54,6 +55,26 @@ export const SalesHistory: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [saleToDelete, setSaleToDelete] = useState<string | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [carneLoading, setCarneLoading] = useState(false);
+
+  const handleDownloadCarne = async (saleId: string, saleNumber: string) => {
+    setCarneLoading(true);
+    try {
+      const response = await api.get(`/sales/${saleId}/carne`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `carne-${saleNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Erro ao gerar carnê.');
+    } finally {
+      setCarneLoading(false);
+    }
+  };
 
   const limit = 10;
 
@@ -563,9 +584,21 @@ export const SalesHistory: React.FC = () => {
               </>
             )}
 
-            <Button variant="secondary" onClick={() => setShowDetails(false)} className="w-full">
-              Fechar
-            </Button>
+            <div className="flex gap-3">
+              {selectedSale.paymentMethod === 'installment' && selectedSale.status === 'completed' && (
+                <Button
+                  onClick={() => handleDownloadCarne(selectedSale.id, selectedSale.saleNumber)}
+                  disabled={carneLoading}
+                  className="flex-1 flex items-center justify-center gap-2"
+                >
+                  <FiDownload size={16} />
+                  {carneLoading ? 'Gerando...' : 'Gerar Carnê'}
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => setShowDetails(false)} className="flex-1">
+                Fechar
+              </Button>
+            </div>
           </div>
         )}
       </Modal>

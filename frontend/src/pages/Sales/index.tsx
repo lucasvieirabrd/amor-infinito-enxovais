@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import { 
-  FiSearch, FiUser, FiShoppingCart, FiPlus, FiMinus, 
+import {
+  FiSearch, FiUser, FiShoppingCart, FiPlus, FiMinus,
   FiTrash2, FiCreditCard, FiDollarSign, FiCalendar, FiCheckCircle, FiX
 } from 'react-icons/fi';
 import { Button, Input, Card, Badge, Modal, Loading } from '../../components/ui';
+import { CarneModal } from '../../components/CarneModal';
 import { format, addMonths } from 'date-fns';
 
 interface Customer {
@@ -41,6 +42,12 @@ export const Sales: React.FC = () => {
   const [downPayment, setDownPayment] = useState(0);
   const [downPaymentDate, setDownPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isSuccess, setIsSuccess] = useState(false);
+  const [carneModal, setCarneModal] = useState<{
+    saleId: string;
+    saleNumber: string;
+    customerName: string;
+    installmentsCount: number;
+  } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -111,9 +118,19 @@ export const Sales: React.FC = () => {
 
   const registerSaleMutation = useMutation({
     mutationFn: (saleData: any) => api.post('/sales', saleData),
-    onSuccess: () => {
+    onSuccess: (response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
-      setIsSuccess(true);
+      const { saleId, saleNumber } = response.data;
+      if (variables.paymentMethod === 'installment') {
+        setCarneModal({
+          saleId,
+          saleNumber,
+          customerName: selectedCustomer?.name ?? '',
+          installmentsCount: variables.installmentsCount ?? 1,
+        });
+      } else {
+        setIsSuccess(true);
+      }
       setCart([]);
       setSelectedCustomer(null);
     },
@@ -143,6 +160,21 @@ export const Sales: React.FC = () => {
 
     registerSaleMutation.mutate(saleData);
   };
+
+  if (carneModal) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <CarneModal
+          isOpen={true}
+          saleId={carneModal.saleId}
+          saleNumber={carneModal.saleNumber}
+          customerName={carneModal.customerName}
+          installmentsCount={carneModal.installmentsCount}
+          onClose={() => { setCarneModal(null); setIsSuccess(true); }}
+        />
+      </div>
+    );
+  }
 
   if (isSuccess) {
     return (
