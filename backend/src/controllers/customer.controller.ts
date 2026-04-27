@@ -6,21 +6,34 @@ import { z } from 'zod';
 const customerService = new CustomerService();
 const customerImportService = new CustomerImportService();
 
+function sanitizeNumeric(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
 export class CustomerController {
   async register(req: Request, res: Response) {
+    const raw = req.body;
+    const body = {
+      ...raw,
+      cpf: raw.cpf ? sanitizeNumeric(raw.cpf) : raw.cpf,
+      phone: raw.phone ? sanitizeNumeric(raw.phone) : raw.phone,
+      cep: raw.cep ? sanitizeNumeric(raw.cep) : raw.cep,
+    };
+
     const registerSchema = z.object({
       name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
-      phone: z.string().min(10, 'Telefone inválido'),
+      phone: z.string().min(10, 'Telefone inválido').max(11, 'Telefone inválido'),
       cpf: z.string().regex(/^\d{11}$/, 'CPF deve ter 11 dígitos'),
       email: z.string().email('E-mail inválido').optional().or(z.literal('')),
       cep: z.string().regex(/^\d{8}$/, 'CEP deve ter 8 dígitos').optional().or(z.literal('')),
       addressStreet: z.string().optional().or(z.literal('')),
+      addressNumber: z.string().optional().or(z.literal('')),
       addressNeighborhood: z.string().optional().or(z.literal('')),
       addressCity: z.string().optional().or(z.literal('')),
       addressState: z.string().length(2, 'Estado inválido').optional().or(z.literal('')),
     });
 
-    const data = registerSchema.parse(req.body);
+    const data = registerSchema.parse(body);
     const customer = await customerService.register(data);
 
     return res.status(201).json(customer);
@@ -47,19 +60,28 @@ export class CustomerController {
 
   async update(req: Request, res: Response) {
     const { id } = req.params;
+    const raw = req.body;
+    const body = {
+      ...raw,
+      cpf: raw.cpf ? sanitizeNumeric(raw.cpf) : raw.cpf,
+      phone: raw.phone ? sanitizeNumeric(raw.phone) : raw.phone,
+      cep: raw.cep ? sanitizeNumeric(raw.cep) : raw.cep,
+    };
+
     const updateSchema = z.object({
       name: z.string().min(3).optional(),
-      phone: z.string().min(10).optional(),
+      phone: z.string().min(10).max(11).optional(),
       cpf: z.string().regex(/^\d{11}$/, 'CPF deve ter 11 dígitos').optional(),
       email: z.union([z.string().email(), z.literal(''), z.null()]).optional(),
       cep: z.union([z.string().regex(/^\d{8}$/, 'CEP deve ter 8 dígitos'), z.literal(''), z.null()]).optional(),
       addressStreet: z.string().nullable().optional(),
+      addressNumber: z.string().nullable().optional(),
       addressNeighborhood: z.string().nullable().optional(),
       addressCity: z.string().nullable().optional(),
       addressState: z.union([z.string().length(2), z.literal(''), z.null()]).optional(),
     });
 
-    const data = updateSchema.parse(req.body);
+    const data = updateSchema.parse(body);
     const customer = await customerService.update(id, data);
 
     return res.json(customer);

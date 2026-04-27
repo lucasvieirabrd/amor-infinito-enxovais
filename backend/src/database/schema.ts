@@ -23,6 +23,7 @@ export const customers = mysqlTable('customers', {
   email: varchar('email', { length: 255 }),
   cep: varchar('cep', { length: 9 }),
   addressStreet: varchar('address_street', { length: 255 }),
+  addressNumber: varchar('address_number', { length: 20 }),
   addressNeighborhood: varchar('address_neighborhood', { length: 255 }),
   addressCity: varchar('address_city', { length: 255 }),
   addressState: varchar('address_state', { length: 2 }),

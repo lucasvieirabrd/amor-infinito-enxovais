@@ -12,6 +12,7 @@ interface Customer {
   phone: string;
   email?: string;
   addressStreet?: string;
+  addressNumber?: string;
   addressNeighborhood?: string;
   addressCity?: string;
   addressState?: string;
@@ -24,6 +25,39 @@ interface PaginatedResponse {
   page: number;
   limit: number;
   totalPages: number;
+}
+
+// --- Máscaras ---
+
+function formatCpf(value: string): string {
+  const d = value.replace(/\D/g, '').slice(0, 11);
+  return d
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3}\.\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3}\.\d{3}\.\d{3})(\d{1,2})/, '$1-$2');
+}
+
+function formatPhone(value: string): string {
+  const d = value.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 10) {
+    return d
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\(\d{2}\) \d{4})(\d)/, '$1-$2');
+  }
+  return d
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\(\d{2}\) \d{5})(\d)/, '$1-$2');
+}
+
+function formatCep(value: string): string {
+  const d = value.replace(/\D/g, '').slice(0, 8);
+  return d.replace(/(\d{5})(\d)/, '$1-$2');
+}
+
+function displayPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  const local = digits.length === 13 && digits.startsWith('55') ? digits.slice(2) : digits;
+  return formatPhone(local);
 }
 
 export const Customers: React.FC = () => {
@@ -41,7 +75,6 @@ export const Customers: React.FC = () => {
 
   const ITEMS_PER_PAGE = 20;
 
-  // Busca de clientes via API com paginação
   const { data: response, isLoading } = useQuery({
     queryKey: ['customers', search, page],
     queryFn: async () => {
@@ -52,7 +85,6 @@ export const Customers: React.FC = () => {
     },
   });
 
-  // Mutação para cadastrar novo cliente
   const registerMutation = useMutation({
     mutationFn: (newCustomer: Partial<Customer>) => {
       if (editingId) {
@@ -77,7 +109,6 @@ export const Customers: React.FC = () => {
     },
   });
 
-  // Mutação para deletar cliente
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/customers/${id}`),
     onSuccess: () => {
@@ -89,7 +120,6 @@ export const Customers: React.FC = () => {
     },
   });
 
-  // Mutação para importar CSV
   const importMutation = useMutation({
     mutationFn: async (file: File) => {
       const formDataFile = new FormData();
@@ -120,36 +150,40 @@ export const Customers: React.FC = () => {
     importMutation.mutate(importFile);
   };
 
-  // Integração ViaCEP
-  const handleCepBlur = async (cep: string) => {
-    const cleanCep = cep.replace(/\D/g, '');
-    if (cleanCep.length === 8) {
+  const handleCepChange = async (value: string) => {
+    const formatted = formatCep(value);
+    setFormData(prev => ({ ...prev, cep: formatted }));
+    const digits = formatted.replace(/\D/g, '');
+    if (digits.length === 8) {
       try {
-        const res = await axios.get(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const res = await axios.get(`https://viacep.com.br/ws/${digits}/json/`);
         if (!res.data.erro) {
-          setFormData((prev) => ({
+          setFormData(prev => ({
             ...prev,
+            cep: formatted,
             addressStreet: res.data.logradouro,
             addressNeighborhood: res.data.bairro,
             addressCity: res.data.localidade,
             addressState: res.data.uf,
           }));
         }
-      } catch (err) {
-        console.error('Erro ao buscar CEP');
+      } catch {
+        // silent — CEP lookup is best-effort
       }
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Dados do formulário enviados:', formData);
     registerMutation.mutate(formData);
   };
 
   const handleEdit = (customer: Customer) => {
     setEditingId(customer.id);
-    setFormData(customer);
+    setFormData({
+      ...customer,
+      phone: displayPhone(customer.phone),
+    });
     setIsModalOpen(true);
   };
 
@@ -161,6 +195,12 @@ export const Customers: React.FC = () => {
 
   const handleSell = (customer: Customer) => {
     window.location.href = `/sales?customerId=${customer.id}`;
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingId(null);
+    setFormData({});
   };
 
   const columns = [
@@ -179,18 +219,12 @@ export const Customers: React.FC = () => {
         </div>
       ),
     },
-    {
-      key: 'cpf' as const,
-      label: 'CPF',
-    },
-    {
-      key: 'phone' as const,
-      label: 'Telefone',
-    },
+    { key: 'cpf' as const, label: 'CPF' },
+    { key: 'phone' as const, label: 'Telefone' },
     {
       key: 'addressCity' as const,
       label: 'Cidade',
-      render: (value: string, item: Customer) => (
+      render: (value: string) => (
         <div className="flex items-center gap-1 text-gray-600">
           <FiMapPin size={14} />
           {value || '-'}
@@ -231,13 +265,12 @@ export const Customers: React.FC = () => {
     return <Loading />;
   }
 
-  const startIndex = (response?.page || 1 - 1) * ITEMS_PER_PAGE + 1;
+  const startIndex = ((response?.page || 1) - 1) * ITEMS_PER_PAGE + 1;
   const endIndex = Math.min(startIndex + ITEMS_PER_PAGE - 1, response?.total || 0);
 
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header com título e contador */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold text-gray-900">Clientes</h1>
@@ -261,7 +294,6 @@ export const Customers: React.FC = () => {
           </div>
         </div>
 
-        {/* Barra de busca */}
         <Card className="mb-6">
           <div className="flex gap-3">
             <div className="flex-1 relative">
@@ -282,7 +314,6 @@ export const Customers: React.FC = () => {
           </div>
         </Card>
 
-        {/* Tabela de clientes */}
         <Card className="mb-6">
           {isLoading ? (
             <Loading />
@@ -295,7 +326,6 @@ export const Customers: React.FC = () => {
           )}
         </Card>
 
-        {/* Paginação */}
         {response && response.totalPages > 1 && (
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-600">
@@ -331,86 +361,118 @@ export const Customers: React.FC = () => {
       {/* Modal de Novo/Editar Cliente */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingId(null);
-          setFormData({});
-        }}
+        onClose={closeModal}
         title={editingId ? 'Editar Cliente' : 'Novo Cliente'}
+        size="xl"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Nome"
-            value={formData.name || ''}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            required
-          />
-          <Input
-            label="CPF"
-            value={formData.cpf || ''}
-            onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-            placeholder="00000000000"
-            required
-          />
-          <Input
-            label="Telefone"
-            value={formData.phone || ''}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            placeholder="11999999999"
-            required
-          />
-          <Input
-            label="E-mail"
-            type="email"
-            value={formData.email || ''}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          />
-          <Input
-            label="CEP"
-            value={formData.cep || ''}
-            onChange={(e) => setFormData({ ...formData, cep: e.target.value })}
-            onBlur={(e) => handleCepBlur(e.target.value)}
-            placeholder="00000000"
-          />
-          <Input
-            label="Rua"
-            value={formData.addressStreet || ''}
-            onChange={(e) => setFormData({ ...formData, addressStreet: e.target.value })}
-          />
-          <Input
-            label="Bairro"
-            value={formData.addressNeighborhood || ''}
-            onChange={(e) => setFormData({ ...formData, addressNeighborhood: e.target.value })}
-          />
-          <Input
-            label="Cidade"
-            value={formData.addressCity || ''}
-            onChange={(e) => setFormData({ ...formData, addressCity: e.target.value })}
-          />
-          <Input
-            label="Estado"
-            value={formData.addressState || ''}
-            onChange={(e) => setFormData({ ...formData, addressState: e.target.value })}
-            maxLength={2}
-          />
-          <div className="flex gap-3 pt-4">
-            <Button type="submit" className="flex-1">
-              {editingId ? 'Atualizar' : 'Cadastrar'}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setIsModalOpen(false);
-                setEditingId(null);
-                setFormData({});
-              }}
-              className="flex-1"
-            >
-              Cancelar
-            </Button>
-          </div>
-        </form>
+        <div className="overflow-y-auto max-h-[65vh] pr-1">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Nome */}
+            <Input
+              label="Nome"
+              value={formData.name || ''}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+            />
+
+            {/* CPF + Telefone */}
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="CPF"
+                value={formData.cpf || ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, cpf: formatCpf(e.target.value) })
+                }
+                placeholder="000.000.000-00"
+                required
+              />
+              <Input
+                label="Telefone"
+                value={formData.phone || ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, phone: formatPhone(e.target.value) })
+                }
+                placeholder="(00) 00000-0000"
+                required
+              />
+            </div>
+
+            {/* E-mail */}
+            <Input
+              label="E-mail"
+              type="email"
+              value={formData.email || ''}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            />
+
+            {/* CEP — metade da largura, auto-lookup ao 8º dígito */}
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="CEP"
+                value={formData.cep || ''}
+                onChange={(e) => handleCepChange(e.target.value)}
+                placeholder="00000-000"
+              />
+              <div />
+            </div>
+
+            {/* Rua + Número */}
+            <div className="grid grid-cols-4 gap-4">
+              <div className="col-span-3">
+                <Input
+                  label="Rua"
+                  value={formData.addressStreet || ''}
+                  onChange={(e) => setFormData({ ...formData, addressStreet: e.target.value })}
+                />
+              </div>
+              <Input
+                label="Número"
+                value={formData.addressNumber || ''}
+                onChange={(e) => setFormData({ ...formData, addressNumber: e.target.value })}
+                placeholder="S/N"
+              />
+            </div>
+
+            {/* Bairro + Cidade */}
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Bairro"
+                value={formData.addressNeighborhood || ''}
+                onChange={(e) => setFormData({ ...formData, addressNeighborhood: e.target.value })}
+              />
+              <Input
+                label="Cidade"
+                value={formData.addressCity || ''}
+                onChange={(e) => setFormData({ ...formData, addressCity: e.target.value })}
+              />
+            </div>
+
+            {/* Estado */}
+            <div className="w-1/4">
+              <Input
+                label="Estado"
+                value={formData.addressState || ''}
+                onChange={(e) => setFormData({ ...formData, addressState: e.target.value })}
+                maxLength={2}
+                placeholder="UF"
+              />
+            </div>
+
+            {/* Botões */}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="secondary" onClick={closeModal}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={registerMutation.isPending}>
+                {registerMutation.isPending
+                  ? 'Salvando...'
+                  : editingId
+                  ? 'Atualizar'
+                  : 'Cadastrar'}
+              </Button>
+            </div>
+          </form>
+        </div>
       </Modal>
 
       {/* Modal de Importação CSV */}

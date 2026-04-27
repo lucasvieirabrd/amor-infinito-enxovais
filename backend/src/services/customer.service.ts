@@ -4,9 +4,19 @@ import { normalizePhone } from '../utils/normalizePhone';
 
 const customerRepository = new CustomerRepository();
 
+function formatCpf(digits: string): string {
+  return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+function formatCep(digits: string): string {
+  return digits.replace(/(\d{5})(\d{3})/, '$1-$2');
+}
+
 export class CustomerService {
   async register(data: any) {
-    const customerExistsByCpf = await customerRepository.findByCpf(data.cpf);
+    const formattedCpf = formatCpf(data.cpf);
+
+    const customerExistsByCpf = await customerRepository.findByCpf(formattedCpf);
     if (customerExistsByCpf) {
       throw new AppError('Este CPF já está cadastrado para outro cliente', 400);
     }
@@ -16,12 +26,11 @@ export class CustomerService {
       throw new AppError('Este telefone já está cadastrado para outro cliente', 400);
     }
 
-    // Formatar CPF, CEP e normalizar telefone antes de salvar
     const formattedData = {
       ...data,
       phone: normalizePhone(data.phone),
-      cpf: data.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'),
-      cep: (data.cep && data.cep !== '00000000') ? data.cep.replace(/(\d{5})(\d{3})/, '$1-$2') : null,
+      cpf: formattedCpf,
+      cep: (data.cep && data.cep !== '00000000') ? formatCep(data.cep) : null,
     };
 
     const customer = await customerRepository.create(formattedData);
@@ -47,49 +56,40 @@ export class CustomerService {
 
   async update(id: string, data: any) {
     try {
-      console.log('[UPDATE CUSTOMER] id:', id);
-      console.log('[UPDATE CUSTOMER] data recebida:', JSON.stringify(data));
-
       const customer = await customerRepository.findById(id);
-      console.log('[UPDATE CUSTOMER] cliente encontrado:', JSON.stringify(customer));
       if (!customer) {
         throw new AppError('Cliente não encontrado', 404);
       }
 
       if (data.cpf) {
-        const customerExistsByCpf = await customerRepository.findByCpf(data.cpf, id);
-        console.log('[UPDATE CUSTOMER] findByCpf resultado:', JSON.stringify(customerExistsByCpf));
+        const formattedCpf = formatCpf(data.cpf);
+        const customerExistsByCpf = await customerRepository.findByCpf(formattedCpf, id);
         if (customerExistsByCpf) {
           throw new AppError('Este CPF já está cadastrado para outro cliente', 400);
         }
+        data = { ...data, cpf: formattedCpf };
       }
 
       if (data.phone) {
         const normalizedPhone = normalizePhone(data.phone);
-        console.log('[UPDATE CUSTOMER] phone original:', data.phone, '| normalizado:', normalizedPhone);
         const customerExistsByPhone = await customerRepository.findByPhone(normalizedPhone, id);
-        console.log('[UPDATE CUSTOMER] findByPhone resultado:', JSON.stringify(customerExistsByPhone));
         if (customerExistsByPhone) {
           throw new AppError('Este telefone já está cadastrado para outro cliente', 400);
         }
         data = { ...data, phone: normalizedPhone };
       }
 
-      // Formatar CPF e CEP antes de atualizar
-      const formattedData = {
-        ...data,
-        cpf: data.cpf ? data.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : data.cpf,
-        cep: (data.cep && data.cep !== '00000000') ? data.cep.replace(/(\d{5})(\d{3})/, '$1-$2') : null,
-      };
+      if (data.cep !== undefined) {
+        data = {
+          ...data,
+          cep: (data.cep && data.cep !== '00000000') ? formatCep(data.cep) : null,
+        };
+      }
 
-      console.log('[UPDATE CUSTOMER] formattedData para salvar:', JSON.stringify(formattedData));
-      const result = await customerRepository.update(id, formattedData);
-      console.log('[UPDATE CUSTOMER] sucesso:', JSON.stringify(result));
+      const result = await customerRepository.update(id, data);
       return result;
     } catch (error: any) {
-      console.error('[UPDATE CUSTOMER] erro:', error);
       if (error instanceof AppError) throw error;
-      // Violação de constraint único no MySQL (ER_DUP_ENTRY / errno 1062)
       if (error?.code === 'ER_DUP_ENTRY' || error?.errno === 1062) {
         const msg = error?.message ?? '';
         if (msg.includes('phone')) {
