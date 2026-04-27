@@ -17,7 +17,6 @@ import {
   FiList,
   FiDownload,
 } from 'react-icons/fi';
-import api from '../../services/api';
 import { Button, Card, Badge, Modal, Input, Loading } from '../../components/ui';
 import { format, isBefore, startOfDay } from 'date-fns';
 
