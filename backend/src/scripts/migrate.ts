@@ -52,7 +52,7 @@ const migrations: { name: string; sql: string }[] = [
   },
   {
     name: '0005_add_customer_address_number',
-    sql: `ALTER TABLE customers ADD COLUMN IF NOT EXISTS address_number VARCHAR(20) NULL AFTER address_street`,
+    sql: `ALTER TABLE customers ADD COLUMN address_number VARCHAR(20) NULL AFTER address_street`,
   },
 ];
 
@@ -80,7 +80,13 @@ async function run() {
       }
 
       console.log(`[migrate] apply ${migration.name} ...`);
-      await connection.execute(migration.sql);
+      try {
+        await connection.execute(migration.sql);
+      } catch (err: any) {
+        // errno 1060 = ER_DUP_FIELDNAME (column already exists) — safe to ignore
+        if (err?.errno !== 1060) throw err;
+        console.log(`[migrate] warn  ${migration.name} — column already exists, skipping ALTER`);
+      }
       await connection.execute(
         'INSERT INTO _migrations (name) VALUES (?)',
         [migration.name]
