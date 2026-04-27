@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { BillingService } from '../services/billing.service';
+import { generateRelatorioCobrancaPdf } from '../services/relatorioCobranca.service';
 
 const billingService = new BillingService();
 
@@ -18,5 +19,16 @@ export class BillingController {
     const period = (req.query.period as string) || 'today';
     const messages = await billingService.getBillingMessages(period);
     return res.json(messages);
+  }
+
+  async getRelatorioPdf(req: Request, res: Response) {
+    const pdf = await generateRelatorioCobrancaPdf();
+    const today = new Date().toISOString().slice(0, 10);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="relatorio-cobranca-${today}.pdf"`,
+      'Content-Length': pdf.length.toString(),
+    });
+    res.end(pdf);
   }
 }

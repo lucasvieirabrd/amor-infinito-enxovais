@@ -15,7 +15,9 @@ import {
   FiTrendingUp,
   FiSend,
   FiList,
+  FiDownload,
 } from 'react-icons/fi';
+import api from '../../services/api';
 import { Button, Card, Badge, Modal, Input, Loading } from '../../components/ui';
 import { format, isBefore, startOfDay } from 'date-fns';
 
@@ -82,7 +84,27 @@ export const Billing: React.FC = () => {
   const [messagesPeriod, setMessagesPeriod] = useState<Period>('today');
   const [activeTab, setActiveTab] = useState<'parcelas' | 'mensagens'>('parcelas');
 
+  const [exportingPdf, setExportingPdf] = useState(false);
   const queryClient = useQueryClient();
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const response = await api.get('/billing/relatorio/pdf', { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio-cobranca-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Erro ao gerar relatório PDF.');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   // ── queries ──────────────────────────────────────────────
   const { data: billingRecords, isLoading } = useQuery({
@@ -236,14 +258,25 @@ export const Billing: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Cobrança</h1>
-          <Button
-            variant="primary"
-            className="flex items-center gap-2"
-            onClick={() => setIsSendChargesModalOpen(true)}
-          >
-            <FiSend size={16} />
-            Disparar Cobranças Manualmente
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              className="flex items-center gap-2"
+              onClick={handleExportPdf}
+              disabled={exportingPdf}
+            >
+              <FiDownload size={16} />
+              {exportingPdf ? 'Gerando...' : 'Exportar PDF'}
+            </Button>
+            <Button
+              variant="primary"
+              className="flex items-center gap-2"
+              onClick={() => setIsSendChargesModalOpen(true)}
+            >
+              <FiSend size={16} />
+              Disparar Cobranças Manualmente
+            </Button>
+          </div>
         </div>
 
         {/* 4 KPI cards */}
