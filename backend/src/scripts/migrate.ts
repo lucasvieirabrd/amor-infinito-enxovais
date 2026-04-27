@@ -50,6 +50,10 @@ const migrations: { name: string; sql: string }[] = [
     name: '0004_add_partial_installment_status',
     sql: `ALTER TABLE installments MODIFY COLUMN status ENUM('pending','paid','overdue','canceled','partial') NOT NULL DEFAULT 'pending'`,
   },
+  {
+    name: '0005_add_customer_address_number',
+    sql: `ALTER TABLE customers ADD COLUMN IF NOT EXISTS address_number VARCHAR(20) NULL AFTER address_street`,
+  },
 ];
 
 async function run() {
