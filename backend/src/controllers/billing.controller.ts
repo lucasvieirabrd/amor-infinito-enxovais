@@ -31,10 +31,4 @@ export class BillingController {
     });
     res.end(pdf);
   }
-
-  async testSendPdfReport(req: Request, res: Response) {
-    const { mediaId, results } = await billingService.sendDailyPdfReport();
-    const messageIds = results.map(r => ({ phone: r.phone, success: r.success, messageId: r.messageId, error: r.error }));
-    return res.json({ success: results.some(r => r.success), mediaId, messageIds });
-  }
 }
