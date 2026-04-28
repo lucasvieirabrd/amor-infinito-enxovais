@@ -91,13 +91,22 @@ export class InstallmentController {
     const schema = z.object({
       customerId: z.string().min(1, 'ID do cliente é obrigatório'),
       saleId: z.string().optional(),
-      newDay: z.number().int().min(1).max(28, 'Dia deve ser entre 1 e 28'),
+      newDay: z.number().int().min(1).max(31, 'Dia deve ser entre 1 e 31'),
       onlyPending: z.boolean().default(true),
     });
 
-    const data = schema.parse(req.body);
-    const result = await installmentService.bulkUpdateDay(data);
-    return res.json(result);
+    try {
+      const data = schema.parse(req.body);
+      const result = await installmentService.bulkUpdateDay(data);
+      return res.json(result);
+    } catch (err: any) {
+      console.error('[InstallmentController] bulkUpdateDay error:', {
+        body: req.body,
+        message: err?.message,
+        stack: err?.stack,
+      });
+      throw err;
+    }
   }
 
   async sendManualBilling(req: Request, res: Response) {

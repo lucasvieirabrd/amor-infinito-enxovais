@@ -9,6 +9,7 @@ import { createServer } from 'http';
 import { rateLimit } from 'express-rate-limit';
 import { routes } from './routes';
 import { AppError } from './utils/AppError';
+import { ZodError } from 'zod';
 import { setupCronJobs } from './cron';
 import { setupWebSocket } from './websocket';
 import { fixOrphanInstallmentsOnStartup } from './startup-fixes';
@@ -85,6 +86,13 @@ app.get('/health', (req: Request, res: Response) => {
 
 // Tratamento global de erros
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  if (err instanceof ZodError) {
+    return res.status(400).json({
+      status: 'error',
+      message: err.errors[0]?.message || 'Dados inválidos',
+    });
+  }
+
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
       status: 'error',
