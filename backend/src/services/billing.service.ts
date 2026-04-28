@@ -6,6 +6,7 @@ import { db } from '../database';
 import { customers, installments } from '../database/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { format, differenceInDays, startOfDay } from 'date-fns';
+import { generateRelatorioCobrancaPdf } from './relatorioCobranca.service';
 
 const whatsAppService = new WhatsAppService();
 const installmentRepository = new InstallmentRepository();
@@ -25,13 +26,14 @@ const formatAmount = (value: number | string) =>
     maximumFractionDigits: 2,
   });
 
-/** Salva mensagem enviada no banco */
+/** Salva mensagem enviada (ou com falha) no banco */
 async function saveMessage(
   metaMessageId: string | undefined,
   customerId: string,
   toPhone: string,
   content: string,
   type: 'template' | 'text' = 'template',
+  status: 'sent' | 'failed' = 'sent',
 ) {
   await messageRepository.create({
     metaMessageId,
@@ -41,7 +43,7 @@ async function saveMessage(
     type,
     content,
     direction: 'outbound',
-    status: 'sent',
+    status,
     tag: 'cobrança',
     timestamp: new Date(),
   });
@@ -69,6 +71,8 @@ export class BillingService {
         )
       );
 
+    console.log(`[BillingService] processDailyBilling: ${pendingInstallments.length} parcela(s) encontrada(s)`);
+
     for (const row of pendingInstallments) {
       const { installment, customer } = row;
       const dueDateSP = new Date(new Date(installment.dueDate).toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
@@ -84,8 +88,6 @@ export class BillingService {
       let contentText = '';
 
       if (daysDiff === 0) {
-        // TEMPLATE 1 — lembrete_vencimento
-        // {{1}}=nome, {{2}}="R$ 150,00", {{3}}=data
         templateName = 'lembrete_vencimento';
         components = [{
           type: 'body',
@@ -96,10 +98,7 @@ export class BillingService {
           ],
         }];
         contentText = `Olá ${customer.name} aqui é a Celita da Amor Infinito Enxovais, sua parcela de R$ ${amountNum} venceu hoje dia ${dateFmt}, você faz o pix ou eu passo ai para receber?`;
-
       } else if ([2, 3, 5, 10, 20].includes(daysDiff)) {
-        // TEMPLATE 2 — cobranca_parcela
-        // {{1}}=nome, {{2}}="150,00" (sem R$, template já tem "R$"), {{3}}=data
         templateName = 'cobranca_parcela';
         components = [{
           type: 'body',
@@ -112,41 +111,71 @@ export class BillingService {
         contentText = `Olá ${customer.name}, sua parcela de R$ ${amountNum} venceu em ${dateFmt} e está pendente. Por favor, regularize o pagamento o quanto antes.`;
       }
 
-      if (templateName) {
-        stats.sent++;
-        const result = await whatsAppService.sendTemplateMessage(customer.phone, templateName, components);
+      if (!templateName) {
+        console.log(`[BillingService] Parcela ${installment.id} (${customer.name}, ${daysDiff}d) — sem template para hoje, pulando`);
+        continue;
+      }
 
-        if (result && !result.error) {
-          stats.success++;
-          stats.notifiedClients.push(customer.name);
-          await saveMessage(result.messages?.[0]?.id, customer.id, customer.phone, contentText);
-        } else {
-          stats.failed++;
-        }
+      console.log(`[BillingService] Enviando ${templateName} para ${customer.name} (${customer.phone}) — ${daysDiff}d de atraso`);
+      stats.sent++;
+      const result = await whatsAppService.sendTemplateMessage(customer.phone, templateName, components);
+
+      if (result && !result.error) {
+        stats.success++;
+        stats.notifiedClients.push(customer.name);
+        console.log(`[BillingService] ✓ Enviado para ${customer.name}`);
+        await saveMessage(result.messages?.[0]?.id, customer.id, customer.phone, contentText);
+      } else {
+        stats.failed++;
+        console.error(`[BillingService] ✗ Falha ao enviar para ${customer.name}:`, result?.message);
+        await saveMessage(undefined, customer.id, customer.phone, contentText, 'template', 'failed');
       }
     }
 
+    console.log(`[BillingService] processDailyBilling concluído: ${stats.success} enviados, ${stats.failed} falhas`);
     return stats;
   }
 
   /**
    * Envia o resumo diário para os 3 administradores via template (11h00).
+   * Consulta o banco para obter as estatísticas do dia — resistente a restarts do servidor.
    * TEMPLATE 4 — msg_resumo_vencimento
    * {{1}}=data, {{2}}=total enviado, {{3}}=sucesso, {{4}}=falhas, {{5}}=lista de clientes
    */
-  async sendDailySummary(stats: { sent: number; success: number; failed: number; notifiedClients: string[] }) {
+  async sendDailySummary() {
     const todayStr = format(new Date(), 'dd/MM/yyyy');
-    const clientsList = stats.notifiedClients.length > 0
-      ? stats.notifiedClients.join(', ')
-      : 'Nenhum';
+
+    // Lê do banco — não depende de estado em memória
+    const statsResult = await db.execute(sql`
+      SELECT
+        COUNT(*)                                                          AS total,
+        SUM(CASE WHEN m.status = 'sent'   THEN 1 ELSE 0 END)            AS success,
+        SUM(CASE WHEN m.status = 'failed' THEN 1 ELSE 0 END)            AS failed,
+        GROUP_CONCAT(c.name ORDER BY c.name SEPARATOR ', ')             AS clients
+      FROM messages m
+      LEFT JOIN customers c ON m.customer_id = c.id
+      WHERE m.direction  = 'outbound'
+        AND m.tag        = 'cobrança'
+        AND m.deleted_at IS NULL
+        AND DATE(CONVERT_TZ(m.timestamp, '+00:00', '-03:00'))
+            = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+    `);
+
+    const row = (statsResult as any)[0]?.[0] ?? {};
+    const sent    = Number(row.total   ?? 0);
+    const success = Number(row.success ?? 0);
+    const failed  = Number(row.failed  ?? 0);
+    const clientsList = row.clients ? String(row.clients) : 'Nenhum';
+
+    console.log(`[BillingService] sendDailySummary: total=${sent} sucesso=${success} falhas=${failed} clientes=${clientsList}`);
 
     const components = [{
       type: 'body',
       parameters: [
         { type: 'text', text: todayStr },
-        { type: 'text', text: String(stats.sent) },
-        { type: 'text', text: String(stats.success) },
-        { type: 'text', text: String(stats.failed) },
+        { type: 'text', text: String(sent) },
+        { type: 'text', text: String(success) },
+        { type: 'text', text: String(failed) },
         { type: 'text', text: clientsList },
       ],
     }];
@@ -154,16 +183,39 @@ export class BillingService {
     for (const phone of ADMIN_PHONES) {
       const result = await whatsAppService.sendTemplateMessage(phone, 'msg_resumo_vencimento', components);
 
-      // Fallback para texto simples se o template falhar
       if (!result || result.error) {
         const text =
           `Celita, aqui está o resumo de cobranças do dia ${todayStr}:\n` +
-          `📤 Total enviado: ${stats.sent}\n` +
-          `✅ Sucesso: ${stats.success}\n` +
-          `❌ Falha: ${stats.failed}\n` +
+          `📤 Total enviado: ${sent}\n` +
+          `✅ Sucesso: ${success}\n` +
+          `❌ Falha: ${failed}\n` +
           `Clientes notificados hoje:\n- ${clientsList}\n` +
           `Acesse o sistema para mais detalhes.`;
         await whatsAppService.sendTextMessage(phone, text);
+      }
+    }
+  }
+
+  /**
+   * Gera o PDF do relatório de cobrança e envia via WhatsApp para os admins (07h30).
+   */
+  async sendDailyPdfReport() {
+    const dateStr = format(new Date(), 'dd/MM/yyyy');
+    const filename = `relatorio-cobranca-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+    const caption = `📊 Relatório de Cobrança - ${dateStr}\nSegue em anexo o relatório completo de cobranças do dia.`;
+
+    const buffer = await generateRelatorioCobrancaPdf();
+    console.log(`[BillingService] PDF gerado: ${buffer.length} bytes`);
+
+    const mediaId = await whatsAppService.uploadMedia(buffer, 'application/pdf', filename);
+    console.log(`[BillingService] PDF enviado ao WhatsApp Media API, mediaId: ${mediaId}`);
+
+    for (const phone of ADMIN_PHONES) {
+      const result = await whatsAppService.sendDocumentMessage(phone, mediaId, filename, caption);
+      if (result?.error) {
+        console.error(`[BillingService] ✗ Falha ao enviar PDF para ${phone}:`, result.message);
+      } else {
+        console.log(`[BillingService] ✓ PDF enviado para ${phone}`);
       }
     }
   }

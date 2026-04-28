@@ -87,4 +87,59 @@ export class WhatsAppService {
       return { error: true, message: error.message };
     }
   }
+
+  /**
+   * Faz upload de um arquivo binário para a WhatsApp Media API.
+   * Retorna o media_id que pode ser reutilizado para múltiplos envios.
+   */
+  async uploadMedia(buffer: Buffer, mimeType: string, filename: string): Promise<string> {
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('type', mimeType);
+    form.append('file', new Blob([buffer], { type: mimeType }), filename);
+
+    const response = await fetch(`${this.apiUrl}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.token}` },
+      body: form,
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(`WhatsApp media upload falhou: ${JSON.stringify(errData)}`);
+    }
+
+    const data = await response.json() as any;
+    console.log('[WhatsApp] uploadMedia ✓ mediaId:', data.id);
+    return data.id;
+  }
+
+  /**
+   * Envia um documento (PDF, etc.) via media_id obtido em uploadMedia.
+   */
+  async sendDocumentMessage(to: string, mediaId: string, filename: string, caption: string) {
+    const cleanPhone = this.normalizePhone(to);
+    try {
+      const response = await axios.post(
+        `${this.apiUrl}/messages`,
+        {
+          messaging_product: 'whatsapp',
+          to: cleanPhone,
+          type: 'document',
+          document: { id: mediaId, filename, caption },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      console.log(`[WhatsApp] sendDocumentMessage ✓ para ${cleanPhone}`);
+      return response.data;
+    } catch (error: any) {
+      console.error(`[WhatsApp] sendDocumentMessage ✗ para ${cleanPhone}:`, error.response?.data || error.message);
+      return { error: true, message: error.message };
+    }
+  }
 }

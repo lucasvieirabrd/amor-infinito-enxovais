@@ -1,9 +1,28 @@
 import puppeteer from 'puppeteer';
 import { format, differenceInDays } from 'date-fns';
 import { inArray } from 'drizzle-orm';
+import fs from 'fs';
+import path from 'path';
 import { db } from '../database';
 import { settings } from '../database/schema';
 import { sql } from 'drizzle-orm';
+
+// --- Logo ---
+
+const possibleLogoPaths = [
+  path.join(__dirname, '../assets/logo-amor-infinito.jpeg'),
+  path.join(__dirname, '../../src/assets/logo-amor-infinito.jpeg'),
+  path.join(process.cwd(), 'src/assets/logo-amor-infinito.jpeg'),
+  path.join(process.cwd(), 'dist/assets/logo-amor-infinito.jpeg'),
+];
+let logoSrc = '';
+for (const p of possibleLogoPaths) {
+  if (fs.existsSync(p)) {
+    const logoBase64 = fs.readFileSync(p).toString('base64');
+    logoSrc = `data:image/jpeg;base64,${logoBase64}`;
+    break;
+  }
+}
 
 // --- Formatters ---
 
@@ -146,15 +165,15 @@ async function fetchReportData(): Promise<{
 // --- HTML builder ---
 
 function cardHtml(row: InstallmentRow, badge: string, badgeColor: string): string {
+  const phone = fmtPhone(row.customerPhone);
   return `
 <div class="entry">
   <div class="entry-head">
     <span class="entry-name">${row.customerName}</span>
     <span class="badge" style="background:${badgeColor}">${badge}</span>
   </div>
-  <div class="entry-sub">
-    ${fmtPhone(row.customerPhone)}${row.address ? ' · ' + row.address : ''}
-  </div>
+  <div class="entry-sub">${phone}</div>
+  ${row.address ? `<div class="entry-address">${row.address}</div>` : ''}
   <div class="entry-detail">
     Parcela <strong>${row.installmentNumber}/${row.totalInstallments}</strong>
     &nbsp;|&nbsp; Valor: <strong>${brl(row.originalAmount)}</strong>
@@ -166,7 +185,7 @@ function cardHtml(row: InstallmentRow, badge: string, badgeColor: string): strin
 }
 
 function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>): string {
-  const { today, overdue, pixCelita, pixMarcelo, reportDate } = data;
+  const { today, overdue, reportDate } = data;
 
   const totalToday = today.reduce((s, r) => s + r.originalAmount, 0);
   const totalOverdue = overdue.reduce((s, r) => s + r.originalAmount, 0);
@@ -178,10 +197,9 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>): string {
   const overdueSection = overdue.length === 0 ? '<p class="empty">Nenhuma parcela atrasada.</p>' :
     overdue.map(r => cardHtml(r, `${r.daysOverdue} dia(s) em atraso`, '#dc2626')).join('');
 
-  const pixLine = [
-    pixCelita ? `PIX Celita: ${pixCelita}` : '',
-    pixMarcelo ? `PIX Marcelo: ${pixMarcelo}` : '',
-  ].filter(Boolean).join('  •  ');
+  const logoHtml = logoSrc
+    ? `<img src="${logoSrc}" style="height: 45px; width: auto;" alt="Amor Infinito Enxovais" />`
+    : `<div class="logo">&#10084; Amor Infinito Enxovais</div>`;
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -195,13 +213,12 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>): string {
   .header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     padding-bottom: 6px;
     border-bottom: 2px solid #be123c;
     margin-bottom: 6px;
   }
   .logo { font-size: 15px; font-weight: bold; color: #be123c; }
-  .logo-sub { font-size: 8px; color: #888; margin-top: 1px; }
   .report-title { font-size: 13px; font-weight: bold; text-align: center; letter-spacing: 1px; }
   .report-date { text-align: right; font-size: 9px; color: #555; }
 
@@ -252,7 +269,8 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>): string {
     border-radius: 10px;
     white-space: nowrap;
   }
-  .entry-sub { font-size: 9px; color: #555; margin-bottom: 2px; }
+  .entry-sub { font-size: 9px; color: #555; margin-bottom: 1px; }
+  .entry-address { font-size: 8.5px; color: #666; margin-bottom: 2px; }
   .entry-detail { font-size: 9px; color: #333; }
 
   .empty { font-size: 9px; color: #888; padding: 4px 0; font-style: italic; }
@@ -273,10 +291,7 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>): string {
 <body>
 
   <div class="header">
-    <div>
-      <div class="logo">&#10084; Amor Infinito Enxovais</div>
-      <div class="logo-sub">Sistema de Gestão</div>
-    </div>
+    <div>${logoHtml}</div>
     <div class="report-title">RELATÓRIO DE COBRANÇA</div>
     <div class="report-date">${reportDate}</div>
   </div>
@@ -300,7 +315,7 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>): string {
   ${overdueSection}
 
   <div class="footer">
-    <div>${pixLine ? 'Amor Infinito Enxovais  •  ' + pixLine : 'Amor Infinito Enxovais'}</div>
+    <div>Amor Infinito Enxovais</div>
     <div class="footer-total">Total geral a cobrar: ${brl(grandTotal)}</div>
   </div>
 
