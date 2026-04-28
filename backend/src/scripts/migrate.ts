@@ -54,6 +54,15 @@ const migrations: { name: string; sql: string }[] = [
     name: '0005_add_customer_address_number',
     sql: `ALTER TABLE customers ADD COLUMN address_number VARCHAR(20) NULL AFTER address_street`,
   },
+  {
+    name: '0006_seed_pix_settings',
+    sql: `INSERT INTO settings (id, \`key\`, value, description)
+      VALUES
+        (UUID(), 'pix_celita',  '74480669604',                         'Chave PIX da Celita (CPF)'),
+        (UUID(), 'pix_marcelo', '16981271021',                         'Chave PIX do Marcelo (telefone)'),
+        (UUID(), 'pix_qrcode',  '5c17e289-963b-4f2b-af01-cd5c52f5af8e', 'Chave PIX aleatória para QR Code')
+      ON DUPLICATE KEY UPDATE value = VALUES(value), description = VALUES(description)`,
+  },
 ];
 
 async function run() {

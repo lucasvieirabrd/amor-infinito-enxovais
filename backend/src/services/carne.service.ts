@@ -45,9 +45,7 @@ function buildPixPayload(key: string, amount: number, merchantName: string, city
 // --- Formatters ---
 
 function brl(value: string | number): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    Number(value)
-  );
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
 }
 
 function fmtDate(date: Date | string | null): string {
@@ -101,20 +99,18 @@ export async function getCarneData(saleId: string) {
   const pixRows = await db
     .select({ key: settings.key, value: settings.value })
     .from(settings)
-    .where(inArray(settings.key, ['pix_celita', 'pix_marcelo']));
+    .where(inArray(settings.key, ['pix_celita', 'pix_marcelo', 'pix_qrcode']));
 
-  const pixCelita = pixRows.find(r => r.key === 'pix_celita')?.value ?? '';
+  const pixCelita  = pixRows.find(r => r.key === 'pix_celita')?.value  ?? '';
   const pixMarcelo = pixRows.find(r => r.key === 'pix_marcelo')?.value ?? '';
+  // pix_qrcode is used for the QR code EMV payload (random key is more reliable for static QR)
+  const pixQrcode  = pixRows.find(r => r.key === 'pix_qrcode')?.value  ?? pixCelita;
 
-  const productNames = itemRows
-    .map(i => i.productName)
-    .filter(Boolean)
-    .join(', ');
-
-  const entryInstallment = insts.find(i => i.installmentNumber === 0) ?? null;
+  const productNames = itemRows.map(i => i.productName).filter(Boolean).join(', ');
+  const entryInstallment    = insts.find(i => i.installmentNumber === 0) ?? null;
   const regularInstallments = insts.filter(i => i.installmentNumber > 0);
 
-  return { sale, productNames, entryInstallment, regularInstallments, pixCelita, pixMarcelo };
+  return { sale, productNames, entryInstallment, regularInstallments, pixCelita, pixMarcelo, pixQrcode };
 }
 
 // --- HTML builder ---
@@ -122,7 +118,7 @@ export async function getCarneData(saleId: string) {
 async function buildCarneHtml(
   data: Awaited<ReturnType<typeof getCarneData>>
 ): Promise<string> {
-  const { sale, productNames, entryInstallment, regularInstallments, pixCelita, pixMarcelo } = data;
+  const { sale, productNames, entryInstallment, regularInstallments, pixCelita, pixMarcelo, pixQrcode } = data;
   const totalInstallments = regularInstallments.length;
 
   const allCards: { inst: (typeof regularInstallments)[0]; isEntry: boolean }[] = [];
@@ -133,68 +129,83 @@ async function buildCarneHtml(
 
   for (const { inst, isEntry } of allCards) {
     const amount = parseFloat(inst.originalAmount.toString());
-    let qrHtml = '';
 
-    if (pixCelita && amount > 0) {
+    // QR code uses pix_qrcode key (random UUID key → more reliable for static QR with amount)
+    let qrHtml = '';
+    if (pixQrcode && amount > 0) {
       try {
-        const payload = buildPixPayload(
-          pixCelita,
-          amount,
-          'AMOR INFINITO ENXOVAIS',
-          'JABOTICABAL'
-        );
+        const payload = buildPixPayload(pixQrcode, amount, 'AMOR INFINITO ENXOVAIS', 'JABOTICABAL');
         const dataUrl = await QRCode.toDataURL(payload, {
-          width: 72,
+          width: 70,
           margin: 1,
           errorCorrectionLevel: 'M',
         });
-        qrHtml = `<div class="qr-wrap"><img src="${dataUrl}" width="72" height="72"/><div class="qr-lbl">PIX</div></div>`;
+        qrHtml = `
+          <div class="c-qr">
+            <img src="${dataUrl}" width="70" height="70" alt="PIX QR Code"/>
+            <div class="c-qr-lbl">Pague com QRCODE</div>
+          </div>`;
       } catch {
         // QR generation is best-effort
       }
     }
 
-    const label = isEntry
+    // Installment number label — "ENTRADA" for entry card, "01/12" for regular
+    const instLabel    = isEntry
       ? 'ENTRADA'
       : `${String(inst.installmentNumber).padStart(2, '0')}/${String(totalInstallments).padStart(2, '0')}`;
+    const instSubLabel = isEntry ? '' : 'PARCELA';
+    const valSubLabel  = isEntry ? 'VALOR ENTRADA' : 'VALOR PARCELA';
 
-    const entryRow =
-      !isEntry && entryInstallment
-        ? `<tr><td class="lbl">ENTRADA</td><td>${brl(entryInstallment.originalAmount)}</td></tr>`
-        : '';
+    // "ENTRADA: R$X | TOTAL VENDA: R$Y" shown on regular cards when sale has entry
+    const entryTotalRow = (!isEntry && entryInstallment)
+      ? `<div class="r">
+           <b>ENTRADA:</b>&nbsp;${brl(entryInstallment.originalAmount)}
+           &nbsp;&nbsp;<b>TOTAL VENDA:</b>&nbsp;${brl(sale.totalAmount)}
+         </div>`
+      : `<div class="r"><b>TOTAL VENDA:</b>&nbsp;${brl(sale.totalAmount)}</div>`;
+
+    // "ENTRADA" label sits narrower at 28px; number pair "01/12" can use 36px
+    const numFontSize = isEntry ? '28px' : '36px';
 
     cardHtmls.push(`
 <div class="carne">
-  <div class="carne-header">
-    <div class="store-name">&#10084; Amor Infinito Enxovais</div>
-    <div class="sale-meta"><span>${sale.saleNumber}</span><span>${fmtDate(sale.saleDate)}</span></div>
+
+  <div class="c-header">
+    <div class="c-logo">&#10084; Amor Infinito Enxovais</div>
+    <div class="c-meta"><strong>${sale.saleNumber}</strong><br>${fmtDate(sale.saleDate)}</div>
   </div>
 
-  <div class="highlight">
-    <span class="inst-num">${label}</span>
-    <span class="inst-val">${brl(amount)}</span>
+  <div class="c-highlight">
+    <div class="c-num-block">
+      <div class="c-num" style="font-size:${numFontSize}">${instLabel}</div>
+      ${instSubLabel ? `<div class="c-num-sub">${instSubLabel}</div>` : ''}
+    </div>
+    <div class="c-amnt-block">
+      <div class="c-amnt">${brl(amount)}</div>
+      <div class="c-amnt-sub">${valSubLabel}</div>
+    </div>
   </div>
 
-  <table class="info-tbl">
-    <tr><td class="lbl">CLIENTE</td><td>${sale.customerName ?? ''}</td></tr>
-    <tr><td class="lbl">CPF</td><td>${sale.customerCpf ?? ''}</td></tr>
-    <tr><td class="lbl">FONE</td><td>${fmtPhone(sale.customerPhone)}</td></tr>
-    <tr><td class="lbl">PRODUTO</td><td class="ellipsis">${productNames}</td></tr>
-    ${entryRow}
-    <tr><td class="lbl">TOTAL</td><td>${brl(sale.totalAmount)}</td></tr>
-    <tr><td class="lbl">VENCIMENTO</td><td><strong>${fmtDate(inst.dueDate)}</strong></td></tr>
-  </table>
+  <div class="c-info">
+    <div class="r"><b>CLIENTE:</b>&nbsp;<span class="ell">${sale.customerName ?? ''}</span></div>
+    <div class="r"><b>CPF:</b>&nbsp;${sale.customerCpf ?? ''}&nbsp;&nbsp;&nbsp;<b>FONE:</b>&nbsp;${fmtPhone(sale.customerPhone)}</div>
+    <div class="r"><b>PRODUTO:</b>&nbsp;<span class="ell">${productNames}</span></div>
+    ${entryTotalRow}
+    <div class="r"><b>VENCIMENTO:</b>&nbsp;<span class="c-due">${fmtDate(inst.dueDate)}</span></div>
+  </div>
 
-  <div class="footer">
-    <div class="manual">
-      <div class="mline"><span class="lsm">Recebido em:</span><span class="fill"></span></div>
-      <div class="mline"><span class="lsm">Recebido por:</span><span class="fill"></span></div>
-      <div class="mline"><span class="lsm">Valor recebido:</span><span class="fill"></span></div>
-      ${pixCelita ? `<div class="pix-txt"><span class="lsm">PIX CELITA:</span> ${pixCelita}</div>` : ''}
-      ${pixMarcelo ? `<div class="pix-txt"><span class="lsm">PIX MARCELO:</span> ${pixMarcelo}</div>` : ''}
+  <div class="c-footer">
+    <div class="c-receipt">
+      <div class="fl"><span class="rl">Recebido em:</span><span class="fline"></span></div>
+      <div class="fl"><span class="rl">Recebido por:</span><span class="fline"></span></div>
+      <div class="fl"><span class="rl">Valor recebido: R$</span><span class="fline"></span></div>
+      ${pixCelita  ? `<div class="pix"><b>PIX CELITA:</b> ${pixCelita}</div>`  : ''}
+      ${pixMarcelo ? `<div class="pix"><b>PIX MARCELO:</b> ${pixMarcelo}</div>` : ''}
     </div>
     ${qrHtml}
   </div>
+
 </div>`);
   }
 
@@ -205,7 +216,7 @@ async function buildCarneHtml(
 <style>
   @page { size: A4; margin: 8mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5px; color: #1a1a1a; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 8px; color: #111; background: #fff; }
 
   .grid {
     display: grid;
@@ -213,66 +224,97 @@ async function buildCarneHtml(
     gap: 4mm;
   }
 
+  /* ── Card shell ── */
   .carne {
-    border: 1.5px dashed #999;
-    padding: 3mm;
-    height: 66mm;
+    border: 1px dashed #aaa;
+    padding: 3mm 3.5mm;
     display: flex;
     flex-direction: column;
-    gap: 1.2mm;
+    gap: 1.8mm;
     page-break-inside: avoid;
+    background: #fff;
     overflow: hidden;
   }
 
-  .carne-header {
+  /* ── Header ── */
+  .c-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     padding-bottom: 1.5mm;
     border-bottom: 1px solid #ddd;
   }
-  .store-name { font-size: 10px; font-weight: bold; color: #be123c; }
-  .sale-meta { text-align: right; font-size: 7.5px; color: #555; display: flex; flex-direction: column; }
-
-  .highlight {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5mm 0;
+  .c-logo {
+    font-size: 9.5px;
+    font-weight: bold;
+    color: #be123c;
+    line-height: 1.3;
   }
-  .inst-num { font-size: 21px; font-weight: bold; line-height: 1; }
-  .inst-val { font-size: 19px; font-weight: bold; color: #be123c; line-height: 1; }
+  .c-meta {
+    text-align: right;
+    font-size: 7px;
+    color: #555;
+    line-height: 1.5;
+  }
 
-  .info-tbl { width: 100%; font-size: 7.5px; border-collapse: collapse; }
-  .info-tbl td { padding: 0.7px 1.5px; vertical-align: top; }
-  .lbl { font-weight: bold; color: #555; white-space: nowrap; width: 56px; }
-  .ellipsis { max-width: 120px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-
-  .footer {
-    margin-top: auto;
+  /* ── Highlight row (big number + big value) ── */
+  .c-highlight {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    border-top: 1px solid #ddd;
-    padding-top: 1.5mm;
+    padding: 0.5mm 0;
+    border-bottom: 1px solid #eee;
+  }
+  .c-num-block  { display: flex; flex-direction: column; }
+  .c-num        { font-weight: bold; line-height: 1; color: #111; }
+  .c-num-sub    { font-size: 6.5px; font-weight: bold; color: #777; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 1px; }
+  .c-amnt-block { display: flex; flex-direction: column; align-items: flex-end; }
+  .c-amnt       { font-size: 28px; font-weight: bold; line-height: 1; color: #be123c; }
+  .c-amnt-sub   { font-size: 6.5px; font-weight: bold; color: #777; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 1px; }
+
+  /* ── Client info block ── */
+  .c-info {
+    font-size: 7.5px;
+    line-height: 1;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 1.5mm;
+  }
+  .r {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    white-space: nowrap;
+    margin-bottom: 1.1mm;
+  }
+  .r:last-child { margin-bottom: 0; }
+  .r b  { font-weight: bold; color: #333; flex-shrink: 0; }
+  .ell  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .c-due { font-weight: bold; color: #be123c; }
+
+  /* ── Footer (receipt lines + QR) ── */
+  .c-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
     gap: 2mm;
   }
-
-  .manual { flex: 1; }
-  .mline {
+  .c-receipt { flex: 1; min-width: 0; }
+  .fl {
     display: flex;
     align-items: baseline;
     gap: 1mm;
     border-bottom: 0.5px solid #bbb;
     margin-bottom: 1.2mm;
-    padding-bottom: 1px;
+    padding-bottom: 0.5px;
   }
-  .fill { flex: 1; }
-  .lsm { font-size: 7px; font-weight: bold; white-space: nowrap; color: #555; }
-  .pix-txt { font-size: 7px; margin-top: 0.8mm; word-break: break-all; }
+  .rl    { font-size: 7px; font-weight: bold; color: #333; white-space: nowrap; flex-shrink: 0; }
+  .fline { flex: 1; }
+  .pix   { font-size: 6.5px; color: #444; margin-top: 0.8mm; word-break: break-all; line-height: 1.3; }
+  .pix b { font-weight: bold; color: #333; }
 
-  .qr-wrap { text-align: center; flex-shrink: 0; }
-  .qr-lbl { font-size: 7px; font-weight: bold; color: #be123c; margin-top: 1px; }
+  .c-qr     { text-align: center; flex-shrink: 0; }
+  .c-qr-lbl { font-size: 6px; font-weight: bold; color: #be123c; margin-top: 1px; white-space: nowrap; }
 </style>
 </head>
 <body>
