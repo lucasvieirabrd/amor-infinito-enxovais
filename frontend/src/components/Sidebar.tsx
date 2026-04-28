@@ -47,11 +47,11 @@ const Sidebar: React.FC = () => {
         }`}
       >
         {/* Logo */}
-        <div className="flex items-center justify-center h-header border-b border-white border-opacity-20">
+        <div className="flex items-center justify-center border-b border-white border-opacity-20" style={{ padding: '16px' }}>
           <img
             src="/logo-amor-infinito.jpeg"
             alt="Amor Infinito Enxovais"
-            style={{ height: 40, width: 'auto' }}
+            style={{ height: 85, width: 'auto', mixBlendMode: 'multiply' }}
             onError={(e) => {
               e.currentTarget.style.display = 'none';
               const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
