@@ -48,7 +48,17 @@ const Sidebar: React.FC = () => {
       >
         {/* Logo */}
         <div className="flex items-center justify-center h-header border-b border-white border-opacity-20">
-          <h1 className="text-2xl font-bold">Amor Infinito</h1>
+          <img
+            src="/logo-amor-infinito.jpeg"
+            alt="Amor Infinito Enxovais"
+            style={{ height: 40, width: 'auto' }}
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+              if (fallback) fallback.style.display = 'block';
+            }}
+          />
+          <h1 className="text-2xl font-bold" style={{ display: 'none' }}>Amor Infinito</h1>
         </div>
 
         {/* Menu Items */}
