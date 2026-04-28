@@ -26,7 +26,6 @@ function crc16(str: string): string {
 function buildPixPayload(key: string, amount: number, merchantName: string, city: string): string {
   const merchantAccount =
     emvField('00', 'BR.GOV.BCB.PIX') + emvField('01', key.trim());
-
   const body =
     emvField('00', '01') +
     emvField('26', merchantAccount) +
@@ -38,7 +37,6 @@ function buildPixPayload(key: string, amount: number, merchantName: string, city
     emvField('60', city.slice(0, 15)) +
     emvField('62', emvField('05', '***')) +
     '6304';
-
   return body + crc16(body);
 }
 
@@ -59,6 +57,20 @@ function fmtPhone(rawPhone: string | null): string {
   const digits = rawPhone.replace(/\D/g, '');
   const local = digits.length === 13 && digits.startsWith('55') ? digits.slice(2) : digits;
   return local.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+}
+
+// --- Logo (SVG inline → base64 data URI, no image file needed) ---
+
+function getLogoDataUri(): string {
+  // Inline SVG: heart + "AMOR INFINITO / ENXOVAIS"
+  const svg = [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40">',
+    '<text x="1" y="30" font-family="Arial,sans-serif" font-size="30" fill="#e53e3e">&#x2665;</text>',
+    '<text x="40" y="18" font-family="Arial,sans-serif" font-size="12" font-weight="bold" fill="#be123c">AMOR INFINITO</text>',
+    '<text x="40" y="33" font-family="Arial,sans-serif" font-size="9" fill="#888" letter-spacing="1">ENXOVAIS</text>',
+    '</svg>',
+  ].join('');
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 }
 
 // --- Data fetching ---
@@ -103,7 +115,6 @@ export async function getCarneData(saleId: string) {
 
   const pixCelita  = pixRows.find(r => r.key === 'pix_celita')?.value  ?? '';
   const pixMarcelo = pixRows.find(r => r.key === 'pix_marcelo')?.value ?? '';
-  // pix_qrcode is used for the QR code EMV payload (random key is more reliable for static QR)
   const pixQrcode  = pixRows.find(r => r.key === 'pix_qrcode')?.value  ?? pixCelita;
 
   const productNames = itemRows.map(i => i.productName).filter(Boolean).join(', ');
@@ -120,6 +131,7 @@ async function buildCarneHtml(
 ): Promise<string> {
   const { sale, productNames, entryInstallment, regularInstallments, pixCelita, pixMarcelo, pixQrcode } = data;
   const totalInstallments = regularInstallments.length;
+  const logoSrc = getLogoDataUri();
 
   const allCards: { inst: (typeof regularInstallments)[0]; isEntry: boolean }[] = [];
   if (entryInstallment) allCards.push({ inst: entryInstallment as any, isEntry: true });
@@ -130,78 +142,68 @@ async function buildCarneHtml(
   for (const { inst, isEntry } of allCards) {
     const amount = parseFloat(inst.originalAmount.toString());
 
-    // QR code uses pix_qrcode key (random UUID key → more reliable for static QR with amount)
+    // QR Code — uses pix_qrcode (UUID key) for more reliable static QR with amount
     let qrHtml = '';
     if (pixQrcode && amount > 0) {
       try {
         const payload = buildPixPayload(pixQrcode, amount, 'AMOR INFINITO ENXOVAIS', 'JABOTICABAL');
-        const dataUrl = await QRCode.toDataURL(payload, {
-          width: 70,
-          margin: 1,
-          errorCorrectionLevel: 'M',
-        });
-        qrHtml = `
-          <div class="c-qr">
-            <img src="${dataUrl}" width="70" height="70" alt="PIX QR Code"/>
-            <div class="c-qr-lbl">Pague com QRCODE</div>
-          </div>`;
+        const dataUrl = await QRCode.toDataURL(payload, { width: 80, margin: 1, errorCorrectionLevel: 'M' });
+        qrHtml = `<div class="qr-wrap"><img class="qr-img" src="${dataUrl}" alt="PIX"/><span class="qr-label">Pague com QRCODE</span></div>`;
       } catch {
-        // QR generation is best-effort
+        // best-effort
       }
     }
 
-    // Installment number label — "ENTRADA" for entry card, "01/12" for regular
-    const instLabel    = isEntry
+    // BLOCO 2 labels
+    const isEntrada   = isEntry;
+    const numText     = isEntrada
       ? 'ENTRADA'
       : `${String(inst.installmentNumber).padStart(2, '0')}/${String(totalInstallments).padStart(2, '0')}`;
-    const instSubLabel = isEntry ? '' : 'PARCELA';
-    const valSubLabel  = isEntry ? 'VALOR ENTRADA' : 'VALOR PARCELA';
+    const numFontSize = isEntrada ? '32px' : '42px';
+    const numSublabel = isEntrada ? '' : 'PARCELA';
+    const amtSublabel = isEntrada ? 'VALOR ENTRADA' : 'VALOR PARCELA';
 
-    // "ENTRADA: R$X | TOTAL VENDA: R$Y" shown on regular cards when sale has entry
-    const entryTotalRow = (!isEntry && entryInstallment)
-      ? `<div class="r">
-           <b>ENTRADA:</b>&nbsp;${brl(entryInstallment.originalAmount)}
-           &nbsp;&nbsp;<b>TOTAL VENDA:</b>&nbsp;${brl(sale.totalAmount)}
-         </div>`
-      : `<div class="r"><b>TOTAL VENDA:</b>&nbsp;${brl(sale.totalAmount)}</div>`;
+    // BLOCO 3: ENTRADA+TOTAL row (only on regular cards when sale has entry)
+    const entradaRow = (!isEntrada && entryInstallment)
+      ? `<div class="dr"><b>ENTRADA:</b>&nbsp;${brl(entryInstallment.originalAmount)}&nbsp;&nbsp;<b>TOTAL VENDA:</b>&nbsp;${brl(sale.totalAmount)}</div>`
+      : `<div class="dr"><b>TOTAL VENDA:</b>&nbsp;${brl(sale.totalAmount)}</div>`;
 
-    // "ENTRADA" label sits narrower at 28px; number pair "01/12" can use 36px
-    const numFontSize = isEntry ? '28px' : '36px';
+    // Truncate product name at 35 chars
+    const product = productNames.length > 35 ? productNames.slice(0, 35) + '…' : productNames;
 
-    cardHtmls.push(`
-<div class="carne">
+    cardHtmls.push(`<div class="carne">
 
-  <div class="c-header">
-    <div class="c-logo">&#10084; Amor Infinito Enxovais</div>
-    <div class="c-meta"><strong>${sale.saleNumber}</strong><br>${fmtDate(sale.saleDate)}</div>
+  <div class="b1">
+    <img class="logo" src="${logoSrc}" alt="Amor Infinito Enxovais"/>
+    <div class="b1r"><div>Venda: <strong>${sale.saleNumber}</strong></div><div>Data: ${fmtDate(sale.saleDate)}</div></div>
   </div>
 
-  <div class="c-highlight">
-    <div class="c-num-block">
-      <div class="c-num" style="font-size:${numFontSize}">${instLabel}</div>
-      ${instSubLabel ? `<div class="c-num-sub">${instSubLabel}</div>` : ''}
+  <div class="b2">
+    <div class="b2l">
+      <span class="b2-num" style="font-size:${numFontSize}">${numText}</span>
+      ${numSublabel ? `<span class="b2-sub">${numSublabel}</span>` : ''}
     </div>
-    <div class="c-amnt-block">
-      <div class="c-amnt">${brl(amount)}</div>
-      <div class="c-amnt-sub">${valSubLabel}</div>
+    <div class="b2r">
+      <span class="b2-amt">${brl(amount)}</span>
+      <span class="b2-sub">${amtSublabel}</span>
     </div>
   </div>
 
-  <div class="c-info">
-    <div class="r"><b>CLIENTE:</b>&nbsp;<span class="ell">${sale.customerName ?? ''}</span></div>
-    <div class="r"><b>CPF:</b>&nbsp;${sale.customerCpf ?? ''}&nbsp;&nbsp;&nbsp;<b>FONE:</b>&nbsp;${fmtPhone(sale.customerPhone)}</div>
-    <div class="r"><b>PRODUTO:</b>&nbsp;<span class="ell">${productNames}</span></div>
-    ${entryTotalRow}
-    <div class="r"><b>VENCIMENTO:</b>&nbsp;<span class="c-due">${fmtDate(inst.dueDate)}</span></div>
+  <div class="b3">
+    <div class="dr"><b>CLIENTE:</b>&nbsp;${sale.customerName ?? ''}</div>
+    <div class="dr"><b>CPF:</b>&nbsp;${sale.customerCpf ?? ''}&nbsp;&nbsp;&nbsp;<b>FONE:</b>&nbsp;${fmtPhone(sale.customerPhone)}</div>
+    <div class="dr"><b>PRODUTO:</b>&nbsp;${product}</div>
+    ${entradaRow}
+    <div class="dr"><b>DATA VENCIMENTO:</b>&nbsp;<span class="due">${fmtDate(inst.dueDate)}</span></div>
   </div>
 
-  <div class="c-footer">
-    <div class="c-receipt">
-      <div class="fl"><span class="rl">Recebido em:</span><span class="fline"></span></div>
-      <div class="fl"><span class="rl">Recebido por:</span><span class="fline"></span></div>
-      <div class="fl"><span class="rl">Valor recebido: R$</span><span class="fline"></span></div>
-      ${pixCelita  ? `<div class="pix"><b>PIX CELITA:</b> ${pixCelita}</div>`  : ''}
-      ${pixMarcelo ? `<div class="pix"><b>PIX MARCELO:</b> ${pixMarcelo}</div>` : ''}
+  <div class="b4">
+    <div class="b4l">
+      <div class="rl"><span class="rll">Recebido em:</span><span class="rlfill"></span></div>
+      <div class="rl"><span class="rll">Recebido por:</span><span class="rlfill"></span></div>
+      <div class="rl"><span class="rll">Valor recebido: R$</span><span class="rlfill"></span></div>
+      ${pixCelita  ? `<div class="pt"><b>PIX CELITA:</b> ${pixCelita}</div>`  : ''}
+      ${pixMarcelo ? `<div class="pt"><b>PIX MARCELO:</b> ${pixMarcelo}</div>` : ''}
     </div>
     ${qrHtml}
   </div>
@@ -209,114 +211,104 @@ async function buildCarneHtml(
 </div>`);
   }
 
-  return `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<style>
-  @page { size: A4; margin: 8mm; }
+  const css = `
+  @page { size: A4; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 8px; color: #111; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
 
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 4mm;
+    gap: 3mm;
   }
 
-  /* ── Card shell ── */
+  /* ── Card shell: height fixed so exactly 4 rows fit per A4 page ── */
   .carne {
     border: 1px dashed #aaa;
-    padding: 3mm 3.5mm;
+    padding: 2mm;
     display: flex;
     flex-direction: column;
-    gap: 1.8mm;
-    page-break-inside: avoid;
-    background: #fff;
+    gap: 1mm;
+    height: 69mm;
     overflow: hidden;
+    background: #fff;
+    page-break-inside: avoid;
   }
 
-  /* ── Header ── */
-  .c-header {
+  /* BLOCO 1 — Header */
+  .b1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 1mm;
+  }
+  .logo { height: 40px; width: auto; }
+  .b1r { text-align: right; font-size: 9px; color: #333; line-height: 1.6; }
+  .b1r strong { font-weight: bold; }
+
+  /* BLOCO 2 — Destaque Principal */
+  .b2 {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 1mm;
+  }
+  .b2l { display: flex; flex-direction: column; }
+  .b2-num { font-weight: 900; color: #111; line-height: 1; }
+  .b2-sub { font-size: 8px; color: #666; letter-spacing: 1px; margin-top: 2px; }
+  .b2r { display: flex; flex-direction: column; align-items: flex-end; }
+  .b2-amt { font-size: 34px; font-weight: 900; color: #e53e3e; line-height: 1; }
+
+  /* BLOCO 3 — Dados */
+  .b3 {
+    font-size: 8.5px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 1mm;
+  }
+  .dr {
+    display: flex;
+    align-items: baseline;
+    white-space: nowrap;
+    overflow: hidden;
+    line-height: 1;
+    margin-bottom: 1.5px;
+  }
+  .dr:last-child { margin-bottom: 0; }
+  .dr b { font-weight: bold; flex-shrink: 0; }
+  .due { color: #e53e3e; font-weight: bold; }
+
+  /* BLOCO 4 — Rodapé */
+  .b4 {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    padding-bottom: 1.5mm;
-    border-bottom: 1px solid #ddd;
-  }
-  .c-logo {
-    font-size: 9.5px;
-    font-weight: bold;
-    color: #be123c;
-    line-height: 1.3;
-  }
-  .c-meta {
-    text-align: right;
-    font-size: 7px;
-    color: #555;
-    line-height: 1.5;
-  }
-
-  /* ── Highlight row (big number + big value) ── */
-  .c-highlight {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    padding: 0.5mm 0;
-    border-bottom: 1px solid #eee;
-  }
-  .c-num-block  { display: flex; flex-direction: column; }
-  .c-num        { font-weight: bold; line-height: 1; color: #111; }
-  .c-num-sub    { font-size: 6.5px; font-weight: bold; color: #777; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 1px; }
-  .c-amnt-block { display: flex; flex-direction: column; align-items: flex-end; }
-  .c-amnt       { font-size: 28px; font-weight: bold; line-height: 1; color: #be123c; }
-  .c-amnt-sub   { font-size: 6.5px; font-weight: bold; color: #777; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 1px; }
-
-  /* ── Client info block ── */
-  .c-info {
-    font-size: 7.5px;
-    line-height: 1;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 1.5mm;
-  }
-  .r {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: nowrap;
-    overflow: hidden;
-    white-space: nowrap;
-    margin-bottom: 1.1mm;
-  }
-  .r:last-child { margin-bottom: 0; }
-  .r b  { font-weight: bold; color: #333; flex-shrink: 0; }
-  .ell  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .c-due { font-weight: bold; color: #be123c; }
-
-  /* ── Footer (receipt lines + QR) ── */
-  .c-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
     gap: 2mm;
+    flex: 1;
   }
-  .c-receipt { flex: 1; min-width: 0; }
-  .fl {
+  .b4l { flex: 1; min-width: 0; }
+  .rl {
     display: flex;
     align-items: baseline;
     gap: 1mm;
-    border-bottom: 0.5px solid #bbb;
-    margin-bottom: 1.2mm;
+    border-bottom: 0.5px solid #ccc;
+    margin-bottom: 2px;
     padding-bottom: 0.5px;
   }
-  .rl    { font-size: 7px; font-weight: bold; color: #333; white-space: nowrap; flex-shrink: 0; }
-  .fline { flex: 1; }
-  .pix   { font-size: 6.5px; color: #444; margin-top: 0.8mm; word-break: break-all; line-height: 1.3; }
-  .pix b { font-weight: bold; color: #333; }
+  .rll { font-size: 8px; white-space: nowrap; flex-shrink: 0; line-height: 1.8; }
+  .rlfill { flex: 1; }
+  .pt { font-size: 8px; line-height: 1.8; word-break: break-all; }
+  .pt b { font-weight: bold; }
 
-  .c-qr     { text-align: center; flex-shrink: 0; }
-  .c-qr-lbl { font-size: 6px; font-weight: bold; color: #be123c; margin-top: 1px; white-space: nowrap; }
-</style>
-</head>
+  .qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 1mm; flex-shrink: 0; }
+  .qr-img { width: 76px; height: 76px; }
+  .qr-label { font-size: 7.5px; font-weight: bold; color: #333; white-space: nowrap; }
+  `;
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><style>${css}</style></head>
 <body>
   <div class="grid">
     ${cardHtmls.join('\n')}
@@ -348,7 +340,11 @@ export async function generateCarnePdf(saleId: string): Promise<Buffer> {
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdf = await page.pdf({ format: 'A4', printBackground: true });
+    const pdf = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '5mm', bottom: '5mm', left: '5mm', right: '5mm' },
+    });
     return Buffer.from(pdf);
   } finally {
     await browser.close();
