@@ -63,13 +63,19 @@ function fmtPhone(rawPhone: string | null): string {
 
 // --- Logo ---
 
-const logoPath = path.join(__dirname, '../../src/assets/logo-amor-infinito.jpeg');
+const possiblePaths = [
+  path.join(__dirname, '../assets/logo-amor-infinito.jpeg'),
+  path.join(__dirname, '../../src/assets/logo-amor-infinito.jpeg'),
+  path.join(process.cwd(), 'src/assets/logo-amor-infinito.jpeg'),
+  path.join(process.cwd(), 'dist/assets/logo-amor-infinito.jpeg'),
+];
 let logoSrc = '';
-try {
-  const logoBase64 = fs.readFileSync(logoPath).toString('base64');
-  logoSrc = `data:image/jpeg;base64,${logoBase64}`;
-} catch {
-  logoSrc = '';
+for (const p of possiblePaths) {
+  if (fs.existsSync(p)) {
+    const logoBase64 = fs.readFileSync(p).toString('base64');
+    logoSrc = `data:image/jpeg;base64,${logoBase64}`;
+    break;
+  }
 }
 
 const logoFallbackSvg = [
@@ -166,7 +172,7 @@ async function buildCarneHtml(
     const numText     = isEntrada
       ? 'ENTRADA'
       : `${String(inst.installmentNumber).padStart(2, '0')}/${String(totalInstallments).padStart(2, '0')}`;
-    const numFontSize = isEntrada ? '32px' : '34px';
+    const numFontSize = '30px';
     const numSublabel = isEntrada ? '' : 'PARCELA';
     const amtSublabel = isEntrada ? 'VALOR ENTRADA' : 'VALOR PARCELA';
 
@@ -267,7 +273,7 @@ async function buildCarneHtml(
   .b2-num { font-weight: 900; color: #111; line-height: 1; }
   .b2-sub { font-size: 8px; color: #666; letter-spacing: 1px; margin-top: 2px; }
   .b2r { display: flex; flex-direction: column; align-items: flex-end; }
-  .b2-amt { font-size: 26px; font-weight: 900; color: #e53e3e; line-height: 1; }
+  .b2-amt { font-size: 30px; font-weight: 900; color: #e53e3e; line-height: 1; }
 
   /* BLOCO 3 — Dados */
   .b3 {

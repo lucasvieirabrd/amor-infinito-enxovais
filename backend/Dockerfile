@@ -21,6 +21,8 @@ COPY backend/ .
 
 RUN npm run build
 
+RUN cp -r src/assets dist/assets
+
 EXPOSE 3000
 
 CMD ["npm", "start"]
