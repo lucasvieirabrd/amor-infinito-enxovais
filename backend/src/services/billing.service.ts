@@ -199,7 +199,7 @@ export class BillingService {
   /**
    * Gera o PDF do relatório de cobrança e envia via WhatsApp para os admins (07h30).
    */
-  async sendDailyPdfReport() {
+  async sendDailyPdfReport(): Promise<{ mediaId: string; results: { phone: string; success: boolean; messageId?: string; error?: string }[] }> {
     const dateStr = format(new Date(), 'dd/MM/yyyy');
     const filename = `relatorio-cobranca-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
     const caption = `📊 Relatório de Cobrança - ${dateStr}\nSegue em anexo o relatório completo de cobranças do dia.`;
@@ -210,14 +210,20 @@ export class BillingService {
     const mediaId = await whatsAppService.uploadMedia(buffer, 'application/pdf', filename);
     console.log(`[BillingService] PDF enviado ao WhatsApp Media API, mediaId: ${mediaId}`);
 
+    const results: { phone: string; success: boolean; messageId?: string; error?: string }[] = [];
+
     for (const phone of ADMIN_PHONES) {
       const result = await whatsAppService.sendDocumentMessage(phone, mediaId, filename, caption);
       if (result?.error) {
         console.error(`[BillingService] ✗ Falha ao enviar PDF para ${phone}:`, result.message);
+        results.push({ phone, success: false, error: result.message });
       } else {
         console.log(`[BillingService] ✓ PDF enviado para ${phone}`);
+        results.push({ phone, success: true, messageId: result?.messages?.[0]?.id });
       }
     }
+
+    return { mediaId, results };
   }
 
   /**
