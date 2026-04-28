@@ -61,11 +61,25 @@ function fmtPhone(rawPhone: string | null): string {
   return local.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
 }
 
-// --- Logo (PNG file → base64 data URI) ---
+// --- Logo ---
 
-const logoPath = path.join(__dirname, '../assets/logo-amor-infinito.png.jpeg');
-const logoBase64 = fs.readFileSync(logoPath).toString('base64');
-const logoSrc = `data:image/jpeg;base64,${logoBase64}`;
+const logoPath = path.join(__dirname, '../../src/assets/logo-amor-infinito.jpeg');
+let logoSrc = '';
+try {
+  const logoBase64 = fs.readFileSync(logoPath).toString('base64');
+  logoSrc = `data:image/jpeg;base64,${logoBase64}`;
+} catch {
+  logoSrc = '';
+}
+
+const logoFallbackSvg = [
+  '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40">',
+  '<text x="1" y="30" font-family="Arial,sans-serif" font-size="30" fill="#e53e3e">&#x2665;</text>',
+  '<text x="40" y="18" font-family="Arial,sans-serif" font-size="12" font-weight="bold" fill="#be123c">AMOR INFINITO</text>',
+  '<text x="40" y="33" font-family="Arial,sans-serif" font-size="9" fill="#888" letter-spacing="1">ENXOVAIS</text>',
+  '</svg>',
+].join('');
+const logoFallbackSrc = `data:image/svg+xml;base64,${Buffer.from(logoFallbackSvg).toString('base64')}`;
 
 // --- Data fetching ---
 
@@ -167,7 +181,10 @@ async function buildCarneHtml(
     cardHtmls.push(`<div class="carne">
 
   <div class="b1">
-    <img class="logo" src="${logoSrc}" alt="Amor Infinito Enxovais"/>
+    ${logoSrc
+      ? `<img class="logo" src="${logoSrc}" alt="Amor Infinito Enxovais"/>`
+      : `<img class="logo" src="${logoFallbackSrc}" alt="Amor Infinito Enxovais"/>`
+    }
     <div class="b1r"><div>Venda: <strong>${sale.saleNumber}</strong></div><div>Data: ${fmtDate(sale.saleDate)}</div></div>
   </div>
 
