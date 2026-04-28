@@ -2,6 +2,8 @@ import puppeteer from 'puppeteer';
 import QRCode from 'qrcode';
 import { format } from 'date-fns';
 import { eq, and, isNull, inArray, asc } from 'drizzle-orm';
+import fs from 'fs';
+import path from 'path';
 import { db } from '../database';
 import { sales, saleItems, installments, customers, products, settings } from '../database/schema';
 import { AppError } from '../utils/AppError';
@@ -59,19 +61,11 @@ function fmtPhone(rawPhone: string | null): string {
   return local.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
 }
 
-// --- Logo (SVG inline → base64 data URI, no image file needed) ---
+// --- Logo (PNG file → base64 data URI) ---
 
-function getLogoDataUri(): string {
-  // Inline SVG: heart + "AMOR INFINITO / ENXOVAIS"
-  const svg = [
-    '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40">',
-    '<text x="1" y="30" font-family="Arial,sans-serif" font-size="30" fill="#e53e3e">&#x2665;</text>',
-    '<text x="40" y="18" font-family="Arial,sans-serif" font-size="12" font-weight="bold" fill="#be123c">AMOR INFINITO</text>',
-    '<text x="40" y="33" font-family="Arial,sans-serif" font-size="9" fill="#888" letter-spacing="1">ENXOVAIS</text>',
-    '</svg>',
-  ].join('');
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
-}
+const logoPath = path.join(__dirname, '../assets/logo-amor-infinito.png.jpeg');
+const logoBase64 = fs.readFileSync(logoPath).toString('base64');
+const logoSrc = `data:image/jpeg;base64,${logoBase64}`;
 
 // --- Data fetching ---
 
@@ -131,7 +125,6 @@ async function buildCarneHtml(
 ): Promise<string> {
   const { sale, productNames, entryInstallment, regularInstallments, pixCelita, pixMarcelo, pixQrcode } = data;
   const totalInstallments = regularInstallments.length;
-  const logoSrc = getLogoDataUri();
 
   const allCards: { inst: (typeof regularInstallments)[0]; isEntry: boolean }[] = [];
   if (entryInstallment) allCards.push({ inst: entryInstallment as any, isEntry: true });
@@ -159,7 +152,7 @@ async function buildCarneHtml(
     const numText     = isEntrada
       ? 'ENTRADA'
       : `${String(inst.installmentNumber).padStart(2, '0')}/${String(totalInstallments).padStart(2, '0')}`;
-    const numFontSize = isEntrada ? '32px' : '42px';
+    const numFontSize = isEntrada ? '32px' : '34px';
     const numSublabel = isEntrada ? '' : 'PARCELA';
     const amtSublabel = isEntrada ? 'VALOR ENTRADA' : 'VALOR PARCELA';
 
@@ -229,8 +222,6 @@ async function buildCarneHtml(
     display: flex;
     flex-direction: column;
     gap: 1mm;
-    height: 69mm;
-    overflow: hidden;
     background: #fff;
     page-break-inside: avoid;
   }
@@ -243,7 +234,7 @@ async function buildCarneHtml(
     border-bottom: 1px solid #ddd;
     padding-bottom: 1mm;
   }
-  .logo { height: 40px; width: auto; }
+  .logo { height: 38px; width: auto; }
   .b1r { text-align: right; font-size: 9px; color: #333; line-height: 1.6; }
   .b1r strong { font-weight: bold; }
 
@@ -259,7 +250,7 @@ async function buildCarneHtml(
   .b2-num { font-weight: 900; color: #111; line-height: 1; }
   .b2-sub { font-size: 8px; color: #666; letter-spacing: 1px; margin-top: 2px; }
   .b2r { display: flex; flex-direction: column; align-items: flex-end; }
-  .b2-amt { font-size: 34px; font-weight: 900; color: #e53e3e; line-height: 1; }
+  .b2-amt { font-size: 26px; font-weight: 900; color: #e53e3e; line-height: 1; }
 
   /* BLOCO 3 — Dados */
   .b3 {
@@ -302,7 +293,7 @@ async function buildCarneHtml(
   .pt b { font-weight: bold; }
 
   .qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 1mm; flex-shrink: 0; }
-  .qr-img { width: 76px; height: 76px; }
+  .qr-img { width: 70px; height: 70px; }
   .qr-label { font-size: 7.5px; font-weight: bold; color: #333; white-space: nowrap; }
   `;
 
