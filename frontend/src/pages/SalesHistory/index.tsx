@@ -5,7 +5,7 @@ import {
   FiSearch, FiFilter, FiChevronLeft, FiChevronRight, FiEye, FiTrash2, FiAlertCircle, FiLoader,
   FiDownload
 } from 'react-icons/fi';
-import { Button, Card, Badge, Input, Modal, Loading } from '../../components/ui';
+import { Button, Card, Badge, Modal, Loading } from '../../components/ui';
 import { format, isToday } from 'date-fns';
 
 interface SaleItem {
@@ -185,22 +185,22 @@ export const SalesHistory: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <Card>
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 mb-4">
-            <FiFilter size={20} className="text-gray-600" />
-            <h3 className="font-semibold text-gray-900">Filtros</h3>
+      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <FiFilter size={18} className="text-gray-500" />
+            <span className="font-semibold text-gray-900">Filtros</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          <div className="flex flex-wrap gap-3 items-center">
             <div className="relative">
-              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
               <input
                 type="text"
                 placeholder="Buscar por cliente ou nº venda..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="input-base pl-10 w-full"
+                className="h-[44px] pl-9 pr-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors w-56"
               />
             </div>
 
@@ -210,7 +210,7 @@ export const SalesHistory: React.FC = () => {
                 setPaymentFilter(e.target.value as any);
                 setPage(1);
               }}
-              className="input-base w-full"
+              className="h-[44px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
             >
               <option value="all">Todas as formas</option>
               <option value="cash">À Vista</option>
@@ -224,37 +224,38 @@ export const SalesHistory: React.FC = () => {
                 setOriginFilter(e.target.value as any);
                 setPage(1);
               }}
-              className="input-base w-full"
+              className="h-[44px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
             >
               <option value="all">Todas as origens</option>
               <option value="sales">Vendas</option>
               <option value="imported">Importados</option>
             </select>
 
-            <Input
-              label="Data Inicial"
+            <input
               type="date"
+              placeholder="Data inicial"
               value={startDate}
               onChange={(e) => {
                 setStartDate(e.target.value);
                 setPage(1);
               }}
+              className="h-[44px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
             />
 
-            <Input
-              label="Data Final"
+            <input
               type="date"
+              placeholder="Data final"
               value={endDate}
               onChange={(e) => {
                 setEndDate(e.target.value);
                 setPage(1);
               }}
+              className="h-[44px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
             />
-          </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
             <Button
               variant="secondary"
+              size="sm"
               onClick={() => {
                 setSearchInput('');
                 setSearch('');
@@ -264,12 +265,13 @@ export const SalesHistory: React.FC = () => {
                 setEndDate('');
                 setPage(1);
               }}
+              className="h-[44px]"
             >
               Limpar Filtros
             </Button>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* Sales Table */}
       <Card>
