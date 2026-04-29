@@ -612,7 +612,7 @@ export const Messages: React.FC = () => {
       {/* ── KANBAN MODE ── */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {viewMode === 'kanban' && (
-        <div className="flex-1 min-h-0 flex gap-3 overflow-x-auto pb-2">
+        <div className="flex-1 min-h-0 flex gap-6 overflow-x-auto pb-4">
           {KANBAN_COLUMNS.map(col => {
             const colConvs = (conversations ?? []).filter(c => {
               const tag = c.conversationTag || 'none';
@@ -623,10 +623,10 @@ export const Messages: React.FC = () => {
             return (
               <div
                 key={col.value}
-                className={`flex-shrink-0 w-64 flex flex-col rounded-xl border-2 transition-colors ${
+                className={`flex-shrink-0 w-[300px] flex flex-col rounded-xl border-2 transition-colors ${
                   isOver ? 'border-primary bg-primary bg-opacity-5' : `border ${col.header}`
                 }`}
-                style={{ minHeight: 0 }}
+                style={{ minHeight: '520px' }}
                 onDragOver={e => handleDragOver(e, col.value)}
                 onDragLeave={() => setDragOverCol(null)}
                 onDrop={() => handleDrop(col.value)}
@@ -652,7 +652,7 @@ export const Messages: React.FC = () => {
                       onDragStart={() => handleDragStart(conv)}
                       onDragEnd={handleDragEnd}
                       onClick={() => setSelectedConversation(conv)}
-                      className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm cursor-pointer hover:shadow-md hover:border-primary transition-all select-none"
+                      className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm cursor-pointer hover:shadow-md hover:border-primary transition-all select-none"
                     >
                       <div className="flex items-start justify-between gap-1 mb-1.5">
                         <p className="font-medium text-gray-900 text-sm truncate flex-1">{displayName(conv)}</p>
