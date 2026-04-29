@@ -48,13 +48,11 @@ type ViewMode = 'list' | 'kanban';
 // ─── Tag definitions ─────────────────────────────────────────────────────────
 
 const TAGS = [
-  { value: 'Pagamento', label: 'Pagamento', badge: 'success' as const, color: 'bg-green-100 text-green-800'  },
-  { value: 'Cobrança',  label: 'Cobrança',  badge: 'error'   as const, color: 'bg-red-100 text-red-800'     },
+  { value: 'Cobrança',  label: 'Cobrança',  badge: 'error'   as const, color: 'bg-red-100 text-red-800'      },
+  { value: 'Venda',     label: 'Venda',     badge: 'success' as const, color: 'bg-green-100 text-green-800'  },
+  { value: 'Follow',    label: 'Follow',    badge: 'info'    as const, color: 'bg-blue-100 text-blue-800'    },
   { value: 'Anúncios',  label: 'Anúncios',  badge: 'info'    as const, color: 'bg-purple-100 text-purple-800' },
-  { value: 'Dúvida',    label: 'Dúvida',    badge: 'info'    as const, color: 'bg-blue-100 text-blue-800'   },
-  { value: 'Urgente',   label: 'Urgente',   badge: 'warning' as const, color: 'bg-orange-100 text-orange-800' },
-  { value: 'Resolvido', label: 'Resolvido', badge: 'success' as const, color: 'bg-gray-100 text-gray-600'   },
-  { value: 'none',      label: 'Sem tag',   badge: 'info'    as const, color: 'bg-gray-100 text-gray-500'   },
+  { value: 'none',      label: 'Sem Tag',   badge: 'default' as const, color: 'bg-gray-100 text-gray-500'    },
 ];
 
 // ─── Kanban column definitions ────────────────────────────────────────────────
@@ -64,7 +62,7 @@ const KANBAN_COLUMNS = [
   { value: 'Venda',    label: 'Venda',    color: 'bg-green-100 text-green-700', header: 'bg-green-50 border-green-200' },
   { value: 'Follow',   label: 'Follow',   color: 'bg-blue-100 text-blue-700',   header: 'bg-blue-50 border-blue-200'  },
   { value: 'Anúncios', label: 'Anúncios', color: 'bg-purple-100 text-purple-700',header: 'bg-purple-50 border-purple-200'},
-  { value: 'none',     label: 'Sem tag',  color: 'bg-gray-100 text-gray-500',   header: 'bg-gray-50 border-gray-200'  },
+  { value: 'none',     label: 'Sem Tag',  color: 'bg-gray-100 text-gray-500',   header: 'bg-gray-50 border-gray-200'  },
 ];
 
 const TAB_ALL = 'Todas';
