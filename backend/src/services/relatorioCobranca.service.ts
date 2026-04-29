@@ -61,6 +61,8 @@ interface InstallmentRow {
   id: string;
   installmentNumber: number;
   originalAmount: number;
+  paidAmount: number;
+  status: string;
   dueDate: Date;
   customerName: string;
   customerPhone: string;
@@ -83,6 +85,8 @@ async function fetchReportData(): Promise<{
       i.id,
       i.installment_number,
       i.original_amount,
+      COALESCE(i.paid_amount, 0) AS paid_amount,
+      i.status,
       i.due_date,
       c.name            AS customer_name,
       c.phone           AS customer_phone,
@@ -145,6 +149,8 @@ async function fetchReportData(): Promise<{
     id: String(r.id),
     installmentNumber: Number(r.installment_number),
     originalAmount: parseFloat(r.original_amount?.toString() ?? '0'),
+    paidAmount: parseFloat(r.paid_amount?.toString() ?? '0'),
+    status: String(r.status ?? ''),
     dueDate: new Date(r.due_date),
     customerName: String(r.customer_name ?? ''),
     customerPhone: String(r.customer_phone ?? ''),
@@ -166,17 +172,29 @@ async function fetchReportData(): Promise<{
 
 function cardHtml(row: InstallmentRow, badge: string, badgeColor: string): string {
   const phone = fmtPhone(row.customerPhone);
+  const isPartial = row.status === 'partial';
+  const partialBadge = isPartial
+    ? `<span class="badge" style="background:#ea580c">Pago parcialmente</span>`
+    : '';
+  const partialDetail = isPartial
+    ? `&nbsp;|&nbsp; Pago: <strong>${brl(row.paidAmount)}</strong>
+    &nbsp;|&nbsp; Restante: <strong>${brl(row.originalAmount - row.paidAmount)}</strong>`
+    : '';
   return `
 <div class="entry">
   <div class="entry-head">
     <span class="entry-name">${row.customerName}</span>
-    <span class="badge" style="background:${badgeColor}">${badge}</span>
+    <div style="display:flex;gap:4px;align-items:center">
+      ${partialBadge}
+      <span class="badge" style="background:${badgeColor}">${badge}</span>
+    </div>
   </div>
   <div class="entry-sub">${phone}</div>
   ${row.address ? `<div class="entry-address">${row.address}</div>` : ''}
   <div class="entry-detail">
     Parcela <strong>${row.installmentNumber}/${row.totalInstallments}</strong>
     &nbsp;|&nbsp; Valor: <strong>${brl(row.originalAmount)}</strong>
+    ${partialDetail}
     &nbsp;|&nbsp; Vencimento: <strong>${fmtDate(row.dueDate)}</strong>
     &nbsp;|&nbsp; Faltam: <strong>${row.remainingCount} parcela(s)</strong>
     &nbsp;|&nbsp; Total restante: <strong>${brl(row.totalRemaining)}</strong>
