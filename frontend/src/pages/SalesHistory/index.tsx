@@ -392,7 +392,7 @@ export const SalesHistory: React.FC = () => {
         isOpen={showDetails && !!selectedSale}
         title={selectedSale ? `Detalhes da Venda ${selectedSale.saleNumber}` : ''}
         onClose={() => setShowDetails(false)}
-        size="lg"
+        size="2xl"
       >
         {selectedSale && (
           <div className="space-y-6">
@@ -585,8 +585,9 @@ export const SalesHistory: React.FC = () => {
             )}
 
             <div className="flex gap-3">
-              {selectedSale.paymentMethod === 'installment' && selectedSale.status === 'completed' && (
+              {selectedSale.paymentMethod === 'installment' && (
                 <Button
+                  variant="danger"
                   onClick={() => handleDownloadCarne(selectedSale.id, selectedSale.saleNumber)}
                   disabled={carneLoading}
                   className="flex-1 flex items-center justify-center gap-2"

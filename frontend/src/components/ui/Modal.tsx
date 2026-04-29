@@ -7,7 +7,7 @@ interface ModalProps {
   title?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
 const Modal: React.FC<ModalProps> = ({
@@ -25,6 +25,7 @@ const Modal: React.FC<ModalProps> = ({
     md: 'max-w-md',
     lg: 'max-w-lg',
     xl: 'max-w-2xl',
+    '2xl': 'max-w-3xl',
   };
 
   return (
@@ -36,9 +37,9 @@ const Modal: React.FC<ModalProps> = ({
       />
 
       {/* Modal */}
-      <div className={`relative bg-white rounded-card shadow-card ${sizeClasses[size]} w-full mx-4`}>
+      <div className={`relative bg-white rounded-card shadow-card ${sizeClasses[size]} w-full mx-4 max-h-[80vh] flex flex-col`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100 flex-shrink-0">
           {title && <h2 className="text-lg font-semibold text-gray-900">{title}</h2>}
           <button
             onClick={onClose}
@@ -49,13 +50,13 @@ const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto flex-1">
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="border-t border-gray-100 p-6 flex justify-end gap-3">
+          <div className="border-t border-gray-100 p-6 flex justify-end gap-3 flex-shrink-0">
             {footer}
           </div>
         )}
