@@ -210,7 +210,7 @@ export const SalesHistory: React.FC = () => {
                 setPaymentFilter(e.target.value as any);
                 setPage(1);
               }}
-              className="h-[44px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
+              className="h-[44px] pl-3 pr-8 min-w-[180px] border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
             >
               <option value="all">Todas as formas</option>
               <option value="cash">À Vista</option>
@@ -224,7 +224,7 @@ export const SalesHistory: React.FC = () => {
                 setOriginFilter(e.target.value as any);
                 setPage(1);
               }}
-              className="h-[44px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
+              className="h-[44px] pl-3 pr-8 min-w-[180px] border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
             >
               <option value="all">Todas as origens</option>
               <option value="sales">Vendas</option>

@@ -82,6 +82,7 @@ export const Billing: React.FC = () => {
   const [newDueDate, setNewDueDate] = useState('');
   const [messagesPeriod, setMessagesPeriod] = useState<Period>('today');
   const [activeTab, setActiveTab] = useState<'parcelas' | 'mensagens'>('parcelas');
+  const [billingStatusFilter, setBillingStatusFilter] = useState<'all' | 'overdue' | 'today'>('all');
 
   const [exportingPdf, setExportingPdf] = useState(false);
   const queryClient = useQueryClient();
@@ -240,12 +241,18 @@ export const Billing: React.FC = () => {
         group.todayCount += 1;
       }
     });
-    return Array.from(map.values()).filter(
-      (g) =>
-        g.customerName.toLowerCase().includes(search.toLowerCase()) ||
-        g.customerPhone.includes(search)
-    );
-  }, [billingRecords, search]);
+    return Array.from(map.values())
+      .filter(
+        (g) =>
+          g.customerName.toLowerCase().includes(search.toLowerCase()) ||
+          g.customerPhone.includes(search)
+      )
+      .filter((g) => {
+        if (billingStatusFilter === 'overdue') return g.overdueCount > 0;
+        if (billingStatusFilter === 'today') return g.todayCount > 0 && g.overdueCount === 0;
+        return true;
+      });
+  }, [billingRecords, search, billingStatusFilter]);
 
   if (isLoading) return <Loading />;
 
@@ -383,6 +390,30 @@ export const Billing: React.FC = () => {
                 className="max-w-xs"
                 icon={<FiSearch />}
               />
+            </div>
+
+            {/* Filtro de status */}
+            <div className="flex gap-2 mb-4 flex-wrap">
+              <button
+                onClick={() => setBillingStatusFilter('all')}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${billingStatusFilter === 'all' ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                Todas
+              </button>
+              <button
+                onClick={() => setBillingStatusFilter('overdue')}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${billingStatusFilter === 'overdue' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                <FiAlertTriangle size={12} />
+                Em Atraso
+              </button>
+              <button
+                onClick={() => setBillingStatusFilter('today')}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${billingStatusFilter === 'today' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                <FiClock size={12} />
+                Vencendo Hoje
+              </button>
             </div>
 
             {customerGroups.length === 0 ? (

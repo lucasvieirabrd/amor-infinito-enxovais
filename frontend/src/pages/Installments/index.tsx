@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import {
@@ -58,6 +58,7 @@ export const Installments: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'today' | 'current'>('all');
 
   // Accordion — qual cliente está expandido
   const [expandedCustomer, setExpandedCustomer] = useState<CustomerCrediario | null>(null);
@@ -226,6 +227,16 @@ export const Installments: React.FC = () => {
     return 'Em dia';
   };
 
+  const filteredCustomers = useMemo(() => {
+    if (!response?.data) return [];
+    return response.data.filter((c) => {
+      if (statusFilter === 'overdue') return c.overdueCount > 0;
+      if (statusFilter === 'today') return c.todayCount > 0 && c.overdueCount === 0;
+      if (statusFilter === 'current') return c.overdueCount === 0 && c.todayCount === 0;
+      return true;
+    });
+  }, [response?.data, statusFilter]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   if (isLoadingCustomers && !response) return <Loading />;
@@ -279,6 +290,37 @@ export const Installments: React.FC = () => {
           </Card>
         </div>
 
+        {/* Filtro de status */}
+        <div className="flex gap-2 mb-4 flex-wrap">
+          <button
+            onClick={() => { setStatusFilter('all'); setPage(1); }}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${statusFilter === 'all' ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => { setStatusFilter('overdue'); setPage(1); }}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${statusFilter === 'overdue' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            <FiAlertTriangle size={12} />
+            Em Atraso
+          </button>
+          <button
+            onClick={() => { setStatusFilter('today'); setPage(1); }}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${statusFilter === 'today' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            <FiClock size={12} />
+            Vencendo Hoje
+          </button>
+          <button
+            onClick={() => { setStatusFilter('current'); setPage(1); }}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${statusFilter === 'current' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            <FiCheckCircle size={12} />
+            Em Dia
+          </button>
+        </div>
+
         {/* Barra de busca + paginação */}
         <div className="flex justify-between items-center mb-4">
           <Input
@@ -319,9 +361,9 @@ export const Installments: React.FC = () => {
         {/* Lista accordion */}
         {isLoadingCustomers ? (
           <Loading />
-        ) : response?.data && response.data.length > 0 ? (
+        ) : filteredCustomers.length > 0 ? (
           <div className="space-y-2">
-            {response.data.map((customer) => {
+            {filteredCustomers.map((customer) => {
               const isExpanded = expandedCustomer?.id === customer.id;
 
               return (
@@ -487,7 +529,9 @@ export const Installments: React.FC = () => {
             })}
           </div>
         ) : (
-          <Card className="text-center py-8 text-gray-500">Nenhum crediário ativo encontrado.</Card>
+          <Card className="text-center py-8 text-gray-500">
+            {statusFilter !== 'all' ? 'Nenhum cliente encontrado para o filtro selecionado.' : 'Nenhum crediário ativo encontrado.'}
+          </Card>
         )}
       </div>
 
