@@ -67,6 +67,7 @@ const CSVImporter: React.FC<CSVImporterProps> = ({ isOpen, onClose, onSuccess })
   };
 
   const handleClose = () => {
+    if (loading) return;
     setFile(null);
     setResult(null);
     setError(null);
@@ -95,16 +96,16 @@ const CSVImporter: React.FC<CSVImporterProps> = ({ isOpen, onClose, onSuccess })
           </Button>
         ) : (
           <>
-            <Button variant="secondary" onClick={handleClose}>
+            <Button variant="secondary" onClick={handleClose} disabled={loading}>
               Cancelar
             </Button>
             <Button
               variant="primary"
               onClick={handleImport}
               loading={loading}
-              disabled={!file}
+              disabled={!file || loading}
             >
-              Importar
+              {loading ? 'Importando...' : 'Importar'}
             </Button>
           </>
         )

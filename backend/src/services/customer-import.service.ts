@@ -264,7 +264,7 @@ export class CustomerImportService {
         return {
           id: byCpf[0].id,
           isNew: false,
-          note: `Telefone duplicado — parcelas adicionadas ao cliente existente (encontrado por CPF)`,
+          note: `Cliente já existente (encontrado por CPF)`,
         };
       }
     }
@@ -281,7 +281,7 @@ export class CustomerImportService {
         return {
           id: byPhone[0].id,
           isNew: false,
-          note: `Telefone duplicado — parcelas adicionadas ao cliente existente`,
+          note: `Cliente já existente (encontrado por telefone)`,
         };
       }
     }
