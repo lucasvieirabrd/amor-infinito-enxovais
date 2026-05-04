@@ -63,6 +63,31 @@ const migrations: { name: string; sql: string }[] = [
         (UUID(), 'pix_qrcode',  '5c17e289-963b-4f2b-af01-cd5c52f5af8e', 'Chave PIX aleatória para QR Code')
       ON DUPLICATE KEY UPDATE value = VALUES(value), description = VALUES(description)`,
   },
+  {
+    name: '0007a_drop_trigger_no_duplicate_installments',
+    sql: `DROP TRIGGER IF EXISTS trg_no_duplicate_installments`,
+  },
+  {
+    // MySQL não suporta partial unique index (WHERE deleted_at IS NULL).
+    // Solução: trigger BEFORE INSERT que rejeita inserção se já existe parcela ativa
+    // com mesmo (sale_id, installment_number) e deleted_at IS NULL.
+    name: '0007b_create_trigger_no_duplicate_installments',
+    sql: `CREATE TRIGGER trg_no_duplicate_installments
+      BEFORE INSERT ON installments
+      FOR EACH ROW
+      BEGIN
+        DECLARE cnt INT DEFAULT 0;
+        SELECT COUNT(*) INTO cnt
+        FROM installments
+        WHERE sale_id = NEW.sale_id
+          AND installment_number = NEW.installment_number
+          AND deleted_at IS NULL;
+        IF cnt > 0 THEN
+          SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Duplicate active installment: same sale_id and installment_number already exists';
+        END IF;
+      END`,
+  },
 ];
 
 async function run() {
@@ -90,7 +115,9 @@ async function run() {
 
       console.log(`[migrate] apply ${migration.name} ...`);
       try {
-        await connection.execute(migration.sql);
+        // Use query() instead of execute() — DDL statements (CREATE/DROP TRIGGER, etc.)
+        // are not supported in the prepared statement protocol used by execute().
+        await connection.query(migration.sql);
       } catch (err: any) {
         // errno 1060 = ER_DUP_FIELDNAME (column already exists) — safe to ignore
         if (err?.errno !== 1060) throw err;

@@ -1,7 +1,7 @@
 import { parse } from 'csv-parse/sync';
 import { db } from '../database';
 import { customers, sales, installments } from '../database/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { SaleRepository } from '../repositories/sale.repository';
 import { addMonths, subMonths, isBefore, startOfDay } from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
@@ -140,6 +140,30 @@ export class CustomerImportService {
 
           if (isNaN(totalDebt) || isNaN(totalInstallmentsCount) || isNaN(installmentValue)) {
             throw new Error('Valores de dívida, parcelas ou valor da parcela inválidos');
+          }
+
+          // Deduplicação: mesma dívida = mesmo cliente + mesmo total + mesmo nº de parcelas.
+          // Permite múltiplas dívidas legítimas desde que difiram em valor ou nº de parcelas.
+          const existingSale = await tx
+            .select({ id: sales.id, saleNumber: sales.saleNumber })
+            .from(sales)
+            .where(
+              and(
+                eq(sales.customerId, customer.id),
+                isNull(sales.deletedAt),
+                sql`${sales.totalAmount} = ${totalDebt.toFixed(2)}`,
+                sql`${sales.installmentsCount} = ${totalInstallmentsCount}`
+              )
+            )
+            .limit(1);
+
+          if (existingSale.length > 0) {
+            result.notes.push({
+              line: lineNumber,
+              customer: row.name,
+              message: `Duplicata ignorada: ${row.name} - R$${totalDebt.toFixed(2)} em ${totalInstallmentsCount}x (já existe ${existingSale[0].saleNumber})`,
+            });
+            continue;
           }
 
           const saleNumber = await saleRepository.generateSaleNumber(tx);
