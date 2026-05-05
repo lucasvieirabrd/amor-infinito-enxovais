@@ -103,28 +103,16 @@ const formatRelativeTime = (val: any): string => {
   return `${formatInTimeZone(d, TZ, 'dd/MM')} ${timeStr}`;
 };
 
-// ─── Media URL hook ───────────────────────────────────────────────────────────
-// Fetches media from the authenticated proxy endpoint and returns a revokable blob URL.
+// ─── Media URL helper ─────────────────────────────────────────────────────────
+// Builds an authenticated proxy URL using the JWT token as a query param,
+// allowing native <img>, <audio>, <video> and <a download> tags to work
+// without needing to set Authorization headers manually.
 
-type MediaState = { status: 'idle' } | { status: 'loading' } | { status: 'ready'; url: string } | { status: 'error' };
-
-function useMediaUrl(mediaId: string | null | undefined): MediaState {
-  const [state, setState] = useState<MediaState>({ status: 'idle' });
-
-  useEffect(() => {
-    if (!mediaId) { setState({ status: 'idle' }); return; }
-    setState({ status: 'loading' });
-    let objectUrl: string | null = null;
-    api.get(`/messages/media/${mediaId}`, { responseType: 'blob' })
-      .then(res => {
-        objectUrl = URL.createObjectURL(res.data);
-        setState({ status: 'ready', url: objectUrl });
-      })
-      .catch(() => setState({ status: 'error' }));
-    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [mediaId]);
-
-  return state;
+function getMediaUrl(mediaId: string | null | undefined): string | null {
+  if (!mediaId) return null;
+  const token = localStorage.getItem('token') ?? '';
+  const base  = (api.defaults.baseURL ?? '').replace(/\/$/, '');
+  return `${base}/messages/media/${encodeURIComponent(mediaId)}?token=${encodeURIComponent(token)}`;
 }
 
 // ─── Per-type media bubble ────────────────────────────────────────────────────
@@ -134,72 +122,66 @@ const MediaBubble: React.FC<{
   isOutbound: boolean;
   onImageClick: (src: string) => void;
 }> = ({ msg, isOutbound, onImageClick }) => {
-  const media = useMediaUrl(msg.mediaId);
-  const dimBg = isOutbound ? 'bg-white bg-opacity-20' : 'bg-gray-100';
+  const src    = getMediaUrl(msg.mediaId);
+  const dimBg  = isOutbound ? 'bg-white bg-opacity-20' : 'bg-gray-100';
   const subText = isOutbound ? 'text-white opacity-75' : 'text-gray-500';
-
-  const url = media.status === 'ready' ? media.url : null;
-  const unavailable = !msg.mediaId || media.status === 'error';
-  const loading = media.status === 'loading';
-
-  const UnavailableLabel = () => (
-    <p className={`text-xs italic ${subText}`}>
-      {media.status === 'error' ? '⚠ Erro ao carregar mídia' : '⚠ Mídia indisponível'}
-    </p>
-  );
 
   if (msg.type === 'image' || msg.type === 'sticker') {
     const cls = msg.type === 'sticker' ? 'w-24 h-24' : 'w-52 h-40';
+    if (!src) {
+      return (
+        <div className={`${cls} rounded-xl ${dimBg} flex items-center justify-center`}>
+          <FiImage size={24} className="opacity-30" />
+        </div>
+      );
+    }
     return (
       <div className="space-y-1">
-        {url ? (
-          <img src={url} alt={msg.type === 'sticker' ? 'Sticker' : 'Imagem'}
-            onClick={() => onImageClick(url)}
-            className={`${cls} object-cover rounded-xl cursor-zoom-in hover:opacity-90 transition-opacity`} />
-        ) : unavailable ? (
-          <div className={`${cls} rounded-xl ${dimBg} flex flex-col items-center justify-center gap-1`}>
-            <FiImage size={24} className="opacity-30" />
-            <UnavailableLabel />
-          </div>
-        ) : (
-          <div className={`${cls} rounded-xl ${dimBg} flex items-center justify-center`}>
-            <FiImage size={24} className="opacity-30 animate-pulse" />
-          </div>
-        )}
+        <img
+          src={src}
+          alt={msg.type === 'sticker' ? 'Sticker' : 'Imagem'}
+          onClick={() => onImageClick(src)}
+          className={`${cls} object-cover rounded-xl cursor-zoom-in hover:opacity-90 transition-opacity`}
+          onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+        />
         {msg.content && <p className="text-sm">{msg.content}</p>}
       </div>
     );
   }
 
   if (msg.type === 'audio') {
+    if (!src) {
+      return (
+        <div className="flex items-center gap-2 min-w-[200px]">
+          <FiVolume2 size={18} className="opacity-40" />
+          <p className={`text-xs italic ${subText}`}>⚠ Áudio indisponível</p>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center gap-2 min-w-[200px]">
         <FiVolume2 size={18} className="flex-shrink-0 opacity-70" />
-        {url
-          ? <audio controls src={url} className="h-8 flex-1"
-              style={{ filter: isOutbound ? 'invert(1) brightness(1.8)' : 'none' }} />
-          : unavailable
-            ? <UnavailableLabel />
-            : <p className="text-sm italic opacity-60">Carregando áudio…</p>
-        }
+        <audio
+          controls
+          src={src}
+          className="h-8 flex-1"
+          style={{ filter: isOutbound ? 'invert(1) brightness(1.8)' : 'none' }}
+        />
       </div>
     );
   }
 
   if (msg.type === 'video') {
+    if (!src) {
+      return (
+        <div className="w-56 h-20 rounded-xl flex items-center justify-center bg-black bg-opacity-10">
+          <FiVideo size={24} className="opacity-30" />
+        </div>
+      );
+    }
     return (
       <div className="space-y-1">
-        {url
-          ? <video controls src={url} className="w-56 max-h-44 rounded-xl object-cover" />
-          : unavailable
-            ? <div className="w-56 h-20 rounded-xl flex flex-col items-center justify-center gap-1 bg-black bg-opacity-10">
-                <FiVideo size={24} className="opacity-30" />
-                <UnavailableLabel />
-              </div>
-            : <div className="w-56 h-36 rounded-xl flex items-center justify-center bg-black bg-opacity-10">
-                <FiVideo size={28} className="opacity-30 animate-pulse" />
-              </div>
-        }
+        <video controls src={src} className="w-56 max-h-44 rounded-xl object-cover" />
         {msg.content && <p className="text-sm">{msg.content}</p>}
       </div>
     );
@@ -213,21 +195,19 @@ const MediaBubble: React.FC<{
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{msg.mediaFilename || 'Documento'}</p>
-          {unavailable
-            ? <UnavailableLabel />
-            : loading
-              ? <p className={`text-xs mt-0.5 ${subText} italic`}>Carregando…</p>
-              : msg.content
-                ? <p className={`text-xs mt-0.5 ${subText}`}>{msg.content}</p>
-                : null
-          }
+          {msg.content && <p className={`text-xs mt-0.5 ${subText}`}>{msg.content}</p>}
         </div>
-        {url && (
-          <a href={url} download={msg.mediaFilename || 'documento'}
+        {src ? (
+          <a
+            href={src}
+            download={msg.mediaFilename || 'documento'}
             onClick={e => e.stopPropagation()}
-            className={`flex-shrink-0 p-2 rounded-lg transition-colors ${isOutbound ? 'hover:bg-white hover:bg-opacity-20' : 'hover:bg-gray-100'}`}>
+            className={`flex-shrink-0 p-2 rounded-lg transition-colors ${isOutbound ? 'hover:bg-white hover:bg-opacity-20' : 'hover:bg-gray-100'}`}
+          >
             <FiDownload size={18} className="opacity-80" />
           </a>
+        ) : (
+          <p className={`text-xs italic ${subText}`}>⚠ Indisponível</p>
         )}
       </div>
     );

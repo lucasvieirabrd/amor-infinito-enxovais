@@ -12,7 +12,10 @@ export function ensureAuthenticated(
   res: Response,
   next: NextFunction
 ) {
-  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+  const token =
+    req.cookies?.token ||
+    req.headers.authorization?.replace('Bearer ', '') ||
+    (typeof req.query.token === 'string' ? req.query.token : undefined);
 
   if (!token) {
     throw new AppError('JWT token não encontrado', 401);
