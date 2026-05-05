@@ -88,6 +88,18 @@ const migrations: { name: string; sql: string }[] = [
         END IF;
       END`,
   },
+  {
+    name: '0008_add_media_id_to_messages',
+    sql: `ALTER TABLE messages ADD COLUMN media_id VARCHAR(255) NULL`,
+  },
+  {
+    name: '0009_add_media_filename_to_messages',
+    sql: `ALTER TABLE messages ADD COLUMN media_filename VARCHAR(500) NULL`,
+  },
+  {
+    name: '0010_add_sticker_type_to_messages',
+    sql: `ALTER TABLE messages MODIFY COLUMN type ENUM('text','template','image','audio','video','document','unknown','unsupported','sticker') NOT NULL DEFAULT 'text'`,
+  },
 ];
 
 async function run() {

@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
 import { MessageService } from '../services/message.service';
+import { WhatsAppService } from '../integrations/whatsapp.service';
 import { z } from 'zod';
 
 const messageService = new MessageService();
+const whatsAppService = new WhatsAppService();
 
 export class MessageController {
   async listConversations(req: Request, res: Response) {
@@ -63,5 +65,17 @@ export class MessageController {
   async getStatsToday(req: Request, res: Response) {
     const stats = await messageService.getStatsToday();
     return res.json(stats);
+  }
+
+  async proxyMedia(req: Request, res: Response) {
+    const { mediaId } = req.params;
+    if (!mediaId || !/^[\w-]+$/.test(mediaId)) {
+      return res.status(400).json({ error: 'mediaId inválido' });
+    }
+    const { buffer, mimeType } = await whatsAppService.downloadMedia(mediaId);
+    res.set('Content-Type', mimeType);
+    res.set('Cache-Control', 'private, max-age=3600');
+    res.set('Content-Length', String(buffer.length));
+    return res.send(buffer);
   }
 }

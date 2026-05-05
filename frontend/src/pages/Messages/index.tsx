@@ -5,6 +5,7 @@ import socket from '../../services/socket';
 import {
   FiSearch, FiSend, FiCheck, FiCheckCircle, FiTag, FiX, FiPlus, FiTrash2,
   FiMessageSquare, FiArrowUp, FiArrowDown, FiList, FiGrid,
+  FiFile, FiDownload, FiVolume2, FiVideo, FiImage,
 } from 'react-icons/fi';
 import { Button, Badge } from '../../components/ui';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -31,7 +32,9 @@ interface Message {
   fromPhone: string;
   toPhone: string;
   type?: string;
-  content: string;
+  content: string | null;
+  mediaId?: string | null;
+  mediaFilename?: string | null;
   direction: 'inbound' | 'outbound';
   status: 'sent' | 'delivered' | 'read' | 'received';
   timestamp: string;
@@ -100,12 +103,103 @@ const formatRelativeTime = (val: any): string => {
   return `${formatInTimeZone(d, TZ, 'dd/MM')} ${timeStr}`;
 };
 
-// ─── Unsupported message helper ───────────────────────────────────────────────
+// ─── Media URL hook ───────────────────────────────────────────────────────────
+// Fetches media from the authenticated proxy endpoint and returns a revokable blob URL.
 
-const isUnsupported = (msg: Message) =>
-  msg.type === 'unsupported' ||
-  msg.type === 'unknown' ||
-  msg.content === 'Conteúdo não suportado';
+function useMediaUrl(mediaId: string | null | undefined): string | null {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!mediaId) return;
+    let objectUrl: string | null = null;
+    api.get(`/messages/media/${mediaId}`, { responseType: 'blob' })
+      .then(res => { objectUrl = URL.createObjectURL(res.data); setBlobUrl(objectUrl); })
+      .catch(() => setBlobUrl(null));
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [mediaId]);
+  return blobUrl;
+}
+
+// ─── Per-type media bubble ────────────────────────────────────────────────────
+
+const MediaBubble: React.FC<{
+  msg: Message;
+  isOutbound: boolean;
+  onImageClick: (src: string) => void;
+}> = ({ msg, isOutbound, onImageClick }) => {
+  const blobUrl = useMediaUrl(msg.mediaId);
+  const dimBg = isOutbound ? 'bg-white bg-opacity-20' : 'bg-gray-100';
+  const subText = isOutbound ? 'text-white opacity-75' : 'text-gray-500';
+
+  if (msg.type === 'image' || msg.type === 'sticker') {
+    const cls = msg.type === 'sticker' ? 'w-24 h-24' : 'w-52 h-40';
+    return (
+      <div className="space-y-1">
+        {blobUrl ? (
+          <img src={blobUrl} alt={msg.type === 'sticker' ? 'Sticker' : 'Imagem'}
+            onClick={() => onImageClick(blobUrl)}
+            className={`${cls} object-cover rounded-xl cursor-zoom-in hover:opacity-90 transition-opacity`} />
+        ) : (
+          <div className={`${cls} rounded-xl ${dimBg} flex items-center justify-center`}>
+            <FiImage size={24} className="opacity-30" />
+          </div>
+        )}
+        {msg.content && <p className="text-sm">{msg.content}</p>}
+      </div>
+    );
+  }
+
+  if (msg.type === 'audio') {
+    return (
+      <div className="flex items-center gap-2 min-w-[200px]">
+        <FiVolume2 size={18} className="flex-shrink-0 opacity-70" />
+        {blobUrl
+          ? <audio controls src={blobUrl} className="h-8 flex-1"
+              style={{ filter: isOutbound ? 'invert(1) brightness(1.8)' : 'none' }} />
+          : <p className="text-sm italic opacity-60">Carregando áudio…</p>
+        }
+      </div>
+    );
+  }
+
+  if (msg.type === 'video') {
+    return (
+      <div className="space-y-1">
+        {blobUrl
+          ? <video controls src={blobUrl} className="w-56 max-h-44 rounded-xl object-cover" />
+          : <div className="w-56 h-36 rounded-xl flex items-center justify-center bg-black bg-opacity-10">
+              <FiVideo size={28} className="opacity-30" />
+            </div>
+        }
+        {msg.content && <p className="text-sm">{msg.content}</p>}
+      </div>
+    );
+  }
+
+  if (msg.type === 'document') {
+    return (
+      <div className="flex items-center gap-3 min-w-[220px] max-w-xs">
+        <div className={`flex-shrink-0 p-2 rounded-lg ${dimBg}`}>
+          <FiFile size={22} className="opacity-80" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{msg.mediaFilename || 'Documento'}</p>
+          {msg.content && <p className={`text-xs mt-0.5 ${subText}`}>{msg.content}</p>}
+        </div>
+        {blobUrl && (
+          <a href={blobUrl} download={msg.mediaFilename || 'documento'}
+            onClick={e => e.stopPropagation()}
+            className={`flex-shrink-0 p-2 rounded-lg transition-colors ${isOutbound ? 'hover:bg-white hover:bg-opacity-20' : 'hover:bg-gray-100'}`}>
+            <FiDownload size={18} className="opacity-80" />
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <p className="text-sm italic opacity-70">📎 Mídia não suportada ({msg.type})</p>
+  );
+};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -129,6 +223,7 @@ export const Messages: React.FC = () => {
   // Kanban DnD state
   const [dragConv,    setDragConv]    = useState<Conversation | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const tagMenuRef = useRef<HTMLDivElement>(null);
@@ -394,12 +489,12 @@ export const Messages: React.FC = () => {
                 ? 'bg-primary text-white rounded-br-sm'
                 : 'bg-white border border-gray-200 text-gray-900 rounded-bl-sm shadow-sm'
             }`}>
-              {isUnsupported(msg) ? (
-                <p className="text-sm italic opacity-70 flex items-center gap-1">
-                  📎 Mídia não suportada (áudio, figurinha, etc.)
-                </p>
-              ) : (
+              {(!msg.type || msg.type === 'text' || msg.type === 'template') ? (
                 <p className="text-sm">{msg.content}</p>
+              ) : (msg.type === 'unsupported' || msg.type === 'unknown') ? (
+                <p className="text-sm italic opacity-70">📎 Mídia não suportada</p>
+              ) : (
+                <MediaBubble msg={msg} isOutbound={msg.direction === 'outbound'} onImageClick={setLightboxSrc} />
               )}
               <div className={`flex items-center gap-1 mt-1 text-xs ${
                 msg.direction === 'outbound' ? 'text-white opacity-70 justify-end' : 'text-gray-400'
@@ -744,6 +839,17 @@ export const Messages: React.FC = () => {
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Image lightbox ── */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-90 cursor-zoom-out"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <img src={lightboxSrc} alt="Imagem ampliada"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" />
         </div>
       )}
 

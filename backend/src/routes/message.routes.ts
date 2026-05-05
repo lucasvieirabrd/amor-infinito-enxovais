@@ -29,4 +29,7 @@ messageRouter.put('/conversations/:phone/tag', messageController.updateConversat
 // Excluir conversa e suas mensagens
 messageRouter.delete('/conversations/:phone', messageController.deleteConversation);
 
+// Proxy autenticado para mídia recebida via WhatsApp (imagem, áudio, vídeo, documento, sticker)
+messageRouter.get('/media/:mediaId', messageController.proxyMedia);
+
 export { messageRouter };

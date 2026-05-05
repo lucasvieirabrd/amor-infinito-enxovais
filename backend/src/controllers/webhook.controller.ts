@@ -50,14 +50,32 @@ export class WebhookController {
         // Tentar vincular ao cliente pelo número de telefone
         const customer = await customerRepository.findByPhone(phone);
 
-        const ALLOWED_TYPES = ['text', 'template', 'image', 'audio', 'video', 'document', 'unknown', 'unsupported'];
+        const ALLOWED_TYPES = ['text', 'template', 'image', 'audio', 'video', 'document', 'unknown', 'unsupported', 'sticker'];
+
+        // Extract media id and filename per message type
+        const mediaObj: Record<string, any> = {
+          image: msg.image, audio: msg.audio, video: msg.video,
+          document: msg.document, sticker: msg.sticker,
+        };
+        const mediaPayload = mediaObj[msg.type] ?? null;
+        const mediaId: string | null = mediaPayload?.id ?? null;
+        const mediaFilename: string | null = msg.document?.filename ?? null;
+        const content: string | null =
+          msg.text?.body
+          ?? msg.image?.caption
+          ?? msg.video?.caption
+          ?? msg.document?.caption
+          ?? null;
+
         const messageData = {
           metaMessageId: msg.id,
           customerId: customer?.id || null,
           fromPhone: phone,
           toPhone: 'SISTEMA',
           type: ALLOWED_TYPES.includes(msg.type) ? msg.type : 'unsupported',
-          content: msg.text?.body || msg.image?.caption || msg.audio?.id || 'Conteúdo não suportado',
+          content,
+          mediaId,
+          mediaFilename,
           direction: 'inbound',
           status: 'received',
           timestamp: new Date(parseInt(msg.timestamp) * 1000),

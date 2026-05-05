@@ -115,6 +115,28 @@ export class WhatsAppService {
   }
 
   /**
+   * Resolve a URL de uma mídia recebida pelo webhook e retorna o buffer binário.
+   * Usado pelo proxy endpoint para servir imagens, áudios, vídeos e documentos ao frontend.
+   */
+  async downloadMedia(mediaId: string): Promise<{ buffer: Buffer; mimeType: string }> {
+    // Step 1: Get media metadata (URL + mime_type) from Meta Graph API
+    const metaRes = await axios.get(
+      `https://graph.facebook.com/v18.0/${mediaId}`,
+      { headers: { Authorization: `Bearer ${this.token}` } }
+    );
+    const mediaUrl: string = metaRes.data.url;
+    const mimeType: string = metaRes.data.mime_type || 'application/octet-stream';
+
+    // Step 2: Download the binary using the time-limited URL from Meta
+    const dlRes = await axios.get(mediaUrl, {
+      headers: { Authorization: `Bearer ${this.token}` },
+      responseType: 'arraybuffer',
+    });
+
+    return { buffer: Buffer.from(dlRes.data), mimeType };
+  }
+
+  /**
    * Envia um documento (PDF, etc.) via media_id obtido em uploadMedia.
    */
   async sendDocumentMessage(to: string, mediaId: string, filename: string, caption: string) {
