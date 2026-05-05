@@ -67,12 +67,21 @@ export class InstallmentRepository {
       );
   }
 
-  async listActiveCrediariosPaginated(page: number, limit: number, search?: string) {
+  async listActiveCrediariosPaginated(page: number, limit: number, search?: string, filter?: string) {
     const offset = (page - 1) * limit;
 
     const searchCond = search
       ? sql`AND (c.name LIKE ${'%' + search + '%'} OR c.phone LIKE ${'%' + search + '%'})`
       : sql``;
+
+    // HAVING usa os mesmos critérios das colunas computadas overdueCount/todayCount
+    const filterHaving = filter === 'overdue'
+      ? sql`HAVING overdueCount > 0`
+      : filter === 'today'
+        ? sql`HAVING todayCount > 0 AND overdueCount = 0`
+        : filter === 'current'
+          ? sql`HAVING overdueCount = 0 AND todayCount = 0`
+          : sql``;
 
     const dataResult = await db.execute(sql`
       SELECT
@@ -96,18 +105,32 @@ export class InstallmentRepository {
         AND c.deleted_at IS NULL
         ${searchCond}
       GROUP BY c.id, c.name, c.phone
+      ${filterHaving}
       ORDER BY overdueCount DESC, c.name ASC
       LIMIT ${limit} OFFSET ${offset}
     `);
 
+    // Count query usa subquery para aplicar o mesmo HAVING
     const countResult = await db.execute(sql`
-      SELECT COUNT(DISTINCT c.id) AS total
-      FROM customers c
-      INNER JOIN installments i ON c.id = i.customer_id
-      WHERE (i.status IN ('pending', 'overdue', 'partial'))
-        AND i.deleted_at IS NULL
-        AND c.deleted_at IS NULL
-        ${searchCond}
+      SELECT COUNT(*) AS total FROM (
+        SELECT c.id,
+          SUM(CASE
+            WHEN i.status = 'overdue'
+              OR (i.status IN ('pending','partial') AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')))
+            THEN 1 ELSE 0 END) AS overdueCount,
+          SUM(CASE
+            WHEN i.status IN ('pending','partial')
+              AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+            THEN 1 ELSE 0 END) AS todayCount
+        FROM customers c
+        INNER JOIN installments i ON c.id = i.customer_id
+        WHERE (i.status IN ('pending', 'overdue', 'partial'))
+          AND i.deleted_at IS NULL
+          AND c.deleted_at IS NULL
+          ${searchCond}
+        GROUP BY c.id
+        ${filterHaving}
+      ) AS sub
     `);
 
     const rows = dataResult[0] as any[];

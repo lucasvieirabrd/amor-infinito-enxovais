@@ -65,10 +65,11 @@ export class InstallmentController {
       page: z.string().optional().transform(v => Number(v) || 1),
       limit: z.string().optional().transform(v => Number(v) || 15),
       search: z.string().optional(),
+      filter: z.enum(['all', 'overdue', 'today', 'current']).optional().default('all'),
     });
 
-    const { page, limit, search } = listSchema.parse(req.query);
-    const result = await installmentService.listActiveCrediariosPaginated(page, limit, search);
+    const { page, limit, search, filter } = listSchema.parse(req.query);
+    const result = await installmentService.listActiveCrediariosPaginated(page, limit, search, filter);
     return res.json(result);
   }
 

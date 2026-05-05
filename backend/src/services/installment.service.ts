@@ -133,8 +133,8 @@ export class InstallmentService {
     return installmentRepository.listActiveCrediarios();
   }
 
-  async listActiveCrediariosPaginated(page: number, limit: number, search?: string) {
-    return installmentRepository.listActiveCrediariosPaginated(page, limit, search);
+  async listActiveCrediariosPaginated(page: number, limit: number, search?: string, filter?: string) {
+    return installmentRepository.listActiveCrediariosPaginated(page, limit, search, filter);
   }
 
   async getStats() {

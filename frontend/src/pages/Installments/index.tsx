@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import {
@@ -84,10 +84,10 @@ export const Installments: React.FC = () => {
   // ── Queries ────────────────────────────────────────────────────────────────
 
   const { data: response, isLoading: isLoadingCustomers } = useQuery({
-    queryKey: ['active-crediarios', search, page],
+    queryKey: ['active-crediarios', search, page, statusFilter],
     queryFn: async () => {
       const res = await api.get('/installments/active', {
-        params: { search, page, limit: ITEMS_PER_PAGE },
+        params: { search, page, limit: ITEMS_PER_PAGE, filter: statusFilter },
       });
       return res.data as PaginatedResponse;
     },
@@ -227,15 +227,8 @@ export const Installments: React.FC = () => {
     return 'Em dia';
   };
 
-  const filteredCustomers = useMemo(() => {
-    if (!response?.data) return [];
-    return response.data.filter((c) => {
-      if (statusFilter === 'overdue') return c.overdueCount > 0;
-      if (statusFilter === 'today') return c.todayCount > 0 && c.overdueCount === 0;
-      if (statusFilter === 'current') return c.overdueCount === 0 && c.todayCount === 0;
-      return true;
-    });
-  }, [response?.data, statusFilter]);
+  // Filtro aplicado no backend via ?filter=; lista já chega filtrada e paginada corretamente
+  const filteredCustomers = response?.data ?? [];
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
