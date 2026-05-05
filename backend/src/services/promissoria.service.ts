@@ -1,8 +1,8 @@
 import puppeteer from 'puppeteer';
 import { format } from 'date-fns';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, asc } from 'drizzle-orm';
 import { db } from '../database';
-import { sales, customers } from '../database/schema';
+import { sales, customers, installments } from '../database/schema';
 import { AppError } from '../utils/AppError';
 
 // --- numberToWords ---
@@ -104,7 +104,6 @@ async function getPromissoriaData(saleId: string) {
       saleNumber: sales.saleNumber,
       saleDate: sales.saleDate,
       totalAmount: sales.totalAmount,
-      installmentsCount: sales.installmentsCount,
       customerName: customers.name,
       customerCpf: customers.cpf,
       customerAddressStreet: customers.addressStreet,
@@ -120,27 +119,48 @@ async function getPromissoriaData(saleId: string) {
     .limit(1);
 
   if (rows.length === 0) throw new AppError('Venda não encontrada', 404);
-  return rows[0];
+
+  const insts = await db
+    .select()
+    .from(installments)
+    .where(and(eq(installments.saleId, saleId), isNull(installments.deletedAt)))
+    .orderBy(asc(installments.installmentNumber));
+
+  const entryInstallment = insts.find(i => i.installmentNumber === 0) ?? null;
+  const regularInstallments = insts.filter(i => i.installmentNumber > 0);
+
+  return { ...rows[0], entryInstallment, regularInstallments };
 }
 
 // --- HTML builder ---
 
 function buildPromissoriaHtml(data: Awaited<ReturnType<typeof getPromissoriaData>>): string {
   const {
-    saleNumber, saleDate, totalAmount, installmentsCount,
+    saleNumber, saleDate, totalAmount,
     customerName, customerCpf,
     customerAddressStreet, customerAddressNumber, customerAddressNeighborhood,
     customerAddressCity, customerAddressState, customerCep,
+    entryInstallment, regularInstallments,
   } = data;
 
   const total = Number(totalAmount);
-  const count = Number(installmentsCount) || 1;
-  const installmentValue = total / count;
+  const count = regularInstallments.length || 1;
+  const installmentValue = count > 0 ? Number(regularInstallments[0]?.originalAmount ?? 0) : 0;
 
   const emissaoFull = fullDatePt(saleDate);
   const emissaoDdMm = fmtDate(saleDate);
-
   const addressLine = [customerAddressStreet, customerAddressNumber].filter(Boolean).join(', ');
+
+  // Linha de entrada (se existir)
+  const entradaHtml = entryInstallment
+    ? (() => {
+        const entradaAmt = Number(entryInstallment.originalAmount);
+        const entradaDate = entryInstallment.paymentDate ?? entryInstallment.dueDate;
+        return `<div class="row" style="margin-top:1.5mm">
+    <b>Entrada:</b> ${brl(entradaAmt)} &mdash; paga em <b>${fmtDate(entradaDate)}</b>
+  </div>`;
+      })()
+    : '';
 
   const css = `
     @page { size: A4; margin: 0; }
@@ -196,7 +216,7 @@ function buildPromissoriaHtml(data: Awaited<ReturnType<typeof getPromissoriaData
     /* Seção emitente */
     .emitente-box {
       border: 1px solid #555;
-      padding: 4mm 5mm 2mm;
+      padding: 4mm 5mm 6mm;
       margin-top: 5mm;
     }
     .emitente-title {
@@ -210,7 +230,7 @@ function buildPromissoriaHtml(data: Awaited<ReturnType<typeof getPromissoriaData
     }
 
     /* Linha de assinatura */
-    .sig-wrap { margin-top: 11mm; text-align: center; }
+    .sig-wrap { margin-top: 14mm; text-align: center; }
     .sig-line {
       border-top: 1px solid #333;
       width: 76%;
@@ -219,29 +239,6 @@ function buildPromissoriaHtml(data: Awaited<ReturnType<typeof getPromissoriaData
       font-size: 10px;
     }
     .sig-sublabel { font-size: 9px; color: #666; margin-top: 1mm; }
-
-    /* Testemunhas */
-    .witnesses {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8mm;
-      margin-top: 5mm;
-      border-top: 1px dashed #888;
-      padding-top: 4mm;
-    }
-    .witness-title {
-      font-weight: bold;
-      text-align: center;
-      font-size: 9.5px;
-      letter-spacing: 1px;
-      margin-bottom: 3mm;
-    }
-    .w-field { line-height: 2.3; }
-    .wline {
-      border-bottom: 1px solid #333;
-      display: inline-block;
-      min-width: 155px;
-    }
   `;
 
   return `<!DOCTYPE html>
@@ -268,14 +265,16 @@ function buildPromissoriaHtml(data: Awaited<ReturnType<typeof getPromissoriaData
 
   <!-- Importância por extenso -->
   <div class="row">Importância de: <b>${numberToWords(total)}</b></div>
+  ${entradaHtml}
   <div class="row" style="margin-top:1.5mm">
     <b>Parcelamento:</b> Dividido em <b>${count}</b> parcela${count > 1 ? 's' : ''} de <b>${brl(installmentValue)}</b> cada
   </div>
 
   <!-- Texto legal -->
   <div class="row" style="margin-top:4mm; line-height:1.9">
-    No vencimento desta Promissória, pagarei(emos) por esta única via ao(à) beneficiário(a) abaixo identificado(a),
-    ou à sua ordem, a importância acima especificada.
+    Pelo presente instrumento, o(a) emitente abaixo qualificado(a) se compromete a pagar ao beneficiário
+    identificado neste documento, a importância acima especificada, de forma parcelada, nas datas de
+    vencimento de cada parcela conforme acordado no ato da compra.
   </div>
 
   <!-- Beneficiário -->
@@ -303,28 +302,6 @@ function buildPromissoriaHtml(data: Awaited<ReturnType<typeof getPromissoriaData
     <div class="sig-wrap">
       <div class="sig-line">${customerName ?? ''}</div>
       <div class="sig-sublabel">Assinatura do Emitente</div>
-    </div>
-  </div>
-
-  <!-- Testemunhas -->
-  <div class="witnesses">
-    <div>
-      <div class="witness-title">TESTEMUNHA 1</div>
-      <div class="w-field"><b>Nome:</b> <span class="wline">&nbsp;</span></div>
-      <div class="w-field"><b>CPF:&nbsp;&nbsp;</b> <span class="wline">&nbsp;</span></div>
-      <div class="sig-wrap">
-        <div class="sig-line">&nbsp;</div>
-        <div class="sig-sublabel">Assinatura</div>
-      </div>
-    </div>
-    <div>
-      <div class="witness-title">TESTEMUNHA 2</div>
-      <div class="w-field"><b>Nome:</b> <span class="wline">&nbsp;</span></div>
-      <div class="w-field"><b>CPF:&nbsp;&nbsp;</b> <span class="wline">&nbsp;</span></div>
-      <div class="sig-wrap">
-        <div class="sig-line">&nbsp;</div>
-        <div class="sig-sublabel">Assinatura</div>
-      </div>
     </div>
   </div>
 
