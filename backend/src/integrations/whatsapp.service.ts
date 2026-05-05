@@ -119,19 +119,23 @@ export class WhatsAppService {
    * Usado pelo proxy endpoint para servir imagens, áudios, vídeos e documentos ao frontend.
    */
   async downloadMedia(mediaId: string): Promise<{ buffer: Buffer; mimeType: string }> {
-    // Step 1: Get media metadata (URL + mime_type) from Meta Graph API
+    console.log(`[downloadMedia] step1 — GET graph.facebook.com/v18.0/${mediaId}`);
+    console.log(`[downloadMedia] token present: ${!!this.token}, length: ${this.token?.length ?? 0}`);
+
     const metaRes = await axios.get(
       `https://graph.facebook.com/v18.0/${mediaId}`,
       { headers: { Authorization: `Bearer ${this.token}` } }
     );
     const mediaUrl: string = metaRes.data.url;
     const mimeType: string = metaRes.data.mime_type || 'application/octet-stream';
+    console.log(`[downloadMedia] step1 ✓ mimeType=${mimeType} url=${mediaUrl?.slice(0, 80)}...`);
 
-    // Step 2: Download the binary using the time-limited URL from Meta
+    console.log(`[downloadMedia] step2 — downloading binary`);
     const dlRes = await axios.get(mediaUrl, {
       headers: { Authorization: `Bearer ${this.token}` },
       responseType: 'arraybuffer',
     });
+    console.log(`[downloadMedia] step2 ✓ bytes=${dlRes.data.byteLength}`);
 
     return { buffer: Buffer.from(dlRes.data), mimeType };
   }

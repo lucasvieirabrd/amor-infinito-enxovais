@@ -69,13 +69,25 @@ export class MessageController {
 
   async proxyMedia(req: Request, res: Response) {
     const { mediaId } = req.params;
+    console.log('[proxyMedia] mediaId recebido:', mediaId);
+
     if (!mediaId || !/^[\w-]+$/.test(mediaId)) {
+      console.warn('[proxyMedia] mediaId inválido:', mediaId);
       return res.status(400).json({ error: 'mediaId inválido' });
     }
-    const { buffer, mimeType } = await whatsAppService.downloadMedia(mediaId);
-    res.set('Content-Type', mimeType);
-    res.set('Cache-Control', 'private, max-age=3600');
-    res.set('Content-Length', String(buffer.length));
-    return res.send(buffer);
+
+    try {
+      const { buffer, mimeType } = await whatsAppService.downloadMedia(mediaId);
+      console.log(`[proxyMedia] ✓ mediaId=${mediaId} mimeType=${mimeType} bytes=${buffer.length}`);
+      res.set('Content-Type', mimeType);
+      res.set('Cache-Control', 'private, max-age=3600');
+      res.set('Content-Length', String(buffer.length));
+      return res.send(buffer);
+    } catch (err: any) {
+      const status = err.response?.status ?? 500;
+      const data   = err.response?.data ?? err.message;
+      console.error(`[proxyMedia] ✗ mediaId=${mediaId} status=${status}`, JSON.stringify(data));
+      return res.status(502).json({ error: 'Falha ao baixar mídia da Meta', detail: data });
+    }
   }
 }
