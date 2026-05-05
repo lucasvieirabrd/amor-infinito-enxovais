@@ -36,6 +36,10 @@ export class WebhookController {
   async handle(req: Request, res: Response) {
     const body = req.body;
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[WEBHOOK] payload completo:', JSON.stringify(body, null, 2));
+    }
+
     if (body.object === 'whatsapp_business_account') {
       const entry = body.entry?.[0];
       const changes = entry?.changes?.[0];

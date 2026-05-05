@@ -85,9 +85,16 @@ export class MessageController {
       return res.send(buffer);
     } catch (err: any) {
       const status = err.response?.status ?? 500;
-      const data   = err.response?.data ?? err.message;
-      console.error(`[proxyMedia] ✗ mediaId=${mediaId} status=${status}`, JSON.stringify(data));
-      return res.status(502).json({ error: 'Falha ao baixar mídia da Meta', detail: data });
+      const raw    = err.response?.data;
+      const detail = raw
+        ? Buffer.isBuffer(raw)
+          ? raw.toString('utf8').slice(0, 300)
+          : raw instanceof ArrayBuffer
+            ? new TextDecoder().decode(raw).slice(0, 300)
+            : typeof raw === 'object' ? JSON.stringify(raw) : String(raw)
+        : err.message;
+      console.error(`[proxyMedia] ✗ mediaId=${mediaId} status=${status} detail=${detail}`);
+      return res.status(502).json({ error: 'Falha ao baixar mídia da Meta', detail });
     }
   }
 }

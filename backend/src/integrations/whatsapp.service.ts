@@ -119,24 +119,48 @@ export class WhatsAppService {
    * Usado pelo proxy endpoint para servir imagens, áudios, vídeos e documentos ao frontend.
    */
   async downloadMedia(mediaId: string): Promise<{ buffer: Buffer; mimeType: string }> {
-    console.log(`[downloadMedia] step1 — GET graph.facebook.com/v18.0/${mediaId}`);
-    console.log(`[downloadMedia] token present: ${!!this.token}, length: ${this.token?.length ?? 0}`);
+    if (!this.token) {
+      throw new Error('[downloadMedia] WHATSAPP_API_TOKEN não configurado');
+    }
 
-    const metaRes = await axios.get(
-      `https://graph.facebook.com/v18.0/${mediaId}`,
-      { headers: { Authorization: `Bearer ${this.token}` } }
-    );
+    console.log(`[downloadMedia] step1 — GET graph.facebook.com/v19.0/${mediaId}`);
+
+    let metaRes: any;
+    try {
+      metaRes = await axios.get(
+        `https://graph.facebook.com/v19.0/${mediaId}`,
+        { headers: { Authorization: `Bearer ${this.token}` } }
+      );
+    } catch (err: any) {
+      const detail = JSON.stringify(err.response?.data ?? err.message);
+      console.error(`[downloadMedia] step1 ✗ status=${err.response?.status} detail=${detail}`);
+      throw err;
+    }
+
     const mediaUrl: string = metaRes.data.url;
     const mimeType: string = metaRes.data.mime_type || 'application/octet-stream';
     console.log(`[downloadMedia] step1 ✓ mimeType=${mimeType} url=${mediaUrl?.slice(0, 80)}...`);
 
-    console.log(`[downloadMedia] step2 — downloading binary`);
-    const dlRes = await axios.get(mediaUrl, {
-      headers: { Authorization: `Bearer ${this.token}` },
-      responseType: 'arraybuffer',
-    });
-    console.log(`[downloadMedia] step2 ✓ bytes=${dlRes.data.byteLength}`);
+    let dlRes: any;
+    try {
+      dlRes = await axios.get(mediaUrl, {
+        headers: { Authorization: `Bearer ${this.token}` },
+        responseType: 'arraybuffer',
+      });
+    } catch (err: any) {
+      const raw = err.response?.data;
+      const detail = raw
+        ? Buffer.isBuffer(raw)
+          ? raw.toString('utf8').slice(0, 200)
+          : raw instanceof ArrayBuffer
+            ? new TextDecoder().decode(raw).slice(0, 200)
+            : JSON.stringify(raw)
+        : err.message;
+      console.error(`[downloadMedia] step2 ✗ status=${err.response?.status} detail=${detail}`);
+      throw err;
+    }
 
+    console.log(`[downloadMedia] step2 ✓ bytes=${dlRes.data.byteLength}`);
     return { buffer: Buffer.from(dlRes.data), mimeType };
   }
 
