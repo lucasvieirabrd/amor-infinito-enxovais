@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { SaleController } from '../controllers/sale.controller';
 import { CarneController } from '../controllers/carne.controller';
+import { PromissoriaController } from '../controllers/promissoria.controller';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { ensureAuthorized } from '../middlewares/ensureAuthorized';
 import { db } from '../database';
@@ -9,6 +10,7 @@ import { sql } from 'drizzle-orm';
 const saleRouter = Router();
 const saleController = new SaleController();
 const carneController = new CarneController();
+const promissoriaController = new PromissoriaController();
 
 // Todas as rotas de vendas requerem autenticação
 saleRouter.use(ensureAuthenticated);
@@ -149,6 +151,7 @@ saleRouter.get('/diag-installments', ensureAuthorized(['admin']), async (req, re
 });
 
 saleRouter.get('/:saleId/carne', carneController.getCarne);
+saleRouter.get('/:saleId/promissoria', promissoriaController.getPromissoria);
 saleRouter.delete('/:id', saleController.cancel);
 saleRouter.get('/:id', saleController.getById);
 

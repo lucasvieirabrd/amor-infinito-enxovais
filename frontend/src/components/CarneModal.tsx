@@ -24,7 +24,7 @@ export const CarneModal: React.FC<CarneModalProps> = ({
   installmentsCount,
   onClose,
 }) => {
-  const [loading, setLoading] = useState<'download' | 'print' | null>(null);
+  const [loading, setLoading] = useState<'download' | 'print' | 'promissoria' | null>(null);
 
   const handleDownload = async () => {
     setLoading('download');
@@ -53,6 +53,19 @@ export const CarneModal: React.FC<CarneModalProps> = ({
       window.open(url, '_blank');
     } catch {
       alert('Erro ao gerar carnê. Tente novamente.');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handlePromissoria = async () => {
+    setLoading('promissoria');
+    try {
+      const response = await api.get(`/sales/${saleId}/promissoria`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+    } catch {
+      alert('Erro ao gerar promissória. Tente novamente.');
     } finally {
       setLoading(null);
     }
@@ -89,7 +102,15 @@ export const CarneModal: React.FC<CarneModalProps> = ({
             disabled={loading !== null}
             className="w-full py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 text-gray-700 font-semibold text-sm transition-colors"
           >
-            {loading === 'print' ? 'Abrindo...' : '🖨 Imprimir'}
+            {loading === 'print' ? 'Abrindo...' : '🖨 Imprimir Carnê'}
+          </button>
+
+          <button
+            onClick={handlePromissoria}
+            disabled={loading !== null}
+            className="w-full py-2.5 rounded-lg border border-blue-300 hover:bg-blue-50 disabled:opacity-50 text-blue-700 font-semibold text-sm transition-colors"
+          >
+            {loading === 'promissoria' ? 'Gerando...' : '📄 Imprimir Promissória'}
           </button>
 
           <button

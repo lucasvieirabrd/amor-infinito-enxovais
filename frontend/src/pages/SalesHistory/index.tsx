@@ -56,6 +56,7 @@ export const SalesHistory: React.FC = () => {
   const [saleToDelete, setSaleToDelete] = useState<string | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [carneLoading, setCarneLoading] = useState(false);
+  const [promissoriaLoading, setPromissoriaLoading] = useState(false);
 
   const handleDownloadCarne = async (saleId: string, saleNumber: string) => {
     setCarneLoading(true);
@@ -73,6 +74,19 @@ export const SalesHistory: React.FC = () => {
       alert('Erro ao gerar carnê.');
     } finally {
       setCarneLoading(false);
+    }
+  };
+
+  const handlePrintPromissoria = async (saleId: string) => {
+    setPromissoriaLoading(true);
+    try {
+      const response = await api.get(`/sales/${saleId}/promissoria`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+    } catch {
+      alert('Erro ao gerar promissória.');
+    } finally {
+      setPromissoriaLoading(false);
     }
   };
 
@@ -586,16 +600,27 @@ export const SalesHistory: React.FC = () => {
               </>
             )}
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               {selectedSale.paymentMethod === 'installment' && (
                 <Button
                   variant="danger"
                   onClick={() => handleDownloadCarne(selectedSale.id, selectedSale.saleNumber)}
-                  disabled={carneLoading}
+                  disabled={carneLoading || promissoriaLoading}
                   className="flex-1 flex items-center justify-center gap-2"
                 >
                   <FiDownload size={16} />
                   {carneLoading ? 'Gerando...' : 'Gerar Carnê'}
+                </Button>
+              )}
+              {selectedSale.paymentMethod === 'installment' && (
+                <Button
+                  variant="secondary"
+                  onClick={() => handlePrintPromissoria(selectedSale.id)}
+                  disabled={carneLoading || promissoriaLoading}
+                  className="flex-1 flex items-center justify-center gap-2"
+                >
+                  <FiDownload size={16} />
+                  {promissoriaLoading ? 'Gerando...' : 'Promissória'}
                 </Button>
               )}
               <Button variant="secondary" onClick={() => setShowDetails(false)} className="flex-1">
