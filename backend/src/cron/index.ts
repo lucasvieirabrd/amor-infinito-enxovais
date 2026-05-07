@@ -1,5 +1,7 @@
 import cron from 'node-cron';
 import { BillingService } from '../services/billing.service';
+import { db } from '../database';
+import { sql } from 'drizzle-orm';
 
 const billingService = new BillingService();
 
@@ -51,6 +53,24 @@ export function setupCronJobs() {
   cron.schedule('0 2 * * *', async () => {
     console.log('[CRON] Iniciando backup diário (02h00)...');
     console.log('[CRON] Backup concluído.');
+  }, {
+    timezone: 'America/Sao_Paulo'
+  });
+
+  // 00h00 do dia 1 de cada mês: resetar tag "Pago" → "none" em todas as conversas
+  cron.schedule('0 0 1 * *', async () => {
+    console.log('[CRON] Resetando tags "Pago" para "none" (dia 1 do mês)...');
+    try {
+      const result = await db.execute(sql`
+        UPDATE conversations
+        SET tag = 'none', updated_at = CURRENT_TIMESTAMP
+        WHERE tag = 'Pago'
+      `);
+      const affected = (result as any)[0]?.affectedRows ?? 0;
+      console.log(`[CRON] Reset concluído: ${affected} conversa(s) resetada(s).`);
+    } catch (error: any) {
+      console.error('[CRON] Erro ao resetar tags Pago:', error.message);
+    }
   }, {
     timezone: 'America/Sao_Paulo'
   });

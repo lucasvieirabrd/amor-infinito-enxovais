@@ -51,21 +51,23 @@ type ViewMode = 'list' | 'kanban';
 // ─── Tag definitions ─────────────────────────────────────────────────────────
 
 const TAGS = [
-  { value: 'Cobrança',  label: 'Cobrança',  badge: 'error'   as const, color: 'bg-red-100 text-red-800'      },
-  { value: 'Venda',     label: 'Venda',     badge: 'success' as const, color: 'bg-green-100 text-green-800'  },
-  { value: 'Follow',    label: 'Follow',    badge: 'info'    as const, color: 'bg-blue-100 text-blue-800'    },
-  { value: 'Anúncios',  label: 'Anúncios',  badge: 'info'    as const, color: 'bg-purple-100 text-purple-800' },
-  { value: 'none',      label: 'Sem Tag',   badge: 'default' as const, color: 'bg-gray-100 text-gray-500'    },
+  { value: 'Cobrança',  label: 'Cobrança',  badge: 'error'   as const, color: 'bg-red-100 text-red-800'          },
+  { value: 'Venda',     label: 'Venda',     badge: 'success' as const, color: 'bg-green-100 text-green-800'      },
+  { value: 'Follow',    label: 'Follow',    badge: 'info'    as const, color: 'bg-blue-100 text-blue-800'        },
+  { value: 'Anúncios',  label: 'Anúncios',  badge: 'info'    as const, color: 'bg-purple-100 text-purple-800'    },
+  { value: 'Pago',      label: 'Pago',      badge: 'success' as const, color: 'bg-emerald-100 text-emerald-800'  },
+  { value: 'none',      label: 'Sem Tag',   badge: 'default' as const, color: 'bg-gray-100 text-gray-500'        },
 ];
 
 // ─── Kanban column definitions ────────────────────────────────────────────────
 
 const KANBAN_COLUMNS = [
-  { value: 'Cobrança', label: 'Cobrança', color: 'bg-red-100 text-red-700',    header: 'bg-red-50 border-red-200'    },
-  { value: 'Venda',    label: 'Venda',    color: 'bg-green-100 text-green-700', header: 'bg-green-50 border-green-200' },
-  { value: 'Follow',   label: 'Follow',   color: 'bg-blue-100 text-blue-700',   header: 'bg-blue-50 border-blue-200'  },
-  { value: 'Anúncios', label: 'Anúncios', color: 'bg-purple-100 text-purple-700',header: 'bg-purple-50 border-purple-200'},
-  { value: 'none',     label: 'Sem Tag',  color: 'bg-gray-100 text-gray-500',   header: 'bg-gray-50 border-gray-200'  },
+  { value: 'Cobrança', label: 'COBRANÇA', color: 'bg-red-100 text-red-700',         header: 'bg-red-50 border-red-200'         },
+  { value: 'Venda',    label: 'VENDA',    color: 'bg-green-100 text-green-700',      header: 'bg-green-50 border-green-200'      },
+  { value: 'Follow',   label: 'FOLLOW',   color: 'bg-blue-100 text-blue-700',        header: 'bg-blue-50 border-blue-200'        },
+  { value: 'Anúncios', label: 'ANÚNCIOS', color: 'bg-purple-100 text-purple-700',    header: 'bg-purple-50 border-purple-200'    },
+  { value: 'Pago',     label: 'PAGO',     color: 'bg-emerald-100 text-emerald-700',  header: 'bg-emerald-50 border-emerald-200'  },
+  { value: 'none',     label: 'SEM TAG',  color: 'bg-gray-100 text-gray-500',        header: 'bg-gray-50 border-gray-200'        },
 ];
 
 const TAB_ALL = 'Todas';

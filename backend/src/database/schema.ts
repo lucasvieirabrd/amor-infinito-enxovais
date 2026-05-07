@@ -97,7 +97,7 @@ export const messages = mysqlTable('messages', {
   mediaFilename: varchar('media_filename', { length: 500 }),
   direction: mysqlEnum('direction', ['inbound', 'outbound']).notNull(),
   status: mysqlEnum('status', ['sent', 'delivered', 'read', 'failed', 'received']).notNull().default('received'),
-  tag: mysqlEnum('tag', ['cobrança', 'lead', 'suporte', 'none']).notNull().default('none'),
+  tag: mysqlEnum('tag', ['cobrança', 'lead', 'suporte', 'none', 'pago']).notNull().default('none'),
   notes: text('notes'),
   timestamp: datetime('timestamp').notNull(),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),

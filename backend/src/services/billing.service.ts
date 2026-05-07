@@ -26,7 +26,7 @@ const formatAmount = (value: number | string) =>
     maximumFractionDigits: 2,
   });
 
-/** Salva mensagem enviada (ou com falha) no banco */
+/** Salva mensagem enviada (ou com falha) no banco e opcionalmente atualiza a tag da conversa */
 async function saveMessage(
   metaMessageId: string | undefined,
   customerId: string,
@@ -34,6 +34,7 @@ async function saveMessage(
   content: string,
   type: 'template' | 'text' = 'template',
   status: 'sent' | 'failed' = 'sent',
+  conversationTag?: string,
 ) {
   await messageRepository.create({
     metaMessageId,
@@ -47,6 +48,11 @@ async function saveMessage(
     tag: 'cobrança',
     timestamp: new Date(),
   });
+
+  if (status === 'sent' && conversationTag) {
+    const normalizedPhone = toPhone.replace(/\D/g, '');
+    await messageRepository.upsertConversationTag(normalizedPhone, conversationTag);
+  }
 }
 
 export class BillingService {
@@ -124,7 +130,7 @@ export class BillingService {
         stats.success++;
         stats.notifiedClients.push(customer.name);
         console.log(`[BillingService] ✓ Enviado para ${customer.name}`);
-        await saveMessage(result.messages?.[0]?.id, customer.id, customer.phone, contentText);
+        await saveMessage(result.messages?.[0]?.id, customer.id, customer.phone, contentText, 'template', 'sent', 'Cobrança');
       } else {
         stats.failed++;
         console.error(`[BillingService] ✗ Falha ao enviar para ${customer.name}:`, result?.message);
@@ -255,7 +261,7 @@ export class BillingService {
     const contentText = `Olá ${customer[0].name}! Confirmamos o recebimento do pagamento da parcela no valor de R$ ${amountNum}. Obrigado pela pontualidade!`;
 
     if (result && !result.error) {
-      await saveMessage(result.messages?.[0]?.id, customer[0].id, customer[0].phone, contentText);
+      await saveMessage(result.messages?.[0]?.id, customer[0].id, customer[0].phone, contentText, 'template', 'sent', 'Pago');
     } else {
       // Fallback: texto simples
       const fallbackResult = await whatsAppService.sendTextMessage(customer[0].phone, contentText);
@@ -266,6 +272,8 @@ export class BillingService {
           customer[0].phone,
           contentText,
           'text',
+          'sent',
+          'Pago',
         );
       }
     }
@@ -314,7 +322,7 @@ export class BillingService {
       if (result && !result.error) {
         stats.success++;
         const contentText = `Olá ${customer.name}, sua parcela de R$ ${amountNum} venceu em ${dateFmt} e está pendente. Por favor, regularize o pagamento o quanto antes.`;
-        await saveMessage(result.messages?.[0]?.id, customer.id, customer.phone, contentText);
+        await saveMessage(result.messages?.[0]?.id, customer.id, customer.phone, contentText, 'template', 'sent', 'Cobrança');
       } else {
         stats.failed++;
       }
@@ -424,7 +432,7 @@ export class BillingService {
 
     if (result && !result.error) {
       const contentText = `Olá ${customer[0].name}, sua parcela de R$ ${amountNum} venceu em ${dateFmt} e está pendente. Por favor, regularize o pagamento o quanto antes.`;
-      await saveMessage(result.messages?.[0]?.id, customer[0].id, customer[0].phone, contentText);
+      await saveMessage(result.messages?.[0]?.id, customer[0].id, customer[0].phone, contentText, 'template', 'sent', 'Cobrança');
     }
 
     return result;
