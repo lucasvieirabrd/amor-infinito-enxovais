@@ -39,38 +39,46 @@ export class MessageRepository {
   /**
    * Lista as últimas conversas agrupadas por número de telefone.
    * Todos os telefones já estão normalizados (com prefixo 55) pela camada de serviço.
+   * Usa ROW_NUMBER() para garantir exatamente uma linha por contact_phone.
    */
   async listConversations() {
     const result = await db.execute(sql`
       SELECT
-        m1.id,
-        m1.from_phone              AS fromPhone,
-        m1.to_phone                AS toPhone,
-        m1.direction,
-        m1.status,
-        m1.tag,
-        m1.notes,
-        COALESCE(c.name, c2.name)  AS customerName,
-        m1.content                 AS lastMessage,
-        m1.timestamp               AS lastMessageAt,
-        m2.contact_phone           AS contactPhone,
-        COALESCE(conv.tag, 'none') AS conversationTag
-      FROM messages m1
-      LEFT JOIN customers c ON m1.customer_id = c.id
-      INNER JOIN (
+        id,
+        fromPhone,
+        toPhone,
+        direction,
+        status,
+        tag,
+        notes,
+        customerName,
+        lastMessage,
+        lastMessageAt,
+        contactPhone,
+        conversationTag
+      FROM (
         SELECT
-          CASE WHEN direction = 'inbound' THEN from_phone ELSE to_phone END AS contact_phone,
-          MAX(timestamp) AS max_ts
-        FROM messages
-        WHERE deleted_at IS NULL
-        GROUP BY contact_phone
-      ) m2
-        ON  (CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END) = m2.contact_phone
-        AND m1.timestamp = m2.max_ts
-      LEFT JOIN customers c2 ON c.id IS NULL AND c2.phone = m2.contact_phone
-      LEFT JOIN conversations conv ON conv.phone = m2.contact_phone
-      WHERE m1.deleted_at IS NULL
-      ORDER BY m1.timestamp DESC
+          m1.id,
+          m1.from_phone              AS fromPhone,
+          m1.to_phone                AS toPhone,
+          m1.direction,
+          m1.status,
+          m1.tag,
+          m1.notes,
+          COALESCE(c.name, c2.name)  AS customerName,
+          m1.content                 AS lastMessage,
+          m1.timestamp               AS lastMessageAt,
+          CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END AS contactPhone,
+          COALESCE(conv.tag, 'none') AS conversationTag,
+          ROW_NUMBER() OVER (PARTITION BY CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END ORDER BY m1.timestamp DESC) AS rn
+        FROM messages m1
+        LEFT JOIN customers c ON m1.customer_id = c.id
+        LEFT JOIN customers c2 ON c.id IS NULL AND (CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END) = c2.phone
+        LEFT JOIN conversations conv ON conv.phone = (CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END)
+        WHERE m1.deleted_at IS NULL
+      ) ranked
+      WHERE rn = 1
+      ORDER BY lastMessageAt DESC
     `);
 
     // db.execute returns [rows, fields] tuple with mysql2 — extract rows only
