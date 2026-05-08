@@ -1,14 +1,39 @@
 import { Request, Response } from 'express';
 import { MessageRepository } from '../repositories/message.repository';
 import { CustomerRepository } from '../repositories/customer.repository';
+import { WhatsAppService } from '../integrations/whatsapp.service';
 import { notifyNewMessage } from '../websocket';
 import { normalizePhone } from '../utils/normalizePhone';
+import { db } from '../database';
+import { settings } from '../database/schema';
+import { inArray } from 'drizzle-orm';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const messageRepository = new MessageRepository();
 const customerRepository = new CustomerRepository();
+const whatsAppService = new WhatsAppService();
+
+// ─── PIX intent detection ─────────────────────────────────────────────────────
+
+const PIX_KEYWORDS = [
+  'pix', 'chave', 'pagar', 'pagamento', 'como pago',
+  'quero pagar', 'me manda', 'passa o pix', 'chave pix',
+];
+
+function hasPIXIntent(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const normalized = text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+  return PIX_KEYWORDS.some(kw =>
+    normalized.includes(kw.normalize('NFD').replace(/[̀-ͯ]/g, ''))
+  );
+}
+
+// ─── Controller ───────────────────────────────────────────────────────────────
 
 export class WebhookController {
   /**
@@ -89,11 +114,71 @@ export class WebhookController {
 
         // Notificar frontend via WebSocket em tempo real
         notifyNewMessage(phone, { id, ...messageData, customerName: customer?.name || contact?.profile?.name });
-        
+
         console.log(`[WEBHOOK] Mensagem recebida de ${phone}: ${msg.text?.body}`);
+
+        // 2. Auto-resposta PIX (somente mensagens de texto inbound)
+        if (msg.type === 'text' && hasPIXIntent(content)) {
+          try {
+            const pixRows = await db
+              .select({ key: settings.key, value: settings.value })
+              .from(settings)
+              .where(inArray(settings.key, ['pix_celita', 'pix_marcelo']));
+
+            const pixCelita  = pixRows.find(r => r.key === 'pix_celita')?.value  ?? '';
+            const pixMarcelo = pixRows.find(r => r.key === 'pix_marcelo')?.value ?? '';
+
+            if (pixCelita || pixMarcelo) {
+              const lines = ['Olá! Segue nossas chaves PIX para pagamento:', ''];
+              if (pixCelita)  lines.push(`PIX CELITA: ${pixCelita}`);
+              if (pixMarcelo) lines.push(`PIX MARCELO: ${pixMarcelo}`);
+              lines.push('👤 Beneficiário: Amor Infinito Enxovais', '');
+              lines.push('Após o pagamento, nos envie o comprovante 😊');
+              const pixText = lines.join('\n');
+
+              const result = await whatsAppService.sendTextMessage(phone, pixText);
+
+              if (result && !result.error) {
+                const autoId = await messageRepository.create({
+                  metaMessageId: result.messages?.[0]?.id,
+                  customerId: customer?.id || null,
+                  fromPhone: 'SISTEMA',
+                  toPhone: phone,
+                  type: 'text',
+                  content: pixText,
+                  direction: 'outbound',
+                  status: 'sent',
+                  timestamp: new Date(),
+                });
+
+                notifyNewMessage(phone, {
+                  id: autoId,
+                  metaMessageId: result.messages?.[0]?.id,
+                  customerId: customer?.id || null,
+                  fromPhone: 'SISTEMA',
+                  toPhone: phone,
+                  type: 'text',
+                  content: pixText,
+                  direction: 'outbound',
+                  status: 'sent',
+                  timestamp: new Date(),
+                  customerName: customer?.name || contact?.profile?.name,
+                });
+
+                console.log(`[WEBHOOK] Auto-resposta PIX enviada para ${phone}`);
+              } else {
+                console.error(`[WEBHOOK] Falha ao enviar auto-resposta PIX para ${phone}:`, result?.message);
+              }
+            } else {
+              console.warn('[WEBHOOK] Auto-resposta PIX ignorada: nenhuma chave PIX cadastrada nas settings');
+            }
+          } catch (err: any) {
+            console.error('[WEBHOOK] Erro na auto-resposta PIX:', err.message);
+          }
+        }
       }
 
-      // 2. Processar Status de Mensagens Enviadas (Outbound)
+      // 3. Processar Status de Mensagens Enviadas (Outbound)
       if (value?.statuses) {
         const statusMsg = value.statuses[0];
         const metaMessageId = statusMsg.id;
