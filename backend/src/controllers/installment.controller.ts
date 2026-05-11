@@ -38,9 +38,30 @@ export class InstallmentController {
     });
 
     const data = updateSchema.parse(req.body);
-    const result = await installmentService.updateInstallment(id, data);
+    const userId = (req as any).user?.id;
+    const result = await installmentService.updateInstallment(id, data, userId);
 
     return res.json(result);
+  }
+
+  async delete(req: Request, res: Response) {
+    const { id } = req.params;
+    const userId = (req as any).user!.id;
+    await installmentService.deleteInstallment(id, userId);
+    return res.status(204).send();
+  }
+
+  async addToSale(req: Request, res: Response) {
+    const { saleId } = req.params;
+    const schema = z.object({
+      installmentNumber: z.number().int().min(0),
+      amount: z.number().positive(),
+      dueDate: z.string().min(1),
+    });
+    const data = schema.parse(req.body);
+    const userId = (req as any).user!.id;
+    const result = await installmentService.addInstallmentToSale(saleId, data, userId);
+    return res.status(201).json(result);
   }
 
   async updateDueDate(req: Request, res: Response) {

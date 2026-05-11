@@ -2,7 +2,10 @@ import { InstallmentRepository } from '../repositories/installment.repository';
 import { BillingService } from './billing.service';
 import { AppError } from '../utils/AppError';
 import { isBefore, startOfDay, isToday, getDaysInMonth } from 'date-fns';
-import { customers, installments } from '../database/schema';
+import { customers, installments, auditLogs } from '../database/schema';
+import { db } from '../database';
+import { v4 as uuidv4 } from 'uuid';
+import { SaleRepository } from '../repositories/sale.repository';
 
 const installmentRepository = new InstallmentRepository();
 const billingService = new BillingService();
@@ -68,17 +71,34 @@ export class InstallmentService {
     });
   }
 
-  async updateInstallment(id: string, data: { dueDate?: string; originalAmount?: number }) {
+  async updateInstallment(id: string, data: { dueDate?: string; originalAmount?: number }, userId?: string) {
     const installment = await installmentRepository.findById(id);
     if (!installment) {
       throw new AppError('Parcela não encontrada', 404);
+    }
+    if (installment.status === 'paid') {
+      throw new AppError('Não é possível editar uma parcela já paga', 400);
     }
 
     const updateData: any = {};
     if (data.dueDate) updateData.dueDate = new Date(data.dueDate + 'T12:00:00');
     if (data.originalAmount !== undefined) updateData.originalAmount = data.originalAmount.toFixed(2);
 
-    return installmentRepository.update(id, updateData);
+    const result = await installmentRepository.update(id, updateData);
+
+    if (userId) {
+      await db.insert(auditLogs).values({
+        id: uuidv4(),
+        userId,
+        action: 'UPDATE_INSTALLMENT',
+        entityType: 'Installment',
+        entityId: id,
+        oldValue: { dueDate: installment.dueDate, originalAmount: installment.originalAmount },
+        newValue: data,
+      });
+    }
+
+    return result;
   }
 
   async updateDueDate(id: string, newDueDate: string) {
@@ -198,6 +218,61 @@ export class InstallmentService {
     }
 
     return { updated: updated.length };
+  }
+
+  async deleteInstallment(id: string, userId: string) {
+    const installment = await installmentRepository.findById(id);
+    if (!installment) {
+      throw new AppError('Parcela não encontrada', 404);
+    }
+    if (installment.status === 'paid') {
+      throw new AppError('Não é possível remover uma parcela já paga', 400);
+    }
+
+    await installmentRepository.softDelete(id);
+
+    await db.insert(auditLogs).values({
+      id: uuidv4(),
+      userId,
+      action: 'DELETE_INSTALLMENT',
+      entityType: 'Installment',
+      entityId: id,
+      oldValue: { installmentNumber: installment.installmentNumber, originalAmount: installment.originalAmount },
+      newValue: null,
+    });
+  }
+
+  async addInstallmentToSale(saleId: string, data: { installmentNumber: number; amount: number; dueDate: string }, userId: string) {
+    const saleRepository = new SaleRepository();
+    const sale = await saleRepository.findById(saleId);
+    if (!sale) {
+      throw new AppError('Venda não encontrada', 404);
+    }
+
+    const isEntry = data.installmentNumber === 0;
+    const date = new Date(data.dueDate + 'T12:00:00');
+
+    const newInstallment = await installmentRepository.createOne({
+      saleId,
+      customerId: sale.customerId,
+      installmentNumber: data.installmentNumber,
+      dueDate: date,
+      originalAmount: data.amount.toFixed(2),
+      ...(isEntry && { paidAmount: data.amount.toFixed(2), paymentDate: date }),
+      status: isEntry ? 'paid' : 'pending',
+    });
+
+    await db.insert(auditLogs).values({
+      id: uuidv4(),
+      userId,
+      action: 'ADD_INSTALLMENT',
+      entityType: 'Installment',
+      entityId: newInstallment!.id,
+      oldValue: null,
+      newValue: { saleId, installmentNumber: data.installmentNumber, amount: data.amount, dueDate: data.dueDate },
+    });
+
+    return newInstallment;
   }
 
   async sendManualBillingMessage(customerId: string, installmentId: string) {

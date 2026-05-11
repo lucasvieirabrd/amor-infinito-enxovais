@@ -1,6 +1,7 @@
 import { db } from '../database';
 import { installments, customers, sales } from '../database/schema';
 import { eq, and, isNull, lt, gte, sql, or } from 'drizzle-orm';
+import { v4 as uuidv4 } from 'uuid';
 
 export class InstallmentRepository {
   async findById(id: string) {
@@ -266,5 +267,15 @@ export class InstallmentRepository {
       day: row.day,
       total: parseFloat(row.total?.toString() ?? '0') || 0,
     }));
+  }
+
+  async softDelete(id: string) {
+    await db.update(installments).set({ deletedAt: new Date() }).where(eq(installments.id, id));
+  }
+
+  async createOne(data: any) {
+    const id = uuidv4();
+    await db.insert(installments).values({ ...data, id });
+    return this.findById(id);
   }
 }
