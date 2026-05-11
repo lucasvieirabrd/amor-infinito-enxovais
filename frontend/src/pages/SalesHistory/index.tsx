@@ -548,20 +548,43 @@ export const SalesHistory: React.FC = () => {
                 {/* Parcelas do crediário */}
                 {selectedSale.paymentMethod === 'installment' &&
                   selectedSale.installments &&
-                  selectedSale.installments.filter(i => i.installmentNumber > 0).length > 0 && (
+                  selectedSale.installments.length > 0 && (
                   <div>
                     <h4 className="font-semibold text-gray-900 mb-3">Parcelas do Crediário</h4>
                     <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                       {(() => {
-                        const regularInstallments = selectedSale.installments!.filter(i => i.installmentNumber > 0);
-                        const total = regularInstallments.length;
-                        return regularInstallments.map((inst, idx) => {
+                        const sorted = [...selectedSale.installments!].sort((a, b) => a.installmentNumber - b.installmentNumber);
+                        const regularCount = sorted.filter(i => i.installmentNumber > 0).length;
+                        return sorted.map((inst) => {
+                          const isEntry = inst.installmentNumber === 0;
+                          if (isEntry) {
+                            return (
+                              <div key={inst.id} className="flex justify-between items-center p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                <div>
+                                  <p className="font-semibold text-amber-800 text-sm">Entrada</p>
+                                  {inst.paymentDate && (
+                                    <p className="text-xs text-amber-600">
+                                      Paga em {format(new Date(inst.paymentDate), 'dd/MM/yyyy')}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="text-right space-y-1">
+                                  <p className="font-bold text-amber-900 text-sm">
+                                    R$ {parseFloat(inst.originalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </p>
+                                  <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                    Paga
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          }
                           const { label, bgClass, textClass } = getInstallmentStatusStyle(inst);
                           return (
-                            <div key={idx} className="flex justify-between items-center p-3 bg-background rounded-lg">
+                            <div key={inst.id} className="flex justify-between items-center p-3 bg-background rounded-lg">
                               <div>
                                 <p className="font-semibold text-gray-900 text-sm">
-                                  Parcela {inst.installmentNumber}/{total}
+                                  Parcela {inst.installmentNumber}/{regularCount}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   Venc.: {format(new Date(inst.dueDate), 'dd/MM/yyyy')}

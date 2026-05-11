@@ -98,7 +98,8 @@ export class SaleRepository {
     const insts = await db
       .select()
       .from(installments)
-      .where(and(eq(installments.saleId, id), isNull(installments.deletedAt)));
+      .where(and(eq(installments.saleId, id), isNull(installments.deletedAt)))
+      .orderBy(installments.installmentNumber);
 
     return {
       ...saleRows[0],
