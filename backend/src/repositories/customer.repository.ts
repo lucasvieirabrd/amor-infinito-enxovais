@@ -119,4 +119,57 @@ export class CustomerRepository {
       .set({ deletedAt: new Date() })
       .where(eq(customers.id, id));
   }
+
+  async countMergeableRecords(duplicateId: string) {
+    const [instRows] = await db.execute(sql`
+      SELECT COUNT(*) AS cnt FROM installments WHERE customer_id = ${duplicateId} AND deleted_at IS NULL
+    `) as any;
+    const [saleRows] = await db.execute(sql`
+      SELECT COUNT(*) AS cnt FROM sales WHERE customer_id = ${duplicateId} AND deleted_at IS NULL
+    `) as any;
+    const [msgRows] = await db.execute(sql`
+      SELECT COUNT(*) AS cnt FROM messages WHERE customer_id = ${duplicateId} AND deleted_at IS NULL
+    `) as any;
+
+    return {
+      installments: Number(instRows[0].cnt),
+      sales: Number(saleRows[0].cnt),
+      messages: Number(msgRows[0].cnt),
+    };
+  }
+
+  async mergeCustomers(primaryId: string, duplicateId: string, mergedData: any) {
+    // Garble duplicate's unique fields first to release constraints before updating primary
+    const garbledPhone = `D${duplicateId.slice(0, 19)}`;
+    const garbledCpf   = `D${duplicateId.slice(0, 13)}`;
+
+    await db.execute(sql`
+      UPDATE customers SET phone = ${garbledPhone}, cpf = ${garbledCpf} WHERE id = ${duplicateId}
+    `);
+
+    await db
+      .update(customers)
+      .set({ ...mergedData, updatedAt: new Date() })
+      .where(eq(customers.id, primaryId));
+
+    await db.execute(sql`
+      UPDATE installments SET customer_id = ${primaryId}, updated_at = NOW()
+      WHERE customer_id = ${duplicateId} AND deleted_at IS NULL
+    `);
+
+    await db.execute(sql`
+      UPDATE sales SET customer_id = ${primaryId}, updated_at = NOW()
+      WHERE customer_id = ${duplicateId} AND deleted_at IS NULL
+    `);
+
+    await db.execute(sql`
+      UPDATE messages SET customer_id = ${primaryId}
+      WHERE customer_id = ${duplicateId} AND deleted_at IS NULL
+    `);
+
+    await db
+      .update(customers)
+      .set({ deletedAt: new Date() })
+      .where(eq(customers.id, duplicateId));
+  }
 }

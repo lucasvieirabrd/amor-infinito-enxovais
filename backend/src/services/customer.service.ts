@@ -1,6 +1,9 @@
 import { CustomerRepository } from '../repositories/customer.repository';
 import { AppError } from '../utils/AppError';
 import { normalizePhone } from '../utils/normalizePhone';
+import { db } from '../database';
+import { auditLogs } from '../database/schema';
+import { v4 as uuidv4 } from 'uuid';
 
 const customerRepository = new CustomerRepository();
 
@@ -110,5 +113,52 @@ export class CustomerService {
       throw new AppError('Cliente não encontrado', 404);
     }
     await customerRepository.delete(id);
+  }
+
+  async getMergePreview(primaryId: string, duplicateId: string) {
+    if (primaryId === duplicateId) {
+      throw new AppError('Não é possível mesclar um cliente com ele mesmo', 400);
+    }
+    const primary = await customerRepository.findById(primaryId);
+    if (!primary) throw new AppError('Cliente principal não encontrado', 404);
+
+    const duplicate = await customerRepository.findById(duplicateId);
+    if (!duplicate) throw new AppError('Cliente duplicado não encontrado', 404);
+
+    return customerRepository.countMergeableRecords(duplicateId);
+  }
+
+  async mergeCustomers(primaryId: string, duplicateId: string, mergedData: any, userId: string) {
+    if (primaryId === duplicateId) {
+      throw new AppError('Não é possível mesclar um cliente com ele mesmo', 400);
+    }
+
+    const primary = await customerRepository.findById(primaryId);
+    if (!primary) throw new AppError('Cliente principal não encontrado', 404);
+
+    const duplicate = await customerRepository.findById(duplicateId);
+    if (!duplicate) throw new AppError('Cliente duplicado não encontrado', 404);
+
+    const counts = await customerRepository.countMergeableRecords(duplicateId);
+
+    // phone comes from customer record already normalized; pass it through
+    await customerRepository.mergeCustomers(primaryId, duplicateId, mergedData);
+
+    await db.insert(auditLogs).values({
+      id: uuidv4(),
+      userId,
+      action: 'MERGE_CUSTOMERS',
+      entityType: 'Customer',
+      entityId: primaryId,
+      oldValue: { duplicateId, duplicateName: duplicate.name },
+      newValue: mergedData,
+    });
+
+    return {
+      primaryId,
+      installments: counts.installments,
+      sales: counts.sales,
+      messages: counts.messages,
+    };
   }
 }

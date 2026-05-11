@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
-import { FiSearch, FiPlus, FiMapPin, FiEdit, FiTrash2, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiSearch, FiPlus, FiMapPin, FiEdit, FiTrash2, FiChevronLeft, FiChevronRight, FiGitMerge } from 'react-icons/fi';
 import { Button, Input, Modal, Table, Card, Loading, Badge } from '../../components/ui';
 import axios from 'axios';
+import { useAuth } from '../../hooks/useAuth';
+import { MergeCustomersModal } from './MergeCustomersModal';
 
 interface Customer {
   id: string;
@@ -61,11 +63,15 @@ function displayPhone(phone: string): string {
 }
 
 export const Customers: React.FC = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Customer>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -279,6 +285,11 @@ export const Customers: React.FC = () => {
             </Badge>
           </div>
           <div className="flex gap-2">
+            {isAdmin && (
+              <Button onClick={() => setIsMergeModalOpen(true)} variant="secondary" className="flex items-center gap-1.5">
+                <FiGitMerge size={16} /> Mesclar Clientes
+              </Button>
+            )}
             <Button onClick={() => setIsImportModalOpen(true)} variant="secondary">
               ⬆ Importar CSV
             </Button>
@@ -578,6 +589,12 @@ export const Customers: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Modal de Mesclagem de Clientes */}
+      <MergeCustomersModal
+        isOpen={isMergeModalOpen}
+        onClose={() => setIsMergeModalOpen(false)}
+      />
     </div>
   );
 };

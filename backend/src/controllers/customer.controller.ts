@@ -101,4 +101,40 @@ export class CustomerController {
     const result = await customerImportService.importFromCSV(req.file.buffer);
     return res.json(result);
   }
+
+  async getMergePreview(req: Request, res: Response) {
+    const { primaryId, duplicateId } = req.params;
+    const result = await customerService.getMergePreview(primaryId, duplicateId);
+    return res.json(result);
+  }
+
+  async merge(req: Request, res: Response) {
+    const mergeSchema = z.object({
+      primaryCustomerId: z.string(),
+      duplicateCustomerId: z.string(),
+      mergedData: z.object({
+        name: z.string().min(1),
+        cpf: z.string().optional().nullable(),
+        phone: z.string().optional().nullable(),
+        email: z.string().optional().nullable(),
+        cep: z.string().optional().nullable(),
+        addressStreet: z.string().optional().nullable(),
+        addressNumber: z.string().optional().nullable(),
+        addressNeighborhood: z.string().optional().nullable(),
+        addressCity: z.string().optional().nullable(),
+        addressState: z.string().optional().nullable(),
+      }),
+    });
+
+    const { primaryCustomerId, duplicateCustomerId, mergedData } = mergeSchema.parse(req.body);
+    const userId = (req as any).user!.id;
+
+    const result = await customerService.mergeCustomers(
+      primaryCustomerId,
+      duplicateCustomerId,
+      mergedData,
+      userId,
+    );
+    return res.json(result);
+  }
 }

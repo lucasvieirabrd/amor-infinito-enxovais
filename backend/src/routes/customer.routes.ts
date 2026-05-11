@@ -14,6 +14,11 @@ customerRouter.use(ensureAuthenticated);
 
 customerRouter.post('/', customerController.register);
 customerRouter.get('/', customerController.list);
+
+// Merge routes — must come before /:id to avoid param conflicts
+customerRouter.get('/merge-preview/:primaryId/:duplicateId', ensureAuthorized(['admin']), customerController.getMergePreview);
+customerRouter.post('/merge', ensureAuthorized(['admin']), customerController.merge);
+
 customerRouter.get('/:id', customerController.getById);
 customerRouter.put('/:id', customerController.update);
 
