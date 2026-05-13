@@ -118,10 +118,28 @@ export class MessageRepository {
   }
 
   async upsertConversationTag(phone: string, tag: string) {
-    await db.execute(sql`
+    // phone must be the canonical form (13-digit with 55 prefix)
+    const legacyPhone = phone.startsWith('55') ? phone.slice(2) : null;
+
+    console.log(`[upsertConversationTag] phone=${phone} legacyPhone=${legacyPhone} tag=${tag}`);
+
+    const [result] = await db.execute(sql`
       INSERT INTO conversations (phone, tag) VALUES (${phone}, ${tag})
       ON DUPLICATE KEY UPDATE tag = ${tag}, updated_at = CURRENT_TIMESTAMP
     `);
+    console.log(`[upsertConversationTag] result=`, (result as any)?.affectedRows, 'changedRows=', (result as any)?.changedRows);
+
+    // Remove any non-canonical (11-digit) row for the same number so the
+    // listConversations JOIN never matches two conversations rows at once.
+    if (legacyPhone) {
+      const [del] = await db.execute(sql`
+        DELETE FROM conversations WHERE phone = ${legacyPhone}
+      `);
+      const affected = (del as any)?.affectedRows ?? 0;
+      if (affected > 0) {
+        console.log(`[upsertConversationTag] deleted legacy row phone=${legacyPhone} (${affected} row)`);
+      }
+    }
   }
 
   async deleteConversationMessages(phone: string) {
