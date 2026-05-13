@@ -38,8 +38,10 @@ export class MessageRepository {
 
   /**
    * Lista as últimas conversas agrupadas por número de telefone.
-   * Todos os telefones já estão normalizados (com prefixo 55) pela camada de serviço.
-   * Usa ROW_NUMBER() para garantir exatamente uma linha por contact_phone.
+   * Normaliza o contactPhone antes de particionar: telefones com 11 dígitos recebem
+   * o prefixo '55', garantindo que o mesmo cliente nunca apareça em dois cards
+   * mesmo que mensagens antigas estejam salvas sem o prefixo.
+   * Usa ROW_NUMBER() para garantir exatamente uma linha por contact_phone normalizado.
    */
   async listConversations() {
     const result = await db.execute(sql`
@@ -68,13 +70,43 @@ export class MessageRepository {
           COALESCE(c.name, c2.name)  AS customerName,
           m1.content                 AS lastMessage,
           m1.timestamp               AS lastMessageAt,
-          CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END AS contactPhone,
+          -- contactPhone normalizado: adiciona '55' se exatamente 11 dígitos
+          CASE
+            WHEN CHAR_LENGTH(CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END) = 11
+            THEN CONCAT('55', CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END)
+            ELSE CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END
+          END AS contactPhone,
           COALESCE(conv.tag, 'none') AS conversationTag,
-          ROW_NUMBER() OVER (PARTITION BY CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END ORDER BY m1.timestamp DESC) AS rn
+          ROW_NUMBER() OVER (
+            PARTITION BY
+              CASE
+                WHEN CHAR_LENGTH(CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END) = 11
+                THEN CONCAT('55', CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END)
+                ELSE CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END
+              END
+            ORDER BY m1.timestamp DESC
+          ) AS rn
         FROM messages m1
         LEFT JOIN customers c ON m1.customer_id = c.id
-        LEFT JOIN customers c2 ON c.id IS NULL AND (CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END) = c2.phone
-        LEFT JOIN conversations conv ON conv.phone = (CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END)
+        LEFT JOIN customers c2
+          ON c.id IS NULL
+          AND (
+            CASE
+              WHEN CHAR_LENGTH(CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END) = 11
+              THEN CONCAT('55', CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END)
+              ELSE CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END
+            END
+          ) = c2.phone
+        -- JOIN também normaliza conversations.phone para suportar dados legados sem prefixo 55
+        LEFT JOIN conversations conv
+          ON (CASE WHEN CHAR_LENGTH(conv.phone) = 11 THEN CONCAT('55', conv.phone) ELSE conv.phone END)
+          = (
+            CASE
+              WHEN CHAR_LENGTH(CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END) = 11
+              THEN CONCAT('55', CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END)
+              ELSE CASE WHEN m1.direction = 'inbound' THEN m1.from_phone ELSE m1.to_phone END
+            END
+          )
         WHERE m1.deleted_at IS NULL
       ) ranked
       WHERE rn = 1

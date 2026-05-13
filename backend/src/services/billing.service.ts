@@ -2,6 +2,7 @@ import { WhatsAppService } from '../integrations/whatsapp.service';
 import { InstallmentRepository } from '../repositories/installment.repository';
 import { MessageRepository } from '../repositories/message.repository';
 import { AppError } from '../utils/AppError';
+import { normalizePhone } from '../utils/normalizePhone';
 import { db } from '../database';
 import { customers, installments } from '../database/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
@@ -50,8 +51,7 @@ async function saveMessage(
   });
 
   if (status === 'sent' && conversationTag) {
-    const normalizedPhone = toPhone.replace(/\D/g, '');
-    await messageRepository.upsertConversationTag(normalizedPhone, conversationTag);
+    await messageRepository.upsertConversationTag(normalizePhone(toPhone), conversationTag);
   }
 }
 
