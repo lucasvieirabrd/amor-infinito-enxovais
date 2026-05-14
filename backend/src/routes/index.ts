@@ -11,6 +11,7 @@ import { seedRouter } from './seed.routes';
 import { billingRouter } from './billing.routes';
 import { dashboardRouter } from './dashboard.routes';
 import { settingsRouter } from './settings.routes';
+import { reportRouter } from './report.routes';
 
 const routes = Router();
 
@@ -26,5 +27,6 @@ routes.use('/seed', seedRouter);
 routes.use('/billing', billingRouter);
 routes.use('/dashboard', dashboardRouter);
 routes.use('/settings', settingsRouter);
+routes.use('/reports', reportRouter);
 
 export { routes };

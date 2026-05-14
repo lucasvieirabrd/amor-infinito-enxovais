@@ -15,6 +15,9 @@ import {
   FiClock,
   FiCheckCircle,
   FiCalendar,
+  FiFileText,
+  FiDownload,
+  FiX,
 } from 'react-icons/fi';
 import { Button, Card, Badge, Modal, Input, Loading } from '../../components/ui';
 import { format, isBefore, startOfDay } from 'date-fns';
@@ -78,6 +81,18 @@ export const Installments: React.FC = () => {
   const [bulkNewDay, setBulkNewDay] = useState(15);
   const [bulkOnlyPending, setBulkOnlyPending] = useState(true);
 
+  // Modal: gerar relatório
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportStatus, setReportStatus] = useState<'all' | 'overdue' | 'today' | 'current' | 'paid'>('all');
+  const [reportFormat, setReportFormat] = useState<'pdf' | 'excel'>('pdf');
+  const [reportStartDate, setReportStartDate] = useState('');
+  const [reportEndDate, setReportEndDate] = useState('');
+  const [reportCustomerSearch, setReportCustomerSearch] = useState('');
+  const [reportCustomerId, setReportCustomerId] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [reportError, setReportError] = useState('');
+
   const queryClient = useQueryClient();
   const ITEMS_PER_PAGE = 15;
 
@@ -109,6 +124,18 @@ export const Installments: React.FC = () => {
       return res.data as Installment[];
     },
     enabled: !!expandedCustomer,
+  });
+
+  const { data: customerSuggestions } = useQuery({
+    queryKey: ['report-customer-search', reportCustomerSearch],
+    queryFn: async () => {
+      if (reportCustomerSearch.length < 2) return [];
+      const res = await api.get('/installments/active', {
+        params: { search: reportCustomerSearch, limit: 6, page: 1 },
+      });
+      return (res.data.data || []) as CustomerCrediario[];
+    },
+    enabled: reportCustomerSearch.length >= 2,
   });
 
   // ── Mutations ──────────────────────────────────────────────────────────────
@@ -213,6 +240,49 @@ export const Installments: React.FC = () => {
     }
   };
 
+  const handleGenerateReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReportError('');
+    setIsGeneratingReport(true);
+    try {
+      const params: Record<string, string> = { status: reportStatus, format: reportFormat };
+      if (reportCustomerId) params.customerId = reportCustomerId;
+      if (reportStartDate) params.startDate = reportStartDate;
+      if (reportEndDate) params.endDate = reportEndDate;
+
+      const res = await api.get('/reports/credit', {
+        params,
+        responseType: 'blob',
+      });
+
+      const ext = reportFormat === 'pdf' ? 'pdf' : 'xlsx';
+      const mime = reportFormat === 'pdf'
+        ? 'application/pdf'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const blob = new Blob([res.data], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio-crediario-${dateStr}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setIsReportModalOpen(false);
+    } catch (err: any) {
+      setReportError('Erro ao gerar relatório. Tente novamente.');
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  const handleReportModalClose = () => {
+    setIsReportModalOpen(false);
+    setReportError('');
+    setReportCustomerSearch('');
+    setReportCustomerId('');
+    setShowCustomerDropdown(false);
+  };
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   const customerStatusVariant = (c: CustomerCrediario) => {
@@ -239,7 +309,16 @@ export const Installments: React.FC = () => {
       <div className="max-w-7xl mx-auto">
 
         {/* Título */}
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Crediário</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">Crediário</h1>
+          <Button
+            onClick={() => setIsReportModalOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <FiFileText size={16} />
+            Gerar Relatório
+          </Button>
+        </div>
 
         {/* KPI cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -651,6 +730,174 @@ export const Installments: React.FC = () => {
             </Button>
             <Button type="submit" variant="primary" loading={bulkUpdateDayMutation.isPending}>
               Confirmar
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Gerar Relatório */}
+      <Modal
+        isOpen={isReportModalOpen}
+        onClose={handleReportModalClose}
+        title="Gerar Relatório de Crediário"
+      >
+        <form onSubmit={handleGenerateReport} className="space-y-5">
+
+          {/* Status */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Status das parcelas</label>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { value: 'all',     label: 'Todos' },
+                { value: 'overdue', label: 'Em Atraso' },
+                { value: 'today',   label: 'Vencendo Hoje' },
+                { value: 'current', label: 'Em Dia' },
+                { value: 'paid',    label: 'Quitado' },
+              ] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setReportStatus(opt.value)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    reportStatus === opt.value
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Cliente */}
+          <div className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cliente específico <span className="text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <div className="relative">
+              <Input
+                type="text"
+                placeholder="Buscar cliente..."
+                value={reportCustomerSearch}
+                onChange={(e) => {
+                  setReportCustomerSearch(e.target.value);
+                  setReportCustomerId('');
+                  setShowCustomerDropdown(true);
+                }}
+                onFocus={() => setShowCustomerDropdown(true)}
+                icon={<FiSearch />}
+              />
+              {reportCustomerId && (
+                <button
+                  type="button"
+                  onClick={() => { setReportCustomerSearch(''); setReportCustomerId(''); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <FiX size={14} />
+                </button>
+              )}
+            </div>
+            {showCustomerDropdown && reportCustomerSearch.length >= 2 && !reportCustomerId && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {(customerSuggestions ?? []).length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-gray-500">Nenhum cliente encontrado</div>
+                ) : (
+                  (customerSuggestions ?? []).map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex flex-col"
+                      onClick={() => {
+                        setReportCustomerSearch(c.name);
+                        setReportCustomerId(c.id);
+                        setShowCustomerDropdown(false);
+                      }}
+                    >
+                      <span className="font-medium text-gray-900">{c.name}</span>
+                      <span className="text-xs text-gray-500">{c.phone}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Período de venda */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Data de venda inicial <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <Input
+                type="date"
+                value={reportStartDate}
+                onChange={(e) => setReportStartDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Data de venda final <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <Input
+                type="date"
+                value={reportEndDate}
+                onChange={(e) => setReportEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Formato */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Formato de saída</label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${reportFormat === 'pdf' ? 'border-rose-500 bg-rose-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input
+                  type="radio"
+                  name="reportFormat"
+                  value="pdf"
+                  checked={reportFormat === 'pdf'}
+                  onChange={() => setReportFormat('pdf')}
+                  className="mt-0.5 accent-rose-600"
+                />
+                <div>
+                  <div className="font-medium text-gray-900 text-sm">PDF</div>
+                  <div className="text-xs text-gray-500 mt-0.5">Recomendado para impressão</div>
+                </div>
+              </label>
+              <label className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${reportFormat === 'excel' ? 'border-rose-500 bg-rose-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input
+                  type="radio"
+                  name="reportFormat"
+                  value="excel"
+                  checked={reportFormat === 'excel'}
+                  onChange={() => setReportFormat('excel')}
+                  className="mt-0.5 accent-rose-600"
+                />
+                <div>
+                  <div className="font-medium text-gray-900 text-sm">Excel / XLSX</div>
+                  <div className="text-xs text-gray-500 mt-0.5">Recomendado para análise</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {reportError && (
+            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{reportError}</p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="secondary" onClick={handleReportModalClose}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={isGeneratingReport}
+              className="flex items-center gap-2"
+            >
+              {!isGeneratingReport && <FiDownload size={15} />}
+              {isGeneratingReport ? 'Gerando...' : 'Gerar e Baixar'}
             </Button>
           </div>
         </form>
