@@ -24,7 +24,7 @@ export const CarneModal: React.FC<CarneModalProps> = ({
   installmentsCount,
   onClose,
 }) => {
-  const [loading, setLoading] = useState<'download' | 'print' | 'promissoria' | null>(null);
+  const [loading, setLoading] = useState<'download' | 'print' | 'promissoria' | 'ordem' | null>(null);
 
   const handleDownload = async () => {
     setLoading('download');
@@ -71,6 +71,19 @@ export const CarneModal: React.FC<CarneModalProps> = ({
     }
   };
 
+  const handleOrdem = async () => {
+    setLoading('ordem');
+    try {
+      const response = await api.get(`/sales/${saleId}/ordem`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+    } catch {
+      alert('Erro ao gerar ordem de venda. Tente novamente.');
+    } finally {
+      setLoading(null);
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="md">
       <div className="flex flex-col items-center gap-5 py-1">
@@ -111,6 +124,14 @@ export const CarneModal: React.FC<CarneModalProps> = ({
             className="w-full py-2.5 rounded-lg border border-blue-300 hover:bg-blue-50 disabled:opacity-50 text-blue-700 font-semibold text-sm transition-colors"
           >
             {loading === 'promissoria' ? 'Gerando...' : '📄 Imprimir Promissória'}
+          </button>
+
+          <button
+            onClick={handleOrdem}
+            disabled={loading !== null}
+            className="w-full py-2.5 rounded-lg border border-green-300 hover:bg-green-50 disabled:opacity-50 text-green-700 font-semibold text-sm transition-colors"
+          >
+            {loading === 'ordem' ? 'Gerando...' : '🗒 Imprimir Ordem de Venda'}
           </button>
 
           <button
