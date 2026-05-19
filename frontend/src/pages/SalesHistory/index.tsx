@@ -60,6 +60,7 @@ export const SalesHistory: React.FC = () => {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [carneLoading, setCarneLoading] = useState(false);
   const [promissoriaLoading, setPromissoriaLoading] = useState(false);
+  const [ordemLoading, setOrdemLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editValues, setEditValues] = useState<Record<string, { amount: string; dueDate: string }>>({});
   const [markedForDelete, setMarkedForDelete] = useState<Set<string>>(new Set());
@@ -97,6 +98,19 @@ export const SalesHistory: React.FC = () => {
       alert('Erro ao gerar promissória.');
     } finally {
       setPromissoriaLoading(false);
+    }
+  };
+
+  const handlePrintOrdem = async (saleId: string) => {
+    setOrdemLoading(true);
+    try {
+      const response = await api.get(`/sales/${saleId}/ordem`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+    } catch {
+      alert('Erro ao gerar ordem de venda.');
+    } finally {
+      setOrdemLoading(false);
     }
   };
 
@@ -889,7 +903,7 @@ export const SalesHistory: React.FC = () => {
                 <Button
                   variant="danger"
                   onClick={() => handleDownloadCarne(selectedSale.id, selectedSale.saleNumber)}
-                  disabled={carneLoading || promissoriaLoading}
+                  disabled={carneLoading || promissoriaLoading || ordemLoading}
                   className="flex-1 flex items-center justify-center gap-2"
                 >
                   <FiDownload size={16} />
@@ -900,13 +914,22 @@ export const SalesHistory: React.FC = () => {
                 <Button
                   variant="secondary"
                   onClick={() => handlePrintPromissoria(selectedSale.id)}
-                  disabled={carneLoading || promissoriaLoading}
+                  disabled={carneLoading || promissoriaLoading || ordemLoading}
                   className="flex-1 flex items-center justify-center gap-2"
                 >
                   <FiDownload size={16} />
                   {promissoriaLoading ? 'Gerando...' : 'Promissória'}
                 </Button>
               )}
+              <Button
+                variant="secondary"
+                onClick={() => handlePrintOrdem(selectedSale.id)}
+                disabled={carneLoading || promissoriaLoading || ordemLoading}
+                className="flex-1 flex items-center justify-center gap-2"
+              >
+                <FiDownload size={16} />
+                {ordemLoading ? 'Gerando...' : 'Imprimir Ordem'}
+              </Button>
               <Button variant="secondary" onClick={() => setShowDetails(false)} className="flex-1">
                 Fechar
               </Button>
