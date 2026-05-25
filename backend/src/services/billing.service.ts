@@ -442,9 +442,8 @@ export class BillingService {
       }];
 
       const contentText =
-        `Olá ${customer[0].name}! Você ainda possui ${count} parcela${count > 1 ? 's' : ''} ` +
-        `restante${count > 1 ? 's' : ''} de R$ ${installmentValue} cada. ` +
-        `Continue em dia para manter seu crédito ativo!`;
+        `Olá ${customer[0].name}! Após este pagamento, restam ${count} parcelas de R$ ${installmentValue} ` +
+        `para a quitação. Qualquer dúvida estamos à disposição! 😊`;
 
       const result = await whatsAppService.sendTemplateMessage(
         customer[0].phone,
