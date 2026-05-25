@@ -49,6 +49,7 @@ export class InstallmentService {
 
     if (updated && isFullyPaid) {
       await billingService.sendPaymentConfirmation(updated.customerId, newPaidTotal);
+      await billingService.sendSaldoParcelas(updated.customerId, installment.saleId);
     }
 
     return updated;

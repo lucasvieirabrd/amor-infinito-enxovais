@@ -405,6 +405,65 @@ export class BillingService {
   }
 
   /**
+   * Envia o template saldo_parcelas após confirmação de pagamento.
+   * {{1}}=nome, {{2}}=qtd parcelas restantes, {{3}}=valor da parcela
+   * Só envia se ainda houver parcelas pendentes/vencidas na mesma venda.
+   * Totalmente silencioso em caso de erro — nunca quebra o fluxo de baixa.
+   */
+  async sendSaldoParcelas(customerId: string, saleId: string): Promise<void> {
+    try {
+      const remaining = await db
+        .select()
+        .from(installments)
+        .where(
+          and(
+            eq(installments.saleId, saleId),
+            sql`${installments.status} IN ('pending', 'overdue')`,
+            sql`${installments.installmentNumber} > 0`,
+            isNull(installments.deletedAt),
+          )
+        );
+
+      if (remaining.length === 0) return;
+
+      const customer = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
+      if (!customer[0]) return;
+
+      const count = remaining.length;
+      const installmentValue = formatAmount(remaining[0].originalAmount);
+
+      const components = [{
+        type: 'body',
+        parameters: [
+          { type: 'text', text: customer[0].name },
+          { type: 'text', text: String(count) },
+          { type: 'text', text: installmentValue },
+        ],
+      }];
+
+      const contentText =
+        `Olá ${customer[0].name}! Você ainda possui ${count} parcela${count > 1 ? 's' : ''} ` +
+        `restante${count > 1 ? 's' : ''} de R$ ${installmentValue} cada. ` +
+        `Continue em dia para manter seu crédito ativo!`;
+
+      const result = await whatsAppService.sendTemplateMessage(
+        customer[0].phone,
+        'saldo_parcelas',
+        components,
+      );
+
+      if (result && !result.error) {
+        await saveMessage(result.messages?.[0]?.id, customer[0].id, customer[0].phone, contentText, 'template', 'sent', 'Pago');
+        console.log(`[BillingService] saldo_parcelas enviado para ${customer[0].name}: ${count} parcela(s) restante(s)`);
+      } else {
+        console.warn(`[BillingService] saldo_parcelas falhou para ${customer[0].name}:`, result?.message);
+      }
+    } catch (err: any) {
+      console.error('[BillingService] sendSaldoParcelas error (ignorado):', err?.message);
+    }
+  }
+
+  /**
    * Envio manual de cobrança individual (botão "Cobrar Agora").
    * TEMPLATE 2 — cobranca_parcela
    */
