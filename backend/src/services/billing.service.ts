@@ -103,7 +103,7 @@ export class BillingService {
             { type: 'text', text: dateFmt },
           ],
         }];
-        contentText = `Olá ${customer.name} aqui é a Celita da Amor Infinito Enxovais, sua parcela de R$ ${amountNum} venceu hoje dia ${dateFmt}, você faz o pix ou eu passo ai para receber?`;
+        contentText = `Olá ${customer.name} aqui é a Celita da Amor Infinito Enxovais, sua parcela de R$ ${amountNum} venceu hoje dia ${dateFmt}, você faz o pix ou eu passo ai para receber? Caso já tenha efetuado o pagamento, por favor desconsidere esta mensagem. 😊`;
       } else if ([2, 3, 5, 10, 20].includes(daysDiff)) {
         templateName = 'cobranca_parcela';
         components = [{
