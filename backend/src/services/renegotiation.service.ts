@@ -1,6 +1,6 @@
 import { db } from '../database';
 import { installments } from '../database/schema';
-import { and, isNull, inArray } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { AppError } from '../utils/AppError';
 import { RenegotiationRepository } from '../repositories/renegotiation.repository';
 
