@@ -22,10 +22,13 @@ export class MessageRepository {
     return result[0];
   }
 
-  async updateStatus(metaMessageId: string, status: any) {
+  async updateStatus(metaMessageId: string, status: any, errorCode?: string, errorMessage?: string) {
+    const updateData: any = { status, updatedAt: new Date() };
+    if (errorCode !== undefined) updateData.errorCode = errorCode;
+    if (errorMessage !== undefined) updateData.errorMessage = errorMessage;
     await db
       .update(messages)
-      .set({ status, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(messages.metaMessageId, metaMessageId));
   }
 

@@ -184,7 +184,16 @@ export class WebhookController {
         const metaMessageId = statusMsg.id;
         const status = statusMsg.status; // 'sent', 'delivered', 'read', 'failed'
 
-        await messageRepository.updateStatus(metaMessageId, status);
+        let errorCode: string | undefined;
+        let errorMessage: string | undefined;
+
+        if (status === 'failed' && statusMsg.errors?.length) {
+          console.log('[WEBHOOK FAILED]', JSON.stringify(statusMsg.errors));
+          errorCode = String(statusMsg.errors[0].code ?? '');
+          errorMessage = statusMsg.errors[0].title ?? statusMsg.errors[0].message ?? '';
+        }
+
+        await messageRepository.updateStatus(metaMessageId, status, errorCode, errorMessage);
         console.log(`[WEBHOOK] Status da mensagem ${metaMessageId} atualizado para ${status}`);
       }
 

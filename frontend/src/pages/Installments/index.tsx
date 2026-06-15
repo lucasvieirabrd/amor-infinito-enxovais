@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import {
@@ -18,6 +18,7 @@ import {
   FiFileText,
   FiDownload,
   FiX,
+  FiRefreshCw,
 } from 'react-icons/fi';
 import { Button, Card, Badge, Modal, Input, Loading } from '../../components/ui';
 import { format, isBefore, startOfDay } from 'date-fns';
@@ -92,6 +93,18 @@ export const Installments: React.FC = () => {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState('');
+
+  // Modal: renegociação de dívida
+  const [isRenModalOpen, setIsRenModalOpen] = useState(false);
+  const [renStep, setRenStep] = useState<1 | 2 | 3>(1);
+  const [renMode, setRenMode] = useState<'all' | 'pending'>('pending');
+  const [renNewTotal, setRenNewTotal] = useState(0);
+  const [renHasEntry, setRenHasEntry] = useState(false);
+  const [renEntryAmount, setRenEntryAmount] = useState(0);
+  const [renEntryDate, setRenEntryDate] = useState('');
+  const [renInstallmentsCount, setRenInstallmentsCount] = useState(3);
+  const [renFirstDueDate, setRenFirstDueDate] = useState('');
+  const [isRenegotiating, setIsRenegotiating] = useState(false);
 
   const queryClient = useQueryClient();
   const ITEMS_PER_PAGE = 15;
@@ -281,6 +294,89 @@ export const Installments: React.FC = () => {
     setReportCustomerSearch('');
     setReportCustomerId('');
     setShowCustomerDropdown(false);
+  };
+
+  // ── Renegociação ───────────────────────────────────────────────────────────
+
+  const renPendingInsts = useMemo(
+    () => (customerInstallments || []).filter(i => i.status !== 'paid'),
+    [customerInstallments]
+  );
+
+  const renPendingTotal = useMemo(
+    () => renPendingInsts.reduce((sum, i) => sum + Number(i.originalAmount) - Number(i.paidAmount || 0), 0),
+    [renPendingInsts]
+  );
+
+  const renAllTotal = useMemo(
+    () => (customerInstallments || []).reduce((sum, i) => sum + Number(i.originalAmount), 0),
+    [customerInstallments]
+  );
+
+  const renSourceTotal = renMode === 'pending' ? renPendingTotal : renAllTotal;
+  const renDiscount = Math.max(0, renSourceTotal - renNewTotal);
+
+  const renPreviewInstallments = useMemo(() => {
+    if (!renFirstDueDate || renInstallmentsCount <= 0 || renNewTotal <= 0) return [];
+    const entryAmt = renHasEntry && renEntryAmount > 0 ? renEntryAmount : 0;
+    const remaining = renNewTotal - entryAmt;
+    const base = Math.floor((remaining / renInstallmentsCount) * 100) / 100;
+    const lastAmt = parseFloat((remaining - base * (renInstallmentsCount - 1)).toFixed(2));
+
+    const result: { number: number; amount: number; dueDate: string }[] = [];
+    if (entryAmt > 0) {
+      result.push({ number: 0, amount: entryAmt, dueDate: renEntryDate || renFirstDueDate });
+    }
+    const firstDate = new Date(renFirstDueDate + 'T12:00:00');
+    for (let i = 0; i < renInstallmentsCount; i++) {
+      const d = new Date(firstDate.getFullYear(), firstDate.getMonth() + i, firstDate.getDate());
+      result.push({
+        number: i + 1,
+        amount: i === renInstallmentsCount - 1 ? lastAmt : base,
+        dueDate: d.toISOString().slice(0, 10),
+      });
+    }
+    return result;
+  }, [renNewTotal, renHasEntry, renEntryAmount, renEntryDate, renInstallmentsCount, renFirstDueDate]);
+
+  const handleOpenRenegotiate = () => {
+    setRenStep(1);
+    setRenMode('pending');
+    setRenNewTotal(0);
+    setRenHasEntry(false);
+    setRenEntryAmount(0);
+    setRenEntryDate('');
+    setRenInstallmentsCount(3);
+    setRenFirstDueDate('');
+    setIsRenModalOpen(true);
+  };
+
+  const handleRenStep1Next = () => {
+    setRenNewTotal(parseFloat(renSourceTotal.toFixed(2)));
+    setRenStep(2);
+  };
+
+  const handleConfirmRenegotiation = async () => {
+    if (!expandedCustomer) return;
+    setIsRenegotiating(true);
+    try {
+      await api.post('/renegotiations', {
+        customerId: expandedCustomer.id,
+        installmentIds: renPendingInsts.map(i => i.id),
+        newTotalAmount: renNewTotal,
+        installmentsCount: renInstallmentsCount,
+        installments: renPreviewInstallments,
+      });
+      queryClient.invalidateQueries({ queryKey: ['installments'] });
+      queryClient.invalidateQueries({ queryKey: ['active-crediarios'] });
+      queryClient.invalidateQueries({ queryKey: ['installments-stats'] });
+      setIsRenModalOpen(false);
+      alert('Renegociação realizada com sucesso!');
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Erro ao renegociar. Tente novamente.');
+    } finally {
+      setIsRenegotiating(false);
+    }
   };
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -484,8 +580,16 @@ export const Installments: React.FC = () => {
                   {/* Parcelas expandidas */}
                   {isExpanded && (
                     <div className="border-t border-gray-200 bg-gray-50 p-4">
-                      {/* Botão alterar dia em lote */}
-                      <div className="flex justify-end mb-3">
+                      {/* Botões de ação em lote */}
+                      <div className="flex justify-end gap-2 mb-3">
+                        <Button
+                          variant="secondary"
+                          onClick={(e) => { e.stopPropagation(); handleOpenRenegotiate(); }}
+                          className="flex items-center gap-2 text-sm !text-orange-700 !border-orange-300 hover:!bg-orange-50"
+                        >
+                          <FiRefreshCw size={14} />
+                          Renegociar Dívida
+                        </Button>
                         <Button
                           variant="secondary"
                           onClick={(e) => { e.stopPropagation(); setIsBulkDayModalOpen(true); }}
@@ -901,6 +1005,219 @@ export const Installments: React.FC = () => {
             </Button>
           </div>
         </form>
+      </Modal>
+      {/* Modal: Renegociação de Dívida */}
+      <Modal
+        isOpen={isRenModalOpen}
+        onClose={() => setIsRenModalOpen(false)}
+        title={`Renegociar Dívida — ${expandedCustomer?.name ?? ''}`}
+        size="lg"
+      >
+        {/* Indicador de etapas */}
+        <div className="flex items-center gap-2 mb-5">
+          {([1, 2, 3] as const).map((s) => (
+            <React.Fragment key={s}>
+              <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${renStep >= s ? 'bg-rose-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                {s}
+              </div>
+              {s < 3 && <div className={`flex-1 h-0.5 ${renStep > s ? 'bg-rose-600' : 'bg-gray-200'}`} />}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* ── ETAPA 1: Selecionar parcelas ── */}
+        {renStep === 1 && (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-800">Selecionar o que renegociar</h3>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${renMode === 'pending' ? 'border-rose-500 bg-rose-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input type="radio" name="renMode" value="pending" checked={renMode === 'pending'} onChange={() => setRenMode('pending')} className="mt-0.5 accent-rose-600" />
+                <div>
+                  <div className="font-medium text-gray-900 text-sm">Somar apenas o que falta</div>
+                  <div className="text-xs text-gray-500 mt-0.5">Apenas parcelas pendentes e atrasadas</div>
+                </div>
+              </label>
+              <label className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${renMode === 'all' ? 'border-rose-500 bg-rose-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input type="radio" name="renMode" value="all" checked={renMode === 'all'} onChange={() => setRenMode('all')} className="mt-0.5 accent-rose-600" />
+                <div>
+                  <div className="font-medium text-gray-900 text-sm">Somar tudo</div>
+                  <div className="text-xs text-gray-500 mt-0.5">Inclui valor total de todas as parcelas</div>
+                </div>
+              </label>
+            </div>
+
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm">
+              <div className="flex justify-between items-center">
+                <span className="text-orange-800 font-medium">Total a renegociar:</span>
+                <span className="text-orange-900 font-bold text-base">
+                  R$ {renSourceTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <p className="text-orange-700 text-xs mt-1">
+                {renPendingInsts.length} parcela(s) pendente(s)/atrasada(s) serão canceladas e substituídas pelo novo acordo.
+              </p>
+            </div>
+
+            <div className="max-h-48 overflow-y-auto space-y-1.5">
+              {(customerInstallments || []).map(inst => {
+                const isPending = inst.status !== 'paid';
+                return (
+                  <div key={inst.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm border ${isPending ? 'bg-white border-orange-200' : 'bg-gray-50 border-gray-200 opacity-60'}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${isPending ? 'bg-orange-400' : 'bg-green-400'}`} />
+                      <span className="font-medium text-gray-800">
+                        {inst.installmentNumber === 0 ? 'Entrada' : `Parcela ${inst.installmentNumber}`}
+                      </span>
+                      <span className="text-gray-500">{format(new Date(inst.dueDate), 'dd/MM/yyyy')}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-800">R$ {Number(inst.originalAmount).toFixed(2)}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${isPending ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                        {isPending ? 'será cancelada' : 'paga ✓'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={handleRenStep1Next}
+                disabled={renPendingInsts.length === 0}
+                className="flex items-center gap-2"
+              >
+                Próximo →
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── ETAPA 2: Configurar novo acordo ── */}
+        {renStep === 2 && (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-800">Configurar novo parcelamento</h3>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Valor total da renegociação</label>
+              <Input
+                type="number"
+                value={renNewTotal}
+                onChange={e => setRenNewTotal(Number(e.target.value))}
+                step="0.01"
+                min={0.01}
+              />
+              {renDiscount > 0 && (
+                <p className="text-green-700 text-xs mt-1 font-medium">
+                  Desconto aplicado: R$ {renDiscount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input id="renHasEntry" type="checkbox" checked={renHasEntry} onChange={e => setRenHasEntry(e.target.checked)} className="w-4 h-4 accent-rose-600" />
+              <label htmlFor="renHasEntry" className="text-sm text-gray-700 cursor-pointer">Incluir entrada</label>
+            </div>
+
+            {renHasEntry && (
+              <div className="grid grid-cols-2 gap-3 pl-7">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Valor da entrada</label>
+                  <Input type="number" value={renEntryAmount} onChange={e => setRenEntryAmount(Number(e.target.value))} step="0.01" min={0.01} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Data da entrada</label>
+                  <Input type="date" value={renEntryDate} onChange={e => setRenEntryDate(e.target.value)} />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Número de parcelas</label>
+                <Input type="number" value={renInstallmentsCount} onChange={e => setRenInstallmentsCount(Number(e.target.value))} min={1} max={60} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data da 1ª parcela</label>
+                <Input type="date" value={renFirstDueDate} onChange={e => setRenFirstDueDate(e.target.value)} />
+              </div>
+            </div>
+
+            {renPreviewInstallments.length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Prévia das parcelas</p>
+                <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                  {renPreviewInstallments.map(inst => (
+                    <div key={inst.number} className="flex justify-between items-center px-3 py-2 text-sm">
+                      <span className="text-gray-600">{inst.number === 0 ? 'Entrada' : `Parcela ${inst.number}`}</span>
+                      <span className="text-gray-500">{format(new Date(inst.dueDate + 'T12:00:00'), 'dd/MM/yyyy')}</span>
+                      <span className="font-semibold text-gray-800">R$ {inst.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between">
+              <Button variant="secondary" onClick={() => setRenStep(1)}>← Voltar</Button>
+              <Button
+                onClick={() => setRenStep(3)}
+                disabled={!renFirstDueDate || renInstallmentsCount < 1 || renNewTotal <= 0 || renPreviewInstallments.length === 0}
+              >
+                Próximo →
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── ETAPA 3: Confirmação ── */}
+        {renStep === 3 && (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-800">Confirmar renegociação</h3>
+
+            <div className="space-y-2">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
+                <p className="font-semibold text-red-800 mb-1">Parcelas que serão CANCELADAS:</p>
+                <p className="text-red-700">{renPendingInsts.length} parcela(s) — R$ {renSourceTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
+                <p className="font-semibold text-green-800 mb-1">Novo acordo criado:</p>
+                <p className="text-green-700">
+                  {renHasEntry && renEntryAmount > 0
+                    ? `Entrada de R$ ${renEntryAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} + `
+                    : ''}
+                  {renInstallmentsCount}x de R$ {renPreviewInstallments.filter(i => i.number > 0)[0]?.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-green-700">Total: R$ {renNewTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+
+              {renDiscount > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+                  <p className="text-blue-800 font-semibold">
+                    Desconto concedido: R$ {renDiscount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              )}
+
+              <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 text-sm text-yellow-800">
+                ⚠️ Esta ação é irreversível. As parcelas canceladas não poderão ser restauradas.
+              </div>
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="secondary" onClick={() => setRenStep(2)}>← Voltar</Button>
+              <Button
+                onClick={handleConfirmRenegotiation}
+                loading={isRenegotiating}
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                Confirmar Renegociação
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

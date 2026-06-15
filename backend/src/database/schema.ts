@@ -80,6 +80,7 @@ export const installments = mysqlTable('installments', {
   paidAmount: decimal('paid_amount', { precision: 10, scale: 2 }).notNull().default('0.00'),
   paymentDate: datetime('payment_date'),
   status: mysqlEnum('status', ['pending', 'paid', 'overdue', 'canceled', 'partial']).notNull().default('pending'),
+  renegotiationId: varchar('renegotiation_id', { length: 36 }),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime('deleted_at'),
@@ -99,10 +100,25 @@ export const messages = mysqlTable('messages', {
   status: mysqlEnum('status', ['sent', 'delivered', 'read', 'failed', 'received']).notNull().default('received'),
   tag: mysqlEnum('tag', ['cobrança', 'lead', 'suporte', 'none', 'pago']).notNull().default('none'),
   notes: text('notes'),
+  errorCode: varchar('error_code', { length: 10 }),
+  errorMessage: text('error_message'),
   timestamp: datetime('timestamp').notNull(),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime('deleted_at'),
+});
+
+export const renegotiations = mysqlTable('renegotiations', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  renNumber: varchar('ren_number', { length: 20 }).notNull().unique(),
+  customerId: varchar('customer_id', { length: 36 }).notNull(),
+  originalAmount: decimal('original_amount', { precision: 10, scale: 2 }).notNull(),
+  newAmount: decimal('new_amount', { precision: 10, scale: 2 }).notNull(),
+  discount: decimal('discount', { precision: 10, scale: 2 }).notNull().default('0.00'),
+  installmentsCount: int('installments_count').notNull(),
+  createdBy: varchar('created_by', { length: 36 }).notNull(),
+  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
 });
 
 export const conversations = mysqlTable('conversations', {
