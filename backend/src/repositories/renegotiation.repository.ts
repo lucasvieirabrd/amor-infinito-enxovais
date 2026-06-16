@@ -1,6 +1,6 @@
 import { db } from '../database';
-import { installments, renegotiations, auditLogs, saleSequence } from '../database/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { installments, renegotiations, auditLogs, saleSequence, customers } from '../database/schema';
+import { eq, inArray, isNull } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export class RenegotiationRepository {
@@ -86,5 +86,35 @@ export class RenegotiationRepository {
 
       return { renId, renNumber, canceledCount: installmentIds.length };
     });
+  }
+
+  async findById(id: string) {
+    const rows = await db
+      .select({
+        id: renegotiations.id,
+        renNumber: renegotiations.renNumber,
+        customerId: renegotiations.customerId,
+        originalAmount: renegotiations.originalAmount,
+        newAmount: renegotiations.newAmount,
+        discount: renegotiations.discount,
+        installmentsCount: renegotiations.installmentsCount,
+        createdBy: renegotiations.createdBy,
+        createdAt: renegotiations.createdAt,
+        customerName: customers.name,
+      })
+      .from(renegotiations)
+      .leftJoin(customers, eq(renegotiations.customerId, customers.id))
+      .where(eq(renegotiations.id, id))
+      .limit(1);
+
+    if (rows.length === 0) return null;
+
+    const insts = await db
+      .select()
+      .from(installments)
+      .where(eq(installments.saleId, id))
+      .orderBy(installments.installmentNumber);
+
+    return { ...rows[0], installments: insts };
   }
 }

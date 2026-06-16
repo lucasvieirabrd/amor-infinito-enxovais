@@ -1,8 +1,11 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { RenegotiationService } from '../services/renegotiation.service';
+import { RenegotiationRepository } from '../repositories/renegotiation.repository';
+import { AppError } from '../utils/AppError';
 
 const renegotiationService = new RenegotiationService();
+const renegotiationRepository = new RenegotiationRepository();
 
 export class RenegotiationController {
   async renegotiate(req: Request, res: Response) {
@@ -25,5 +28,12 @@ export class RenegotiationController {
 
     const result = await renegotiationService.renegotiateDebt({ ...data, userId });
     return res.status(201).json(result);
+  }
+
+  async getById(req: Request, res: Response) {
+    const { id } = req.params;
+    const ren = await renegotiationRepository.findById(id);
+    if (!ren) throw new AppError('Renegociação não encontrada', 404);
+    return res.json(ren);
   }
 }

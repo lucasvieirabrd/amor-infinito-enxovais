@@ -8,5 +8,6 @@ const renegotiationController = new RenegotiationController();
 
 renegotiationRouter.use(ensureAuthenticated);
 renegotiationRouter.post('/', ensureAuthorized(['admin']), renegotiationController.renegotiate);
+renegotiationRouter.get('/:id', renegotiationController.getById);
 
 export { renegotiationRouter };

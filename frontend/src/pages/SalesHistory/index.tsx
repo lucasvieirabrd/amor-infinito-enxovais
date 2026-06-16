@@ -35,12 +35,37 @@ interface Sale {
   createdAt: string;
   customer?: { name: string };
   customerName?: string;
-  paymentMethod: 'cash' | 'credit_card' | 'installment';
+  paymentMethod: 'cash' | 'credit_card' | 'installment' | 'renegotiation';
   totalAmount: number;
   installmentsCount?: number;
   status: 'completed' | 'canceled';
   items?: SaleItem[];
   installments?: Installment[];
+  recordType?: 'sale' | 'renegotiation';
+  isRenegotiated?: boolean;
+  originalAmount?: number;
+  discount?: number;
+}
+
+interface RenegotiationDetail {
+  id: string;
+  renNumber: string;
+  customerId: string;
+  customerName?: string;
+  originalAmount: number | string;
+  newAmount: number | string;
+  discount: number | string;
+  installmentsCount: number;
+  createdAt: string;
+  installments: {
+    id: string;
+    installmentNumber: number;
+    dueDate: string;
+    originalAmount: number | string;
+    paidAmount: number | string;
+    paymentDate?: string;
+    status: string;
+  }[];
 }
 
 export const SalesHistory: React.FC = () => {
@@ -50,7 +75,7 @@ export const SalesHistory: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'credit_card' | 'installment'>('all');
-  const [originFilter, setOriginFilter] = useState<'all' | 'sales' | 'imported'>('all');
+  const [originFilter, setOriginFilter] = useState<'all' | 'sales' | 'imported' | 'renegotiation'>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -68,6 +93,9 @@ export const SalesHistory: React.FC = () => {
   const [addForm, setAddForm] = useState<{ type: 'installment' | 'entry'; number: string; amount: string; dueDate: string } | null>(null);
   const [pendingAdds, setPendingAdds] = useState<{ installmentNumber: number; amount: string; dueDate: string }[]>([]);
   const [editSaving, setEditSaving] = useState(false);
+  const [selectedRen, setSelectedRen] = useState<RenegotiationDetail | null>(null);
+  const [showRenDetails, setShowRenDetails] = useState(false);
+  const [renDetailsLoading, setRenDetailsLoading] = useState(false);
 
   const handleDownloadCarne = async (saleId: string, saleNumber: string) => {
     setCarneLoading(true);
@@ -142,6 +170,17 @@ export const SalesHistory: React.FC = () => {
   });
 
   const handleViewDetails = async (sale: Sale) => {
+    if (sale.recordType === 'renegotiation') {
+      setShowRenDetails(true);
+      setRenDetailsLoading(true);
+      try {
+        const { data } = await api.get(`/renegotiations/${sale.id}`);
+        setSelectedRen(data);
+      } finally {
+        setRenDetailsLoading(false);
+      }
+      return;
+    }
     setSelectedSale(sale);
     setShowDetails(true);
     setDetailsLoading(true);
@@ -178,6 +217,8 @@ export const SalesHistory: React.FC = () => {
         return 'Cartão';
       case 'installment':
         return 'Crediário';
+      case 'renegotiation':
+        return 'Renegociação';
       default:
         return method;
     }
@@ -191,6 +232,8 @@ export const SalesHistory: React.FC = () => {
         return 'info';
       case 'installment':
         return 'warning';
+      case 'renegotiation':
+        return 'error';
       default:
         return 'info';
     }
@@ -334,7 +377,8 @@ export const SalesHistory: React.FC = () => {
                 setPaymentFilter(e.target.value as any);
                 setPage(1);
               }}
-              className="h-[44px] pl-3 pr-8 min-w-[180px] border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
+              disabled={originFilter === 'renegotiation'}
+              className="h-[44px] pl-3 pr-8 min-w-[180px] border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="all">Todas as formas</option>
               <option value="cash">À Vista</option>
@@ -345,7 +389,9 @@ export const SalesHistory: React.FC = () => {
             <select
               value={originFilter}
               onChange={(e) => {
-                setOriginFilter(e.target.value as any);
+                const v = e.target.value as any;
+                setOriginFilter(v);
+                if (v === 'renegotiation') setPaymentFilter('all');
                 setPage(1);
               }}
               className="h-[44px] pl-3 pr-8 min-w-[180px] border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
@@ -353,6 +399,7 @@ export const SalesHistory: React.FC = () => {
               <option value="all">Todas as origens</option>
               <option value="sales">Vendas</option>
               <option value="imported">Importados</option>
+              <option value="renegotiation">Renegociações</option>
             </select>
 
             <input
@@ -440,11 +487,18 @@ export const SalesHistory: React.FC = () => {
                       R$ {parseFloat(sale.totalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      {sale.status === 'completed' ? (
-                        <Badge variant="success">Concluída</Badge>
-                      ) : (
-                        <Badge variant="error">Cancelada</Badge>
-                      )}
+                      <div className="flex flex-col gap-1 items-start">
+                        {sale.recordType === 'renegotiation' ? (
+                          <Badge variant="error">Renegociação</Badge>
+                        ) : sale.status === 'completed' ? (
+                          <Badge variant="success">Concluída</Badge>
+                        ) : (
+                          <Badge variant="error">Cancelada</Badge>
+                        )}
+                        {sale.isRenegotiated && (
+                          <span className="text-xs font-semibold text-purple-600 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">Renegociada</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2">
@@ -455,22 +509,24 @@ export const SalesHistory: React.FC = () => {
                         >
                           <FiEye size={18} />
                         </button>
-                        {sale.status === 'completed' ? (
-                          <button
-                            onClick={() => handleDeleteClick(sale.id)}
-                            className="text-error hover:bg-error hover:bg-opacity-10 p-2 rounded-lg transition-colors"
-                            title="Cancelar venda"
-                          >
-                            <FiTrash2 size={18} />
-                          </button>
-                        ) : (
-                          <button
-                            disabled
-                            className="text-gray-400 p-2 rounded-lg cursor-not-allowed"
-                            title="Venda cancelada"
-                          >
-                            <FiTrash2 size={18} />
-                          </button>
+                        {sale.recordType !== 'renegotiation' && (
+                          sale.status === 'completed' ? (
+                            <button
+                              onClick={() => handleDeleteClick(sale.id)}
+                              className="text-error hover:bg-error hover:bg-opacity-10 p-2 rounded-lg transition-colors"
+                              title="Cancelar venda"
+                            >
+                              <FiTrash2 size={18} />
+                            </button>
+                          ) : (
+                            <button
+                              disabled
+                              className="text-gray-400 p-2 rounded-lg cursor-not-allowed"
+                              title="Venda cancelada"
+                            >
+                              <FiTrash2 size={18} />
+                            </button>
+                          )
                         )}
                       </div>
                     </td>
@@ -931,6 +987,116 @@ export const SalesHistory: React.FC = () => {
                 {ordemLoading ? 'Gerando...' : 'Imprimir Ordem'}
               </Button>
               <Button variant="secondary" onClick={() => setShowDetails(false)} className="flex-1">
+                Fechar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Renegotiation Details Modal */}
+      <Modal
+        isOpen={showRenDetails}
+        title={selectedRen ? `Renegociação ${selectedRen.renNumber}` : 'Detalhes da Renegociação'}
+        onClose={() => { setShowRenDetails(false); setSelectedRen(null); }}
+        size="2xl"
+      >
+        {renDetailsLoading ? (
+          <div className="flex justify-center py-8">
+            <FiLoader size={24} className="animate-spin text-primary" />
+          </div>
+        ) : selectedRen && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-gray-600 font-semibold uppercase">Nº Renegociação</p>
+                <p className="text-lg font-bold text-gray-900">{selectedRen.renNumber}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600 font-semibold uppercase">Data</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {format(new Date(selectedRen.createdAt), 'dd/MM/yyyy HH:mm')}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600 font-semibold uppercase">Cliente</p>
+                <p className="text-lg font-bold text-gray-900">{selectedRen.customerName || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600 font-semibold uppercase">Parcelas</p>
+                <p className="text-lg font-bold text-gray-900">{selectedRen.installmentsCount}x</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                <p className="text-xs text-gray-500 uppercase font-semibold">Valor Original</p>
+                <p className="text-base font-bold text-gray-700 mt-1">
+                  R$ {parseFloat(selectedRen.originalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="p-3 bg-primary bg-opacity-5 rounded-lg border border-primary border-opacity-20">
+                <p className="text-xs text-primary uppercase font-semibold">Novo Valor</p>
+                <p className="text-base font-bold text-primary mt-1">
+                  R$ {parseFloat(selectedRen.newAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              {parseFloat(selectedRen.discount.toString()) > 0 && (
+                <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+                  <p className="text-xs text-green-600 uppercase font-semibold">Desconto</p>
+                  <p className="text-base font-bold text-green-700 mt-1">
+                    R$ {parseFloat(selectedRen.discount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {selectedRen.installments && selectedRen.installments.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">Parcelas do Novo Acordo</h4>
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {[...selectedRen.installments]
+                    .sort((a, b) => a.installmentNumber - b.installmentNumber)
+                    .map((inst) => {
+                      const isEntry = inst.installmentNumber === 0;
+                      const regularCount = selectedRen.installments.filter(i => i.installmentNumber > 0).length;
+                      const statusStyle = (() => {
+                        switch (inst.status) {
+                          case 'paid': return { label: 'Paga', bg: 'bg-green-50', text: 'text-green-700' };
+                          case 'canceled': return { label: 'Cancelada', bg: 'bg-gray-100', text: 'text-gray-400' };
+                          default: return { label: 'Pendente', bg: 'bg-gray-50', text: 'text-gray-500' };
+                        }
+                      })();
+                      return (
+                        <div key={inst.id} className={`flex justify-between items-center p-3 rounded-lg border ${isEntry ? 'bg-amber-50 border-amber-200' : 'bg-background border-gray-100'}`}>
+                          <div>
+                            <p className={`font-semibold text-sm ${isEntry ? 'text-amber-800' : 'text-gray-900'}`}>
+                              {isEntry ? 'Entrada' : `Parcela ${inst.installmentNumber}/${regularCount}`}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Venc.: {format(new Date(inst.dueDate), 'dd/MM/yyyy')}
+                            </p>
+                            {inst.status === 'paid' && inst.paymentDate && (
+                              <p className="text-xs text-green-600">Paga em {format(new Date(inst.paymentDate), 'dd/MM/yyyy')}</p>
+                            )}
+                          </div>
+                          <div className="text-right space-y-1">
+                            <p className="font-bold text-sm text-gray-900">
+                              R$ {parseFloat(inst.originalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                            <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
+                              {statusStyle.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={() => { setShowRenDetails(false); setSelectedRen(null); }} className="flex-1">
                 Fechar
               </Button>
             </div>

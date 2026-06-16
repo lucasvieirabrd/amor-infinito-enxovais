@@ -60,7 +60,7 @@ export class SaleController {
       startDate: z.string().optional(),
       endDate: z.string().optional(),
       search: z.string().optional(),
-      origin: z.enum(['all', 'sales', 'imported']).optional(),
+      origin: z.enum(['all', 'sales', 'imported', 'renegotiation']).optional(),
     });
 
     const filters = listSchema.parse(req.query);
