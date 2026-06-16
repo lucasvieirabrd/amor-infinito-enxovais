@@ -54,6 +54,7 @@ export const sales = mysqlTable("sales", {
   saleDate: datetime('sale_date').notNull().default(sql`CURRENT_TIMESTAMP`),
   installmentsCount: int('installments_count'),
   isImported: boolean('is_imported').notNull().default(false),
+  sellerId: varchar('seller_id', { length: 36 }),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime('deleted_at'),
@@ -155,4 +156,13 @@ export const saleSequence = mysqlTable('sale_sequence', {
   prefix: varchar('prefix', { length: 10 }).notNull().default('VEN-'),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+});
+
+export const sellers = mysqlTable('sellers', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  active: boolean('active').notNull().default(true),
+  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  deletedAt: datetime('deleted_at'),
 });

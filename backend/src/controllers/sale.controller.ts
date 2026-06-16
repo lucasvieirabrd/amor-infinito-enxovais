@@ -23,6 +23,7 @@ export class SaleController {
         dueDate: z.string(),
         amount: z.number().positive(),
       })).optional(),
+      sellerId: z.string().optional(),
     });
 
     const data = registerSchema.parse(req.body);
@@ -61,6 +62,7 @@ export class SaleController {
       endDate: z.string().optional(),
       search: z.string().optional(),
       origin: z.enum(['all', 'sales', 'imported', 'renegotiation']).optional(),
+      sellerId: z.string().optional(),
     });
 
     const filters = listSchema.parse(req.query);

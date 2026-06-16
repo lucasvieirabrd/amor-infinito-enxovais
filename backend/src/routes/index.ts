@@ -13,6 +13,7 @@ import { dashboardRouter } from './dashboard.routes';
 import { settingsRouter } from './settings.routes';
 import { reportRouter } from './report.routes';
 import { renegotiationRouter } from './renegotiation.routes';
+import { sellerRouter } from './seller.routes';
 
 const routes = Router();
 
@@ -30,5 +31,6 @@ routes.use('/dashboard', dashboardRouter);
 routes.use('/settings', settingsRouter);
 routes.use('/reports', reportRouter);
 routes.use('/renegotiations', renegotiationRouter);
+routes.use('/sellers', sellerRouter);
 
 export { routes };

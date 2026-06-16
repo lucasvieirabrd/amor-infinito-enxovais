@@ -1,5 +1,5 @@
 import { db } from '../database';
-import { sales, saleItems, installments, saleSequence, customers, products } from '../database/schema';
+import { sales, saleItems, installments, saleSequence, customers, products, sellers } from '../database/schema';
 import { eq, and, isNull, sql, ne } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { MySqlTransaction } from 'drizzle-orm/mysql-core';
@@ -64,6 +64,7 @@ export class SaleRepository {
         saleNumber: sales.saleNumber,
         customerId: sales.customerId,
         userId: sales.userId,
+        sellerId: sales.sellerId,
         paymentMethod: sales.paymentMethod,
         totalAmount: sales.totalAmount,
         saleDate: sales.saleDate,
@@ -73,9 +74,11 @@ export class SaleRepository {
         updatedAt: sales.updatedAt,
         deletedAt: sales.deletedAt,
         customerName: customers.name,
+        sellerName: sellers.name,
       })
       .from(sales)
       .leftJoin(customers, eq(sales.customerId, customers.id))
+      .leftJoin(sellers, eq(sales.sellerId, sellers.id))
       .where(and(eq(sales.id, id), isNull(sales.deletedAt)))
       .limit(1);
 
@@ -133,11 +136,11 @@ export class SaleRepository {
   }
 
   async listWithFilters(filters: any) {
-    const { page = 1, limit = 10, customerId, paymentMethod, startDate, endDate, search, origin } = filters;
+    const { page = 1, limit = 10, customerId, paymentMethod, startDate, endDate, search, origin, sellerId } = filters;
     const offset = (page - 1) * limit;
 
     const onlyRenegotiations = origin === 'renegotiation';
-    const onlySales = !!paymentMethod || origin === 'sales' || origin === 'imported';
+    const onlySales = !!paymentMethod || !!sellerId || origin === 'sales' || origin === 'imported';
 
     // Build WHERE for sales
     let sCond = sql`s.deleted_at IS NULL AND c.deleted_at IS NULL`;
@@ -149,6 +152,7 @@ export class SaleRepository {
       const term = `%${search}%`;
       sCond = sql`${sCond} AND (LOWER(s.sale_number) LIKE LOWER(${term}) OR LOWER(c.name) LIKE LOWER(${term}))`;
     }
+    if (sellerId) sCond = sql`${sCond} AND s.seller_id = ${sellerId}`;
     if (origin === 'sales') sCond = sql`${sCond} AND s.sale_number LIKE 'VEN-%'`;
     else if (origin === 'imported') sCond = sql`${sCond} AND s.sale_number LIKE 'IMP-%'`;
 
@@ -179,6 +183,8 @@ export class SaleRepository {
       isRenegotiated: Boolean(Number(row.isRenegotiated)),
       originalAmount: row.originalAmount != null ? parseFloat(row.originalAmount.toString()) : undefined,
       discount: row.discount != null ? parseFloat(row.discount.toString()) : undefined,
+      sellerName: row.sellerName ?? null,
+      sellerId: row.sellerId ?? null,
       status: row.deletedAt ? 'canceled' : 'completed',
     });
 
@@ -192,7 +198,8 @@ export class SaleRepository {
             r.created_at AS createdAt, r.created_at AS updatedAt,
             NULL AS deletedAt, c.name AS customerName,
             'renegotiation' AS recordType, 0 AS isRenegotiated,
-            r.original_amount AS originalAmount, r.discount AS discount
+            r.original_amount AS originalAmount, r.discount AS discount,
+            NULL AS sellerName, NULL AS sellerId
           FROM renegotiations r
           LEFT JOIN customers c ON r.customer_id = c.id
           WHERE ${rCond}
@@ -219,9 +226,11 @@ export class SaleRepository {
             s.deleted_at AS deletedAt, c.name AS customerName,
             'sale' AS recordType,
             CAST(EXISTS(SELECT 1 FROM installments i WHERE i.sale_id = s.id AND i.renegotiation_id IS NOT NULL AND i.deleted_at IS NOT NULL) AS UNSIGNED) AS isRenegotiated,
-            NULL AS originalAmount, NULL AS discount
+            NULL AS originalAmount, NULL AS discount,
+            sel.name AS sellerName, s.seller_id AS sellerId
           FROM sales s
           LEFT JOIN customers c ON s.customer_id = c.id
+          LEFT JOIN sellers sel ON s.seller_id = sel.id
           WHERE ${sCond}
           ORDER BY s.created_at DESC
           LIMIT ${limit} OFFSET ${offset}
@@ -247,9 +256,11 @@ export class SaleRepository {
             s.deleted_at AS deletedAt, c.name AS customerName,
             'sale' AS recordType,
             CAST(EXISTS(SELECT 1 FROM installments i WHERE i.sale_id = s.id AND i.renegotiation_id IS NOT NULL AND i.deleted_at IS NOT NULL) AS UNSIGNED) AS isRenegotiated,
-            NULL AS originalAmount, NULL AS discount
+            NULL AS originalAmount, NULL AS discount,
+            sel.name AS sellerName, s.seller_id AS sellerId
           FROM sales s
           LEFT JOIN customers c ON s.customer_id = c.id
+          LEFT JOIN sellers sel ON s.seller_id = sel.id
           WHERE ${sCond}
           UNION ALL
           SELECT r.id, r.ren_number AS saleNumber, r.customer_id AS customerId,
@@ -259,7 +270,8 @@ export class SaleRepository {
             r.created_at AS createdAt, r.created_at AS updatedAt,
             NULL AS deletedAt, c.name AS customerName,
             'renegotiation' AS recordType, 0 AS isRenegotiated,
-            r.original_amount AS originalAmount, r.discount AS discount
+            r.original_amount AS originalAmount, r.discount AS discount,
+            NULL AS sellerName, NULL AS sellerId
           FROM renegotiations r
           LEFT JOIN customers c ON r.customer_id = c.id
           WHERE ${rCond}

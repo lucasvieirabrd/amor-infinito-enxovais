@@ -45,6 +45,13 @@ interface Sale {
   isRenegotiated?: boolean;
   originalAmount?: number;
   discount?: number;
+  sellerName?: string | null;
+  sellerId?: string | null;
+}
+
+interface SellerOption {
+  id: string;
+  name: string;
 }
 
 interface RenegotiationDetail {
@@ -96,6 +103,15 @@ export const SalesHistory: React.FC = () => {
   const [selectedRen, setSelectedRen] = useState<RenegotiationDetail | null>(null);
   const [showRenDetails, setShowRenDetails] = useState(false);
   const [renDetailsLoading, setRenDetailsLoading] = useState(false);
+  const [sellerFilter, setSellerFilter] = useState('');
+
+  const { data: sellerOptions } = useQuery({
+    queryKey: ['sellers-list'],
+    queryFn: async () => {
+      const res = await api.get('/sellers');
+      return res.data as SellerOption[];
+    },
+  });
 
   const handleDownloadCarne = async (saleId: string, saleNumber: string) => {
     setCarneLoading(true);
@@ -153,7 +169,7 @@ export const SalesHistory: React.FC = () => {
   }, [searchInput]);
 
   const { data: salesData, isLoading, refetch } = useQuery({
-    queryKey: ['sales-history', page, search, paymentFilter, originFilter, startDate, endDate],
+    queryKey: ['sales-history', page, search, paymentFilter, originFilter, startDate, endDate, sellerFilter],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -163,6 +179,7 @@ export const SalesHistory: React.FC = () => {
         ...(originFilter !== 'all' && { origin: originFilter }),
         ...(startDate && { startDate }),
         ...(endDate && { endDate }),
+        ...(sellerFilter && { sellerId: sellerFilter }),
       });
       const response = await api.get(`/sales/history?${params}`);
       return response.data;
@@ -402,6 +419,17 @@ export const SalesHistory: React.FC = () => {
               <option value="renegotiation">Renegociações</option>
             </select>
 
+            <select
+              value={sellerFilter}
+              onChange={(e) => { setSellerFilter(e.target.value); setPage(1); }}
+              className="h-[44px] pl-3 pr-8 min-w-[160px] border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
+            >
+              <option value="">Todos os vendedores</option>
+              {sellerOptions?.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+
             <input
               type="date"
               placeholder="Data inicial"
@@ -432,6 +460,7 @@ export const SalesHistory: React.FC = () => {
                 setSearch('');
                 setPaymentFilter('all');
                 setOriginFilter('all');
+                setSellerFilter('');
                 setStartDate('');
                 setEndDate('');
                 setPage(1);
@@ -460,6 +489,7 @@ export const SalesHistory: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nº Venda</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Data</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Cliente</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Vendedor</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Forma Pagamento</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Valor Total</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
@@ -477,6 +507,9 @@ export const SalesHistory: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {sale.customer?.name || sale.customerName || 'N/A'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {sale.sellerName || <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <Badge variant={getPaymentMethodVariant(sale.paymentMethod)}>
@@ -607,6 +640,10 @@ export const SalesHistory: React.FC = () => {
                     <Badge variant={getPaymentMethodVariant(selectedSale.paymentMethod)}>
                       {getPaymentMethodLabel(selectedSale.paymentMethod)}
                     </Badge>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 font-semibold uppercase">Vendedor</p>
+                    <p className="text-lg font-bold text-gray-900">{(selectedSale as any).sellerName || '—'}</p>
                   </div>
                 </div>
 

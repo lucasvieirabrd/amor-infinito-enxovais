@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { FiSave, FiAlertCircle, FiKey, FiDatabase, FiMail, FiClock } from 'react-icons/fi';
+import { FiSave, FiAlertCircle, FiKey, FiDatabase, FiMail, FiClock, FiUser, FiPlus, FiEdit2, FiTrash2, FiCheck, FiX } from 'react-icons/fi';
 import { Card, Button, Input, Badge } from '../../components/ui';
 import api from '../../services/api';
 
+interface Seller {
+  id: string;
+  name: string;
+  active: boolean;
+  deletedAt?: string | null;
+}
+
 export const Settings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers'>('general');
   const [loading, setLoading] = useState(false);
   const [pixLoading, setPixLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -30,7 +37,66 @@ export const Settings: React.FC = () => {
     pix_qrcode: '',
   });
 
-  // Load PIX settings from backend on mount
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [newSellerName, setNewSellerName] = useState('');
+  const [sellerLoading, setSellerLoading] = useState(false);
+  const [editingSeller, setEditingSeller] = useState<{ id: string; name: string } | null>(null);
+
+  const loadSellers = async () => {
+    try {
+      const res = await api.get('/sellers');
+      setSellers(res.data);
+    } catch {}
+  };
+
+  const handleAddSeller = async () => {
+    if (!newSellerName.trim()) return;
+    setSellerLoading(true);
+    try {
+      await api.post('/sellers', { name: newSellerName.trim() });
+      setNewSellerName('');
+      await loadSellers();
+    } catch (e: any) {
+      alert(e.response?.data?.error || 'Erro ao adicionar vendedor');
+    } finally {
+      setSellerLoading(false);
+    }
+  };
+
+  const handleUpdateSeller = async () => {
+    if (!editingSeller || !editingSeller.name.trim()) return;
+    setSellerLoading(true);
+    try {
+      await api.put(`/sellers/${editingSeller.id}`, { name: editingSeller.name.trim() });
+      setEditingSeller(null);
+      await loadSellers();
+    } catch (e: any) {
+      alert(e.response?.data?.error || 'Erro ao atualizar vendedor');
+    } finally {
+      setSellerLoading(false);
+    }
+  };
+
+  const handleToggleActive = async (seller: Seller) => {
+    try {
+      await api.put(`/sellers/${seller.id}`, { active: !seller.active });
+      await loadSellers();
+    } catch (e: any) {
+      alert(e.response?.data?.error || 'Erro ao atualizar vendedor');
+    }
+  };
+
+  const handleDeleteSeller = async (id: string) => {
+    if (!confirm('Remover este vendedor?')) return;
+    try {
+      await api.delete(`/sellers/${id}`);
+      await loadSellers();
+    } catch (e: any) {
+      alert(e.response?.data?.error || 'Erro ao remover vendedor');
+    }
+  };
+
+  // Load PIX settings and sellers on mount
   useEffect(() => {
     api.get('/settings')
       .then(res => {
@@ -41,9 +107,8 @@ export const Settings: React.FC = () => {
           pix_qrcode:  data.pix_qrcode  ?? '',
         });
       })
-      .catch(() => {
-        // settings load failure is non-critical
-      });
+      .catch(() => {});
+    loadSellers();
   }, []);
 
   const handleSaveSettings = async () => {
@@ -127,6 +192,16 @@ export const Settings: React.FC = () => {
           }`}
         >
           Notificações
+        </button>
+        <button
+          onClick={() => setActiveTab('sellers')}
+          className={`px-4 py-3 font-medium border-b-2 transition-colors ${
+            activeTab === 'sellers'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Vendedores
         </button>
       </div>
 
@@ -317,6 +392,97 @@ export const Settings: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Sellers */}
+        {activeTab === 'sellers' && (
+          <div className="space-y-6">
+            <Card title="Vendedores" subtitle="Gerencie os vendedores cadastrados no sistema">
+              <div className="flex gap-3 mb-6">
+                <input
+                  type="text"
+                  placeholder="Nome do vendedor..."
+                  value={newSellerName}
+                  onChange={e => setNewSellerName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddSeller()}
+                  className="flex-1 h-[44px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
+                />
+                <Button
+                  variant="primary"
+                  onClick={handleAddSeller}
+                  loading={sellerLoading}
+                  disabled={!newSellerName.trim()}
+                  className="flex items-center gap-2"
+                >
+                  <FiPlus size={16} />
+                  Adicionar
+                </Button>
+              </div>
+
+              {sellers.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <FiUser size={32} className="mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">Nenhum vendedor cadastrado</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {sellers.map(seller => (
+                    <div key={seller.id} className="flex items-center justify-between p-3 bg-background rounded-lg border border-gray-100">
+                      {editingSeller?.id === seller.id ? (
+                        <input
+                          type="text"
+                          value={editingSeller.name}
+                          onChange={e => setEditingSeller({ ...editingSeller, name: e.target.value })}
+                          onKeyDown={e => e.key === 'Enter' && handleUpdateSeller()}
+                          className="flex-1 h-9 px-3 border border-primary rounded-lg text-sm focus:outline-none mr-3"
+                          autoFocus
+                        />
+                      ) : (
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="w-8 h-8 rounded-full bg-primary bg-opacity-10 flex items-center justify-center">
+                            <FiUser size={14} className="text-primary" />
+                          </div>
+                          <span className={`font-medium text-sm ${!seller.active ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                            {seller.name}
+                          </span>
+                          {!seller.active && (
+                            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Inativo</span>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1">
+                        {editingSeller?.id === seller.id ? (
+                          <>
+                            <button onClick={handleUpdateSeller} disabled={sellerLoading} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Salvar">
+                              <FiCheck size={16} />
+                            </button>
+                            <button onClick={() => setEditingSeller(null)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Cancelar">
+                              <FiX size={16} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleToggleActive(seller)}
+                              className={`text-xs px-2 py-1 rounded-lg border font-medium transition-colors ${seller.active ? 'border-gray-200 text-gray-600 hover:bg-gray-50' : 'border-green-200 text-green-700 hover:bg-green-50'}`}
+                            >
+                              {seller.active ? 'Desativar' : 'Ativar'}
+                            </button>
+                            <button onClick={() => setEditingSeller({ id: seller.id, name: seller.name })} className="p-2 text-primary hover:bg-primary hover:bg-opacity-10 rounded-lg transition-colors">
+                              <FiEdit2 size={16} />
+                            </button>
+                            <button onClick={() => handleDeleteSeller(seller.id)} className="p-2 text-error hover:bg-error hover:bg-opacity-10 rounded-lg transition-colors">
+                              <FiTrash2 size={16} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
           </div>
         )}

@@ -12,7 +12,7 @@ const googleSheetsService = new GoogleSheetsService();
 
 export class SaleService {
   async register(data: any, userId: string) {
-    const { customerId, paymentMethod, items, installmentsCount, saleDate, firstDueDate, downPayment, downPaymentDate, customInstallments } = data;
+    const { customerId, paymentMethod, items, installmentsCount, saleDate, firstDueDate, downPayment, downPaymentDate, customInstallments, sellerId } = data;
 
     console.log('[sale.register] firstDueDate recebido:', firstDueDate);
     console.log('[sale.register] downPayment recebido:', downPayment);
@@ -49,6 +49,7 @@ export class SaleService {
       const saleData = {
         customerId,
         userId,
+        sellerId: sellerId ?? null,
         paymentMethod,
         totalAmount: totalAmount.toFixed(2),
         saleDate: saleDate ? new Date(saleDate) : new Date(),
@@ -152,7 +153,7 @@ export class SaleService {
   }
 
   async listWithFilters(filters: any) {
-    const { page = 1, limit = 10, customerId, paymentMethod, startDate, endDate, search, origin } = filters;
+    const { page = 1, limit = 10, customerId, paymentMethod, startDate, endDate, search, origin, sellerId } = filters;
     return saleRepository.listWithFilters({
       page,
       limit,
@@ -162,6 +163,7 @@ export class SaleService {
       endDate: endDate ? new Date(endDate) : undefined,
       search,
       origin,
+      sellerId,
     });
   }
 

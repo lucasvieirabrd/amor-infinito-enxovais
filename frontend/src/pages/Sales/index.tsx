@@ -16,6 +16,11 @@ interface Customer {
   cpf: string;
 }
 
+interface Seller {
+  id: string;
+  name: string;
+}
+
 interface Product {
   id: string;
   name: string;
@@ -34,6 +39,7 @@ export const Sales: React.FC = () => {
   const navigate = useNavigate();
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedSellerId, setSelectedSellerId] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit_card' | 'installment'>('cash');
@@ -71,6 +77,15 @@ export const Sales: React.FC = () => {
       return response.data.data as Product[];
     },
     enabled: productSearch.length >= 2,
+  });
+
+  // Buscar vendedores ativos
+  const { data: sellers } = useQuery({
+    queryKey: ['sellers-active'],
+    queryFn: async () => {
+      const response = await api.get('/sellers', { params: { active: 'true' } });
+      return response.data as Seller[];
+    },
   });
 
   const addToCart = (product: Product) => {
@@ -133,6 +148,7 @@ export const Sales: React.FC = () => {
       }
       setCart([]);
       setSelectedCustomer(null);
+      setSelectedSellerId('');
     },
     onError: (err: any) => {
       alert(err.response?.data?.message || 'Erro ao registrar venda');
@@ -156,6 +172,7 @@ export const Sales: React.FC = () => {
       downPayment: paymentMethod === 'installment' ? downPayment : 0,
       downPaymentDate: paymentMethod === 'installment' && downPayment > 0 ? downPaymentDate : undefined,
       firstDueDate: paymentMethod === 'installment' ? firstDueDate : undefined,
+      sellerId: selectedSellerId || undefined,
     };
 
     registerSaleMutation.mutate(saleData);
@@ -264,6 +281,20 @@ export const Sales: React.FC = () => {
                 </button>
               </div>
             )}
+          </Card>
+
+          {/* Seller Selection */}
+          <Card title="Vendedor" subtitle="Selecione o vendedor responsável pela venda">
+            <select
+              value={selectedSellerId}
+              onChange={e => setSelectedSellerId(e.target.value)}
+              className="input-base w-full"
+            >
+              <option value="">Selecionar vendedor...</option>
+              {sellers?.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
           </Card>
 
           {/* Shopping Cart */}
