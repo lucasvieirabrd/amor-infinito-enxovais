@@ -37,7 +37,7 @@ interface SalesMetrics {
   billing: {
     totalReceivable: SalesSegment;
     overdue: SalesSegment;
-    receivedThisMonth: { total: number };
+    receivedThisMonth: { total: number; installmentsTotal: number; entriesTotal: number };
   };
   salesByDay: Array<{ day: string; total: number }>;
   topProducts: Array<{ name: string; sku: string; totalQty: number; totalRevenue: number }>;
@@ -323,9 +323,15 @@ export const Dashboard: React.FC = () => {
                   <FiCheckCircle size={20} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-gray-500 font-medium">✅ Recebido no Mês</p>
+                  <p className="text-xs text-gray-500 font-medium">✅ Recebido no Período</p>
                   <p className="text-xl font-bold text-gray-900 mt-1 truncate">
                     {brl(billing?.receivedThisMonth.total ?? 0)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Parcelas: {brl(billing?.receivedThisMonth.installmentsTotal ?? 0)}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Entradas: {brl(billing?.receivedThisMonth.entriesTotal ?? 0)}
                   </p>
                 </div>
               </div>

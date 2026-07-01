@@ -14,7 +14,7 @@ export class DashboardService {
   async getSalesMetrics({ start, end, compareTo }: MetricsParams) {
     const [salesData, billingData, salesByDay, topProducts] = await Promise.all([
       this.querySalesData(start, end),
-      this.queryBillingData(),
+      this.queryBillingData(start, end),
       this.querySalesByDay(start, end),
       this.queryTopProducts(start, end),
     ]);
@@ -92,7 +92,7 @@ export class DashboardService {
     };
   }
 
-  private async queryBillingData() {
+  private async queryBillingData(start: string, end: string) {
     const [receivableResult, overdueResult, receivedResult] = await Promise.all([
       db.execute(sql`
         SELECT COUNT(*) AS count,
@@ -113,12 +113,15 @@ export class DashboardService {
           AND deleted_at IS NULL
       `),
       db.execute(sql`
-        SELECT COALESCE(SUM(paid_amount), 0) AS total
+        SELECT
+          COALESCE(SUM(paid_amount), 0)                                                              AS total,
+          COALESCE(SUM(CASE WHEN installment_number > 0 THEN paid_amount ELSE 0 END), 0)             AS installments_total,
+          COALESCE(SUM(CASE WHEN installment_number = 0 THEN paid_amount ELSE 0 END), 0)             AS entries_total
         FROM installments
         WHERE status = 'paid'
           AND deleted_at IS NULL
-          AND YEAR(CONVERT_TZ(payment_date, '+00:00', '-03:00'))  = YEAR(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
-          AND MONTH(CONVERT_TZ(payment_date, '+00:00', '-03:00')) = MONTH(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+          AND DATE(CONVERT_TZ(payment_date, '+00:00', '-03:00')) >= ${start}
+          AND DATE(CONVERT_TZ(payment_date, '+00:00', '-03:00')) <= ${end}
       `),
     ]);
 
@@ -132,7 +135,11 @@ export class DashboardService {
     return {
       totalReceivable:   { total: toF(rec?.total), count: toN(rec?.count) },
       overdue:           { total: toF(ovd?.total), count: toN(ovd?.count) },
-      receivedThisMonth: { total: toF(rcv?.total) },
+      receivedThisMonth: {
+        total:              toF(rcv?.total),
+        installmentsTotal:  toF(rcv?.installments_total),
+        entriesTotal:       toF(rcv?.entries_total),
+      },
     };
   }
 
