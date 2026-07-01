@@ -44,10 +44,11 @@ export class CustomerController {
       page: z.string().optional().transform(v => Number(v) || 1),
       limit: z.string().optional().transform(v => Number(v) || 10),
       search: z.string().optional(),
+      statusFilter: z.enum(['devendo', 'quitado', 'sem_crediario', 'sem_compras']).optional(),
     });
 
-    const { page, limit, search } = listSchema.parse(req.query);
-    const result = await customerService.list(page, limit, search);
+    const { page, limit, search, statusFilter } = listSchema.parse(req.query);
+    const result = await customerService.list(page, limit, search, statusFilter);
 
     return res.json(result);
   }

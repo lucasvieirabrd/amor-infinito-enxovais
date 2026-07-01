@@ -45,8 +45,8 @@ export class CustomerService {
     return customer;
   }
 
-  async list(page = 1, limit = 10, search?: string) {
-    return customerRepository.list(page, limit, search);
+  async list(page = 1, limit = 10, search?: string, statusFilter?: string) {
+    return customerRepository.list(page, limit, search, statusFilter);
   }
 
   async getById(id: string) {

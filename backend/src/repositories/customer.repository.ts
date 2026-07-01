@@ -43,56 +43,97 @@ export class CustomerRepository {
     return result[0];
   }
 
-  async list(page: number, limit: number, search?: string) {
+  async list(page: number, limit: number, search?: string, statusFilter?: string) {
     const offset = (page - 1) * limit;
-    
-    let query = db
-      .select()
-      .from(customers)
-      .where(isNull(customers.deletedAt));
 
-    if (search) {
-      query = db
-        .select()
-        .from(customers)
-        .where(
-          and(
-            isNull(customers.deletedAt),
-            or(
-              like(customers.name, `%${search}%`),
-              like(customers.cpf, `%${search}%`),
-              like(customers.phone, `%${search}%`)
-            )
-          )
-        );
-    }
+    const searchCond = search
+      ? sql`AND (c.name LIKE ${`%${search}%`} OR c.cpf LIKE ${`%${search}%`} OR c.phone LIKE ${`%${search}%`})`
+      : sql``;
 
-    const data = await query.limit(limit).offset(offset);
-    
-    const countResult = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(customers)
-      .where(
-        search 
-          ? and(
-              isNull(customers.deletedAt),
-              or(
-                like(customers.name, `%${search}%`),
-                like(customers.cpf, `%${search}%`),
-                like(customers.phone, `%${search}%`)
-              )
-            )
-          : isNull(customers.deletedAt)
-      );
+    const statusCond =
+      statusFilter === 'devendo'
+        ? sql`AND COALESCE(inst_agg.pending_count, 0) > 0`
+        : statusFilter === 'quitado'
+        ? sql`AND COALESCE(inst_agg.pending_count, 0) = 0 AND COALESCE(inst_agg.total_installments, 0) > 0`
+        : statusFilter === 'sem_crediario'
+        ? sql`AND COALESCE(inst_agg.total_installments, 0) = 0 AND COALESCE(sale_agg.total_sales, 0) > 0`
+        : statusFilter === 'sem_compras'
+        ? sql`AND COALESCE(sale_agg.total_sales, 0) = 0`
+        : sql``;
 
-    const totalPages = Math.ceil(countResult[0].count / limit);
-    
+    const [dataRows] = await db.execute(sql`
+      SELECT
+        c.id,
+        c.name,
+        c.cpf,
+        c.phone,
+        c.email,
+        c.address_street       AS addressStreet,
+        c.address_number       AS addressNumber,
+        c.address_neighborhood AS addressNeighborhood,
+        c.address_city         AS addressCity,
+        c.address_state        AS addressState,
+        c.cep,
+        c.created_at           AS createdAt,
+        c.updated_at           AS updatedAt,
+        CASE
+          WHEN COALESCE(inst_agg.pending_count, 0) > 0          THEN 'devendo'
+          WHEN COALESCE(inst_agg.total_installments, 0) > 0     THEN 'quitado'
+          WHEN COALESCE(sale_agg.total_sales, 0) > 0            THEN 'sem_crediario'
+          ELSE 'sem_compras'
+        END AS paymentStatus
+      FROM customers c
+      LEFT JOIN (
+        SELECT customer_id,
+               COUNT(*) AS total_installments,
+               SUM(CASE WHEN status IN ('pending','overdue') THEN 1 ELSE 0 END) AS pending_count
+        FROM installments
+        WHERE deleted_at IS NULL
+        GROUP BY customer_id
+      ) inst_agg ON inst_agg.customer_id = c.id
+      LEFT JOIN (
+        SELECT customer_id, COUNT(*) AS total_sales
+        FROM sales
+        WHERE deleted_at IS NULL
+        GROUP BY customer_id
+      ) sale_agg ON sale_agg.customer_id = c.id
+      WHERE c.deleted_at IS NULL
+        ${searchCond}
+        ${statusCond}
+      ORDER BY c.name ASC
+      LIMIT ${limit} OFFSET ${offset}
+    `) as any;
+
+    const [countRows] = await db.execute(sql`
+      SELECT COUNT(*) AS total
+      FROM customers c
+      LEFT JOIN (
+        SELECT customer_id,
+               COUNT(*) AS total_installments,
+               SUM(CASE WHEN status IN ('pending','overdue') THEN 1 ELSE 0 END) AS pending_count
+        FROM installments
+        WHERE deleted_at IS NULL
+        GROUP BY customer_id
+      ) inst_agg ON inst_agg.customer_id = c.id
+      LEFT JOIN (
+        SELECT customer_id, COUNT(*) AS total_sales
+        FROM sales
+        WHERE deleted_at IS NULL
+        GROUP BY customer_id
+      ) sale_agg ON sale_agg.customer_id = c.id
+      WHERE c.deleted_at IS NULL
+        ${searchCond}
+        ${statusCond}
+    `) as any;
+
+    const total = Number(countRows[0].total);
+
     return {
-      data,
-      total: countResult[0].count,
+      data: dataRows as any[],
+      total,
       page,
       limit,
-      totalPages,
+      totalPages: Math.ceil(total / limit),
     };
   }
 

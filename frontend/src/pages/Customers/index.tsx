@@ -7,6 +7,8 @@ import axios from 'axios';
 import { useAuth } from '../../hooks/useAuth';
 import { MergeCustomersModal } from './MergeCustomersModal';
 
+type PaymentStatus = 'devendo' | 'quitado' | 'sem_crediario' | 'sem_compras';
+
 interface Customer {
   id: string;
   name: string;
@@ -19,6 +21,7 @@ interface Customer {
   addressCity?: string;
   addressState?: string;
   cep?: string;
+  paymentStatus?: PaymentStatus;
 }
 
 interface PaginatedResponse {
@@ -69,6 +72,7 @@ export const Customers: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<PaymentStatus | ''>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
@@ -82,10 +86,15 @@ export const Customers: React.FC = () => {
   const ITEMS_PER_PAGE = 20;
 
   const { data: response, isLoading } = useQuery({
-    queryKey: ['customers', search, page],
+    queryKey: ['customers', search, page, statusFilter],
     queryFn: async () => {
       const res = await api.get('/customers', {
-        params: { search, page, limit: ITEMS_PER_PAGE },
+        params: {
+          search,
+          page,
+          limit: ITEMS_PER_PAGE,
+          ...(statusFilter && { statusFilter }),
+        },
       });
       return res.data as PaginatedResponse;
     },
@@ -238,6 +247,24 @@ export const Customers: React.FC = () => {
       ),
     },
     {
+      key: 'paymentStatus' as const,
+      label: 'Status',
+      render: (value: PaymentStatus) => {
+        const map: Record<PaymentStatus, { label: string; cls: string }> = {
+          devendo:       { label: 'Devendo',       cls: 'bg-red-100 text-red-700' },
+          quitado:       { label: 'Quitado',       cls: 'bg-green-100 text-green-700' },
+          sem_crediario: { label: 'Sem crediário', cls: 'bg-gray-100 text-gray-600' },
+          sem_compras:   { label: 'Sem compras',   cls: 'bg-gray-100 text-gray-500' },
+        };
+        const s = map[value] ?? map.sem_compras;
+        return (
+          <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${s.cls}`}>
+            {s.label}
+          </span>
+        );
+      },
+    },
+    {
       key: 'actions' as const,
       label: 'Ações',
       render: (_: any, item: Customer) => (
@@ -306,8 +333,8 @@ export const Customers: React.FC = () => {
         </div>
 
         <Card className="mb-6">
-          <div className="flex gap-3">
-            <div className="flex-1 relative">
+          <div className="flex gap-3 flex-wrap">
+            <div className="flex-1 relative min-w-[200px]">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <Input
                 placeholder="Buscar por nome, CPF ou telefone..."
@@ -322,6 +349,17 @@ export const Customers: React.FC = () => {
                 className="pl-10"
               />
             </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value as PaymentStatus | ''); setPage(1); }}
+              className="h-[44px] px-3 pr-8 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+            >
+              <option value="">Todos os status</option>
+              <option value="devendo">🔴 Devendo</option>
+              <option value="quitado">🟢 Quitados</option>
+              <option value="sem_crediario">⚪ Sem crediário</option>
+              <option value="sem_compras">⚪ Sem compras</option>
+            </select>
           </div>
         </Card>
 
