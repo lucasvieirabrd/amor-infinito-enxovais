@@ -3,10 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
 import {
   FiSearch, FiFilter, FiChevronLeft, FiChevronRight, FiEye, FiTrash2, FiAlertCircle, FiLoader,
-  FiDownload
+  FiDownload, FiFileText,
 } from 'react-icons/fi';
 import { Button, Card, Badge, Modal, Loading } from '../../components/ui';
-import { format, isToday } from 'date-fns';
+import { format, isToday, startOfMonth, endOfMonth } from 'date-fns';
 import { useAuth } from '../../hooks/useAuth';
 
 interface SaleItem {
@@ -105,6 +105,14 @@ export const SalesHistory: React.FC = () => {
   const [renDetailsLoading, setRenDetailsLoading] = useState(false);
   const [sellerFilter, setSellerFilter] = useState('');
 
+  const [showSellerReport, setShowSellerReport] = useState(false);
+  const [sellerReportStart, setSellerReportStart] = useState('');
+  const [sellerReportEnd, setSellerReportEnd] = useState('');
+  const [sellerReportSellerId, setSellerReportSellerId] = useState('');
+  const [sellerReportCommission, setSellerReportCommission] = useState('5');
+  const [sellerReportFormat, setSellerReportFormat] = useState<'pdf' | 'excel'>('pdf');
+  const [sellerReportLoading, setSellerReportLoading] = useState(false);
+
   const { data: sellerOptions } = useQuery({
     queryKey: ['sellers-list'],
     queryFn: async () => {
@@ -155,6 +163,48 @@ export const SalesHistory: React.FC = () => {
       alert('Erro ao gerar ordem de venda.');
     } finally {
       setOrdemLoading(false);
+    }
+  };
+
+  const openSellerReport = () => {
+    const now = new Date();
+    setSellerReportStart(format(startOfMonth(now), 'yyyy-MM-dd'));
+    setSellerReportEnd(format(endOfMonth(now), 'yyyy-MM-dd'));
+    setSellerReportSellerId('');
+    setSellerReportCommission('5');
+    setSellerReportFormat('pdf');
+    setShowSellerReport(true);
+  };
+
+  const handleGenerateSellerReport = async () => {
+    setSellerReportLoading(true);
+    try {
+      const params = new URLSearchParams({
+        startDate: sellerReportStart,
+        endDate: sellerReportEnd,
+        commissionPercent: sellerReportCommission,
+        format: sellerReportFormat,
+        ...(sellerReportSellerId && { sellerId: sellerReportSellerId }),
+      });
+      const response = await api.get(`/reports/sellers?${params}`, { responseType: 'blob' });
+      const dateStr = format(new Date(), 'yyyy-MM-dd');
+      const isExcel = sellerReportFormat === 'excel';
+      const mimeType = isExcel
+        ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        : 'application/pdf';
+      const ext = isExcel ? 'xlsx' : 'pdf';
+      const url = URL.createObjectURL(new Blob([response.data], { type: mimeType }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio-vendedores-${dateStr}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Erro ao gerar relatório de vendedores.');
+    } finally {
+      setSellerReportLoading(false);
     }
   };
 
@@ -469,6 +519,18 @@ export const SalesHistory: React.FC = () => {
             >
               Limpar Filtros
             </Button>
+
+            {isAdmin && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={openSellerReport}
+                className="h-[44px] flex items-center gap-2"
+              >
+                <FiFileText size={16} />
+                Relatório de Vendedores
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -1139,6 +1201,114 @@ export const SalesHistory: React.FC = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Seller Report Modal */}
+      <Modal
+        isOpen={showSellerReport}
+        title="Relatório de Vendas por Vendedor"
+        onClose={() => setShowSellerReport(false)}
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Data Inicial</label>
+              <input
+                type="date"
+                value={sellerReportStart}
+                onChange={e => setSellerReportStart(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Data Final</label>
+              <input
+                type="date"
+                value={sellerReportEnd}
+                onChange={e => setSellerReportEnd(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Vendedor</label>
+            <select
+              value={sellerReportSellerId}
+              onChange={e => setSellerReportSellerId(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">Todos os vendedores</option>
+              {sellerOptions?.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">
+              Percentual de Comissão (%)
+            </label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.5"
+              value={sellerReportCommission}
+              onChange={e => setSellerReportCommission(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 uppercase mb-2">Formato</label>
+            <div className="flex gap-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="seller-report-format"
+                  value="pdf"
+                  checked={sellerReportFormat === 'pdf'}
+                  onChange={() => setSellerReportFormat('pdf')}
+                  className="accent-primary"
+                />
+                <span className="text-sm font-medium text-gray-700">PDF</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="seller-report-format"
+                  value="excel"
+                  checked={sellerReportFormat === 'excel'}
+                  onChange={() => setSellerReportFormat('excel')}
+                  className="accent-primary"
+                />
+                <span className="text-sm font-medium text-gray-700">Excel (.xlsx)</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => setShowSellerReport(false)}
+              className="flex-1"
+              disabled={sellerReportLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleGenerateSellerReport}
+              className="flex-1 flex items-center justify-center gap-2"
+              disabled={sellerReportLoading || !sellerReportStart || !sellerReportEnd}
+            >
+              <FiDownload size={16} />
+              {sellerReportLoading ? 'Gerando...' : 'Gerar Relatório'}
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Delete Confirmation Modal */}
