@@ -2,7 +2,7 @@ import puppeteer from 'puppeteer';
 import { format } from 'date-fns';
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { db } from '../database';
-import { sales, saleItems, installments, customers, products } from '../database/schema';
+import { sales, saleItems, installments, customers, products, sellers } from '../database/schema';
 import { AppError } from '../utils/AppError';
 import fs from 'fs';
 import path from 'path';
@@ -78,9 +78,11 @@ async function getOrdemData(saleId: string) {
       customerAddressCity: customers.addressCity,
       customerAddressState: customers.addressState,
       customerCep: customers.cep,
+      sellerName: sellers.name,
     })
     .from(sales)
     .leftJoin(customers, eq(sales.customerId, customers.id))
+    .leftJoin(sellers, eq(sales.sellerId, sellers.id))
     .where(and(eq(sales.id, saleId), isNull(sales.deletedAt)))
     .limit(1);
 
@@ -344,6 +346,7 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
       <div class="doc-title">ORDEM DE VENDA</div>
       <div class="doc-number">${esc(sale.saleNumber)}</div>
       <div class="doc-date">Data da venda: ${fmtDate(sale.saleDate)}</div>
+      ${sale.sellerName ? `<div class="doc-date">Vendedor: ${esc(sale.sellerName)}</div>` : ''}
     </div>
   </div>
 
