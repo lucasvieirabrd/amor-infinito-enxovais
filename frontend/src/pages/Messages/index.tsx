@@ -106,9 +106,6 @@ const formatRelativeTime = (val: any): string => {
 };
 
 // ─── Media URL helper ─────────────────────────────────────────────────────────
-// Builds an authenticated proxy URL using the JWT token as a query param,
-// allowing native <img>, <audio>, <video> and <a download> tags to work
-// without needing to set Authorization headers manually.
 
 function getMediaUrl(mediaId: string | null | undefined): string | null {
   if (!mediaId) return null;
@@ -219,6 +216,147 @@ const MediaBubble: React.FC<{
     <p className="text-sm italic opacity-70">📎 Mídia não suportada ({msg.type})</p>
   );
 };
+
+// ─── ChatPanel props ──────────────────────────────────────────────────────────
+
+interface ChatPanelProps {
+  selectedConversation: Conversation | null;
+  contactPhone: string | undefined;
+  tagMenuRef: React.RefObject<HTMLDivElement>;
+  showTagMenu: boolean;
+  setShowTagMenu: React.Dispatch<React.SetStateAction<boolean>>;
+  handleTag: (tag: string) => void;
+  setShowDeleteConfirm: React.Dispatch<React.SetStateAction<boolean>>;
+  messages: Message[] | undefined;
+  chatEndRef: React.RefObject<HTMLDivElement>;
+  setLightboxSrc: React.Dispatch<React.SetStateAction<string | null>>;
+  newMessage: string;
+  setNewMessage: React.Dispatch<React.SetStateAction<string>>;
+  handleSend: (e: React.FormEvent) => void;
+  sendIsPending: boolean;
+  displayName: (conv: Conversation) => string;
+  activeTag: (conv: Conversation) => string | null;
+  onClose?: () => void;
+}
+
+// ─── ChatPanel ────────────────────────────────────────────────────────────────
+// Defined at module level (NOT inside Messages) so React never recreates its
+// component type on re-render, which would unmount the input and lose focus.
+
+const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
+  selectedConversation, contactPhone, tagMenuRef, showTagMenu, setShowTagMenu,
+  handleTag, setShowDeleteConfirm, messages, chatEndRef, setLightboxSrc,
+  newMessage, setNewMessage, handleSend, sendIsPending, displayName, activeTag, onClose,
+}) => (
+  <>
+    {/* Chat header */}
+    <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-gray-200">
+      <div>
+        <h2 className="text-base font-bold text-gray-900">{selectedConversation ? displayName(selectedConversation) : ''}</h2>
+        <p className="text-xs text-gray-500">{contactPhone}</p>
+      </div>
+      <div className="flex items-center gap-2">
+        {/* Tag button */}
+        <div className="relative" ref={tagMenuRef}>
+          <Button variant="secondary" size="sm"
+            onClick={() => setShowTagMenu(v => !v)}
+            className="flex items-center gap-1.5 text-sm"
+          >
+            <FiTag size={14} />
+            {selectedConversation && activeTag(selectedConversation)
+              ? <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${tagColor(selectedConversation.conversationTag)}`}>{selectedConversation.conversationTag}</span>
+              : 'Tag'
+            }
+          </Button>
+          {showTagMenu && (
+            <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-xl border border-gray-200 z-20 py-1">
+              {TAGS.map(t => (
+                <button key={t.value}
+                  onClick={() => handleTag(t.value)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between transition-colors"
+                >
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.color}`}>{t.label}</span>
+                  {selectedConversation?.conversationTag === t.value && <span className="text-primary text-xs">✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Delete button */}
+        <Button variant="secondary" size="sm"
+          onClick={() => setShowDeleteConfirm(true)}
+          className="text-red-500 hover:bg-red-50 border-red-200"
+        >
+          <FiTrash2 size={15} />
+        </Button>
+
+        {/* Close button (kanban modal only) */}
+        {onClose && (
+          <button onClick={onClose} className="ml-1 text-gray-400 hover:text-gray-600 transition-colors">
+            <FiX size={20} />
+          </button>
+        )}
+      </div>
+    </div>
+
+    {/* Messages */}
+    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+      {!messages || messages.length === 0 ? (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center text-gray-400">
+            <FiMessageSquare size={40} className="mx-auto mb-2 opacity-40" />
+            <p className="text-sm">Nenhuma mensagem ainda</p>
+          </div>
+        </div>
+      ) : messages.map(msg => (
+        <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
+          <div className={`max-w-sm px-4 py-2 rounded-2xl ${
+            msg.direction === 'outbound'
+              ? 'bg-primary text-white rounded-br-sm'
+              : 'bg-white border border-gray-200 text-gray-900 rounded-bl-sm shadow-sm'
+          }`}>
+            {(!msg.type || msg.type === 'text' || msg.type === 'template') ? (
+              <p className="text-sm">{msg.content}</p>
+            ) : (msg.type === 'unsupported' || msg.type === 'unknown') ? (
+              <p className="text-sm italic opacity-70">📎 Mídia não suportada</p>
+            ) : (
+              <MediaBubble msg={msg} isOutbound={msg.direction === 'outbound'} onImageClick={setLightboxSrc} />
+            )}
+            <div className={`flex items-center gap-1 mt-1 text-xs ${
+              msg.direction === 'outbound' ? 'text-white opacity-70 justify-end' : 'text-gray-400'
+            }`}>
+              <span>{formatRelativeTime(msg.timestamp)}</span>
+              {msg.direction === 'outbound' && (
+                msg.status === 'read' ? <FiCheckCircle size={12} /> : <FiCheck size={12} />
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+      <div ref={chatEndRef} />
+    </div>
+
+    {/* Input */}
+    <div className="flex-shrink-0 border-t border-gray-200 p-3">
+      <form onSubmit={handleSend} className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Digite uma mensagem..."
+          value={newMessage}
+          onChange={e => setNewMessage(e.target.value)}
+          className="input-base flex-1 text-sm"
+        />
+        <Button variant="primary" type="submit"
+          loading={sendIsPending} disabled={!newMessage.trim()}
+          className="flex items-center gap-1.5"
+        >
+          <FiSend size={16} />
+        </Button>
+      </form>
+    </div>
+  </>
+));
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -410,7 +548,7 @@ export const Messages: React.FC = () => {
     setDragOverCol(null);
   };
 
-  // ── Filtered conversations (list mode) ──────────────────────────────────
+  // ── Filtered conversations (list mode) ──────────────────────────────
 
   const filtered = (conversations ?? []).filter(conv => {
     const name  = (conv.customerName ?? '').toLowerCase();
@@ -437,118 +575,27 @@ export const Messages: React.FC = () => {
   const convPhone = (conv: Conversation) =>
     conv.contactPhone || (conv.fromPhone !== 'SISTEMA' ? conv.fromPhone : conv.toPhone) || '';
 
-  // ── Chat panel (shared between list right-panel and kanban modal) ────────
+  // ── Shared ChatPanel props ────────────────────────────────────────────────
+  // Collected here so both the list-mode panel and kanban modal share them.
 
-  const ChatPanel = ({ onClose }: { onClose?: () => void }) => (
-    <>
-      {/* Chat header */}
-      <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-gray-200">
-        <div>
-          <h2 className="text-base font-bold text-gray-900">{selectedConversation ? displayName(selectedConversation) : ''}</h2>
-          <p className="text-xs text-gray-500">{contactPhone}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Tag button */}
-          <div className="relative" ref={tagMenuRef}>
-            <Button variant="secondary" size="sm"
-              onClick={() => setShowTagMenu(v => !v)}
-              className="flex items-center gap-1.5 text-sm"
-            >
-              <FiTag size={14} />
-              {selectedConversation && activeTag(selectedConversation)
-                ? <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${tagColor(selectedConversation.conversationTag)}`}>{selectedConversation.conversationTag}</span>
-                : 'Tag'
-              }
-            </Button>
-            {showTagMenu && (
-              <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-xl border border-gray-200 z-20 py-1">
-                {TAGS.map(t => (
-                  <button key={t.value}
-                    onClick={() => handleTag(t.value)}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between transition-colors"
-                  >
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.color}`}>{t.label}</span>
-                    {selectedConversation?.conversationTag === t.value && <span className="text-primary text-xs">✓</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Delete button */}
-          <Button variant="secondary" size="sm"
-            onClick={() => setShowDeleteConfirm(true)}
-            className="text-red-500 hover:bg-red-50 border-red-200"
-          >
-            <FiTrash2 size={15} />
-          </Button>
-
-          {/* Close button (kanban modal only) */}
-          {onClose && (
-            <button onClick={onClose} className="ml-1 text-gray-400 hover:text-gray-600 transition-colors">
-              <FiX size={20} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-        {!messages || messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center text-gray-400">
-              <FiMessageSquare size={40} className="mx-auto mb-2 opacity-40" />
-              <p className="text-sm">Nenhuma mensagem ainda</p>
-            </div>
-          </div>
-        ) : messages.map(msg => (
-          <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-sm px-4 py-2 rounded-2xl ${
-              msg.direction === 'outbound'
-                ? 'bg-primary text-white rounded-br-sm'
-                : 'bg-white border border-gray-200 text-gray-900 rounded-bl-sm shadow-sm'
-            }`}>
-              {(!msg.type || msg.type === 'text' || msg.type === 'template') ? (
-                <p className="text-sm">{msg.content}</p>
-              ) : (msg.type === 'unsupported' || msg.type === 'unknown') ? (
-                <p className="text-sm italic opacity-70">📎 Mídia não suportada</p>
-              ) : (
-                <MediaBubble msg={msg} isOutbound={msg.direction === 'outbound'} onImageClick={setLightboxSrc} />
-              )}
-              <div className={`flex items-center gap-1 mt-1 text-xs ${
-                msg.direction === 'outbound' ? 'text-white opacity-70 justify-end' : 'text-gray-400'
-              }`}>
-                <span>{formatRelativeTime(msg.timestamp)}</span>
-                {msg.direction === 'outbound' && (
-                  msg.status === 'read' ? <FiCheckCircle size={12} /> : <FiCheck size={12} />
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-        <div ref={chatEndRef} />
-      </div>
-
-      {/* Input */}
-      <div className="flex-shrink-0 border-t border-gray-200 p-3">
-        <form onSubmit={handleSend} className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Digite uma mensagem..."
-            value={newMessage}
-            onChange={e => setNewMessage(e.target.value)}
-            className="input-base flex-1 text-sm"
-          />
-          <Button variant="primary" type="submit"
-            loading={sendMutation.isPending} disabled={!newMessage.trim()}
-            className="flex items-center gap-1.5"
-          >
-            <FiSend size={16} />
-          </Button>
-        </form>
-      </div>
-    </>
-  );
+  const chatPanelProps = {
+    selectedConversation,
+    contactPhone,
+    tagMenuRef,
+    showTagMenu,
+    setShowTagMenu,
+    handleTag,
+    setShowDeleteConfirm,
+    messages,
+    chatEndRef,
+    setLightboxSrc,
+    newMessage,
+    setNewMessage,
+    handleSend,
+    sendIsPending: sendMutation.isPending,
+    displayName,
+    activeTag,
+  };
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -708,7 +755,7 @@ export const Messages: React.FC = () => {
           {/* ── Right panel: chat ── */}
           {selectedConversation ? (
             <div className="flex-1 min-w-0 flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <ChatPanel />
+              <ChatPanel {...chatPanelProps} />
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center bg-white rounded-xl border-2 border-dashed border-gray-200">
@@ -791,7 +838,10 @@ export const Messages: React.FC = () => {
       {viewMode === 'kanban' && selectedConversation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col overflow-hidden">
-            <ChatPanel onClose={() => { setSelectedConversation(null); setShowTagMenu(false); }} />
+            <ChatPanel
+              {...chatPanelProps}
+              onClose={() => { setSelectedConversation(null); setShowTagMenu(false); }}
+            />
           </div>
         </div>
       )}
