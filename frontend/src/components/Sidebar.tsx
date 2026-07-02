@@ -11,11 +11,15 @@ import {
   FiSettings,
   FiMenu,
   FiX,
+  FiAlertTriangle,
 } from 'react-icons/fi';
+import { useAuth } from '../hooks/useAuth';
 
 const Sidebar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: FiHome },
@@ -26,6 +30,7 @@ const Sidebar: React.FC = () => {
     { path: '/billing', label: 'Cobrança', icon: FiPhone },
     { path: '/messages', label: 'Mensagens', icon: FiMessageSquare },
     { path: '/settings', label: 'Configurações', icon: FiSettings },
+    ...(isAdmin ? [{ path: '/delinquency-score', label: 'Inadimplência', icon: FiAlertTriangle }] : []),
   ];
 
   const isActive = (path: string) => location.pathname === path;

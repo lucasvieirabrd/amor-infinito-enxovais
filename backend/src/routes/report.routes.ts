@@ -10,5 +10,6 @@ reportRouter.use(ensureAuthenticated);
 
 reportRouter.get('/credit', reportController.getCreditReport);
 reportRouter.get('/sellers', ensureAuthorized(['admin']), reportController.getSellerReport);
+reportRouter.get('/delinquency-score', ensureAuthorized(['admin']), reportController.getDelinquencyScore);
 
 export { reportRouter };

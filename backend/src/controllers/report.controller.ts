@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { generateCreditReportPdf, generateCreditReportExcel, ReportParams } from '../services/creditReport.service';
 import { generateSellerReportPdf, generateSellerReportExcel } from '../services/sellerReport.service';
+import { getDelinquencyScoreData, generateDelinquencyScorePdf, generateDelinquencyScoreExcel } from '../services/delinquencyScore.service';
 
 export class ReportController {
   async getCreditReport(req: Request, res: Response) {
@@ -69,5 +70,42 @@ export class ReportController {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="relatorio-vendedores-${dateStr}.xlsx"`);
     return res.send(buffer);
+  }
+
+  async getDelinquencyScore(req: Request, res: Response) {
+    const schema = z.object({
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+      search: z.string().optional(),
+      riskFilter: z.enum(['low', 'medium', 'high']).optional(),
+      format: z.enum(['json', 'pdf', 'excel']).default('json'),
+    });
+
+    const parsed = schema.parse(req.query);
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    if (parsed.format === 'pdf') {
+      const result = await getDelinquencyScoreData({ search: parsed.search, riskFilter: parsed.riskFilter, limit: 9999 });
+      const buffer = await generateDelinquencyScorePdf(result.data);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="score-inadimplencia-${dateStr}.pdf"`);
+      return res.send(buffer);
+    }
+
+    if (parsed.format === 'excel') {
+      const result = await getDelinquencyScoreData({ search: parsed.search, riskFilter: parsed.riskFilter, limit: 9999 });
+      const buffer = generateDelinquencyScoreExcel(result.data);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="score-inadimplencia-${dateStr}.xlsx"`);
+      return res.send(buffer);
+    }
+
+    const result = await getDelinquencyScoreData({
+      page: parsed.page,
+      limit: parsed.limit,
+      search: parsed.search,
+      riskFilter: parsed.riskFilter,
+    });
+    return res.json(result);
   }
 }

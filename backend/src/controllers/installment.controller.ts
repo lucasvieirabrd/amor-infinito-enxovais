@@ -71,7 +71,8 @@ export class InstallmentController {
     });
 
     const { dueDate } = updateDueDateSchema.parse(req.body);
-    const result = await installmentService.updateDueDate(id, dueDate);
+    const userId = (req as any).user?.id;
+    const result = await installmentService.updateDueDate(id, dueDate, userId);
 
     return res.json(result);
   }

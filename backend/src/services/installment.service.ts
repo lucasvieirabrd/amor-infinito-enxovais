@@ -102,12 +102,11 @@ export class InstallmentService {
     return result;
   }
 
-  async updateDueDate(id: string, newDueDate: string) {
+  async updateDueDate(id: string, newDueDate: string, userId?: string) {
     const existingInstallment = await installmentRepository.findById(id);
     if (!existingInstallment) {
       throw new AppError('Parcela não encontrada', 404);
     }
-    // Se a nova data de vencimento for anterior à data atual e o status for 'pending', mudar para 'overdue'
     let status = existingInstallment.status;
     const today = startOfDay(new Date());
     const newDate = new Date(newDueDate + 'T12:00:00');
@@ -119,7 +118,21 @@ export class InstallmentService {
       status = 'pending';
     }
 
-    return installmentRepository.update(id, { dueDate: newDate, status });
+    const result = await installmentRepository.update(id, { dueDate: newDate, status });
+
+    if (userId) {
+      await db.insert(auditLogs).values({
+        id: uuidv4(),
+        userId,
+        action: 'UPDATE_INSTALLMENT_DATE',
+        entityType: 'Installment',
+        entityId: id,
+        oldValue: { dueDate: existingInstallment.dueDate },
+        newValue: { dueDate: newDate },
+      });
+    }
+
+    return result;
   }
 
   async listOverdue() {
