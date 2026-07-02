@@ -5,31 +5,62 @@ import * as XLSX from 'xlsx';
 import path from 'path';
 import fs from 'fs';
 
+export type RiskLevel = 'good' | 'attention' | 'high_risk';
+
 export interface DelinquencyScoreRow {
   id: string;
   name: string;
   phone: string;
   cpf: string;
-  overdue_count: number;
-  total_days_overdue: number;
-  late_payments_count: number;
   renegotiations_count: number;
-  date_changes_count: number;
+  has_renegotiation: boolean;
+  late_payments: number;
+  overdue_8_30: number;
+  overdue_30plus: number;
+  date_changes: number;
   score: number;
-  risk: 'low' | 'medium' | 'high';
+  risk: RiskLevel;
 }
 
 export interface DelinquencyScoreParams {
   page?: number;
   limit?: number;
   search?: string;
-  riskFilter?: 'low' | 'medium' | 'high';
+  riskFilter?: RiskLevel;
 }
 
-function calcRisk(score: number): 'low' | 'medium' | 'high' {
-  if (score >= 80) return 'high';
-  if (score >= 30) return 'medium';
-  return 'low';
+function calcRisk(score: number): RiskLevel {
+  if (score >= 700) return 'good';
+  if (score >= 400) return 'attention';
+  return 'high_risk';
+}
+
+function computeScore(row: {
+  latest_ren_id: string | null;
+  noren_late: number; noren_o8_30: number; noren_o30plus: number;
+  noren_grace_days: number; noren_dc: number;
+  ren_late: number; ren_o8_30: number; ren_o30plus: number;
+  ren_grace_days: number; ren_dc: number;
+}): number {
+  if (row.latest_ren_id) {
+    // Renegotiation clean-slate: only count behaviour on the new agreement
+    return Math.max(0, Math.round(
+      1000
+      - row.ren_late    * 15
+      - row.ren_o8_30   * 10
+      - row.ren_o30plus * 30
+      - Math.min(row.ren_grace_days, 365) * 0.5
+      - row.ren_dc      * 12  // reoffending on dates weighs more after renegotiation
+    ));
+  }
+  return Math.max(0, Math.round(
+    1000
+    - row.noren_late    * 15
+    - row.noren_o8_30   * 10
+    - row.noren_o30plus * 30
+    - Math.min(row.noren_grace_days, 365) * 0.5
+    - row.noren_dc      * 5
+  ));
 }
 
 async function fetchAllScores(search?: string): Promise<DelinquencyScoreRow[]> {
@@ -37,77 +68,163 @@ async function fetchAllScores(search?: string): Promise<DelinquencyScoreRow[]> {
     ? sql`AND (c.name LIKE ${`%${search}%`} OR c.cpf LIKE ${`%${search}%`} OR c.phone LIKE ${`%${search}%`})`
     : sql``;
 
+  /*
+   * Main JOIN strategy:
+   *  - LEFT JOIN installments i (deleted_at IS NULL) — all active installments
+   *  - LEFT JOIN renegotiations iren ON iren.id = i.sale_id
+   *      → iren.id IS NULL  means the installment belongs to a regular sale (VEN-xxx)
+   *      → iren.id NOT NULL means the installment belongs to a renegotiation (REN-xxx)
+   *  - ren subquery: per-customer latest renegotiation id + count
+   *  - norendc: date-change audit counts on original (non-ren) installments
+   *  - rendc:   date-change audit counts on latest-ren installments
+   *
+   * 7-day grace: overdue conditions start at DATEDIFF > 7, not > 0.
+   * Canceled installments (renegotiationId IS NOT NULL, deletedAt IS NOT NULL)
+   * are excluded by the i.deleted_at IS NULL JOIN filter.
+   */
   const [rows] = await db.execute(sql`
     SELECT
       c.id,
       c.name,
       c.phone,
       c.cpf,
-      COALESCE(od.overdue_count, 0)         AS overdue_count,
-      COALESCE(od.total_days_overdue, 0)    AS total_days_overdue,
-      COALESCE(lp.late_payments_count, 0)   AS late_payments_count,
-      COALESCE(rn.renegotiations_count, 0)  AS renegotiations_count,
-      COALESCE(dc.date_changes_count, 0)    AS date_changes_count,
-      ROUND(
-        COALESCE(od.overdue_count, 0) * 30
-        + LEAST(COALESCE(od.total_days_overdue, 0), 365) * 0.5
-        + COALESCE(lp.late_payments_count, 0) * 5
-        + COALESCE(rn.renegotiations_count, 0) * 20
-        + COALESCE(dc.date_changes_count, 0) * 3
-      , 1) AS score
+      COALESCE(ren.ren_count, 0)  AS renegotiations_count,
+      ren.latest_ren_id,
+
+      /* ── NO-REN PATH: original installments (iren.id IS NULL = regular VEN-xxx sale) ── */
+      COALESCE(SUM(CASE
+        WHEN i.renegotiation_id IS NULL AND iren.id IS NULL
+          AND i.status IN ('pending','overdue')
+          AND DATEDIFF(CURDATE(), DATE(i.due_date)) BETWEEN 8 AND 30
+        THEN 1 ELSE 0 END), 0)                                              AS noren_o8_30,
+
+      COALESCE(SUM(CASE
+        WHEN i.renegotiation_id IS NULL AND iren.id IS NULL
+          AND i.status IN ('pending','overdue')
+          AND DATEDIFF(CURDATE(), DATE(i.due_date)) > 30
+        THEN 1 ELSE 0 END), 0)                                              AS noren_o30plus,
+
+      COALESCE(SUM(CASE
+        WHEN i.renegotiation_id IS NULL AND iren.id IS NULL
+          AND i.status IN ('pending','overdue')
+          AND DATEDIFF(CURDATE(), DATE(i.due_date)) > 7
+        THEN DATEDIFF(CURDATE(), DATE(i.due_date)) - 7 ELSE 0 END), 0)    AS noren_grace_days,
+
+      COALESCE(SUM(CASE
+        WHEN i.renegotiation_id IS NULL AND iren.id IS NULL
+          AND i.status = 'paid' AND i.payment_date > i.due_date
+        THEN 1 ELSE 0 END), 0)                                              AS noren_late,
+
+      COALESCE(norendc.dc_count, 0)                                         AS noren_dc,
+
+      /* ── REN PATH: installments of the customer's latest renegotiation ── */
+      COALESCE(SUM(CASE
+        WHEN ren.latest_ren_id IS NOT NULL
+          AND i.sale_id = ren.latest_ren_id
+          AND i.status IN ('pending','overdue')
+          AND DATEDIFF(CURDATE(), DATE(i.due_date)) BETWEEN 8 AND 30
+        THEN 1 ELSE 0 END), 0)                                              AS ren_o8_30,
+
+      COALESCE(SUM(CASE
+        WHEN ren.latest_ren_id IS NOT NULL
+          AND i.sale_id = ren.latest_ren_id
+          AND i.status IN ('pending','overdue')
+          AND DATEDIFF(CURDATE(), DATE(i.due_date)) > 30
+        THEN 1 ELSE 0 END), 0)                                              AS ren_o30plus,
+
+      COALESCE(SUM(CASE
+        WHEN ren.latest_ren_id IS NOT NULL
+          AND i.sale_id = ren.latest_ren_id
+          AND i.status IN ('pending','overdue')
+          AND DATEDIFF(CURDATE(), DATE(i.due_date)) > 7
+        THEN DATEDIFF(CURDATE(), DATE(i.due_date)) - 7 ELSE 0 END), 0)    AS ren_grace_days,
+
+      COALESCE(SUM(CASE
+        WHEN ren.latest_ren_id IS NOT NULL
+          AND i.sale_id = ren.latest_ren_id
+          AND i.status = 'paid' AND i.payment_date > i.due_date
+        THEN 1 ELSE 0 END), 0)                                              AS ren_late,
+
+      COALESCE(rendc.dc_count, 0)                                           AS ren_dc
+
     FROM customers c
+    LEFT JOIN installments i    ON i.customer_id = c.id AND i.deleted_at IS NULL
+    LEFT JOIN renegotiations iren ON iren.id = i.sale_id
     LEFT JOIN (
+      /* Latest renegotiation per customer */
       SELECT
         customer_id,
-        COUNT(*) AS overdue_count,
-        SUM(GREATEST(DATEDIFF(CURDATE(), DATE(due_date)), 0)) AS total_days_overdue
-      FROM installments
-      WHERE deleted_at IS NULL
-        AND status IN ('pending', 'overdue')
-        AND due_date < CURDATE()
+        COUNT(*) AS ren_count,
+        SUBSTRING_INDEX(GROUP_CONCAT(id ORDER BY created_at DESC), ',', 1) AS latest_ren_id
+      FROM renegotiations
       GROUP BY customer_id
-    ) od ON od.customer_id = c.id
+    ) ren ON ren.customer_id = c.id
     LEFT JOIN (
-      SELECT customer_id, COUNT(*) AS late_payments_count
-      FROM installments
-      WHERE deleted_at IS NULL
-        AND status = 'paid'
-        AND payment_date > due_date
-      GROUP BY customer_id
-    ) lp ON lp.customer_id = c.id
-    LEFT JOIN (
-      SELECT i.customer_id, COUNT(*) AS renegotiations_count
+      /* Date changes on original (non-ren) installments */
+      SELECT inst.customer_id, COUNT(*) AS dc_count
       FROM audit_logs al
-      JOIN installments i ON i.id = al.entity_id AND i.deleted_at IS NULL
-      WHERE al.action = 'UPDATE_INSTALLMENT'
-      GROUP BY i.customer_id
-    ) rn ON rn.customer_id = c.id
+      JOIN installments inst ON inst.id = al.entity_id
+        AND inst.renegotiation_id IS NULL AND inst.deleted_at IS NULL
+      LEFT JOIN renegotiations irn2 ON irn2.id = inst.sale_id
+      WHERE al.action = 'UPDATE_INSTALLMENT_DATE' AND irn2.id IS NULL
+      GROUP BY inst.customer_id
+    ) norendc ON norendc.customer_id = c.id
     LEFT JOIN (
-      SELECT i.customer_id, COUNT(*) AS date_changes_count
+      /* Date changes on installments of the latest renegotiation */
+      SELECT inst.customer_id, COUNT(*) AS dc_count
       FROM audit_logs al
-      JOIN installments i ON i.id = al.entity_id AND i.deleted_at IS NULL
+      JOIN installments inst ON inst.id = al.entity_id AND inst.deleted_at IS NULL
+      JOIN renegotiations r   ON r.id = inst.sale_id
+      JOIN (
+        SELECT customer_id, MAX(created_at) AS max_dt
+        FROM renegotiations GROUP BY customer_id
+      ) lat ON lat.customer_id = r.customer_id AND lat.max_dt = r.created_at
       WHERE al.action = 'UPDATE_INSTALLMENT_DATE'
-      GROUP BY i.customer_id
-    ) dc ON dc.customer_id = c.id
+      GROUP BY inst.customer_id
+    ) rendc ON rendc.customer_id = c.id
     WHERE c.deleted_at IS NULL
       AND EXISTS (SELECT 1 FROM installments WHERE customer_id = c.id AND deleted_at IS NULL)
       ${searchCond}
-    ORDER BY score DESC
+    GROUP BY
+      c.id, c.name, c.phone, c.cpf,
+      ren.ren_count, ren.latest_ren_id,
+      norendc.dc_count, rendc.dc_count
   `) as any;
 
-  return (rows as any[]).map(row => ({
-    id: row.id,
-    name: row.name,
-    phone: row.phone,
-    cpf: row.cpf,
-    overdue_count: Number(row.overdue_count),
-    total_days_overdue: Number(row.total_days_overdue),
-    late_payments_count: Number(row.late_payments_count),
-    renegotiations_count: Number(row.renegotiations_count),
-    date_changes_count: Number(row.date_changes_count),
-    score: Number(row.score),
-    risk: calcRisk(Number(row.score)),
-  }));
+  return (rows as any[]).map(row => {
+    const raw = {
+      latest_ren_id:  row.latest_ren_id ?? null,
+      noren_late:     Number(row.noren_late),
+      noren_o8_30:    Number(row.noren_o8_30),
+      noren_o30plus:  Number(row.noren_o30plus),
+      noren_grace_days: Number(row.noren_grace_days),
+      noren_dc:       Number(row.noren_dc),
+      ren_late:       Number(row.ren_late),
+      ren_o8_30:      Number(row.ren_o8_30),
+      ren_o30plus:    Number(row.ren_o30plus),
+      ren_grace_days: Number(row.ren_grace_days),
+      ren_dc:         Number(row.ren_dc),
+    };
+    const hasRen = Boolean(raw.latest_ren_id);
+    const score = computeScore(raw);
+    return {
+      id: row.id,
+      name: row.name,
+      phone: row.phone,
+      cpf: row.cpf,
+      renegotiations_count: Number(row.renegotiations_count),
+      has_renegotiation: hasRen,
+      // Expose the metrics that actually drove the score
+      late_payments: hasRen ? raw.ren_late    : raw.noren_late,
+      overdue_8_30:  hasRen ? raw.ren_o8_30   : raw.noren_o8_30,
+      overdue_30plus: hasRen ? raw.ren_o30plus : raw.noren_o30plus,
+      date_changes:  hasRen ? raw.ren_dc      : raw.noren_dc,
+      score,
+      risk: calcRisk(score),
+    } as DelinquencyScoreRow;
+  })
+    // Piores no topo (score ASC), empates em ordem alfabética
+    .sort((a, b) => a.score - b.score || a.name.localeCompare(b.name, 'pt-BR'));
 }
 
 export async function getDelinquencyScoreData(params: DelinquencyScoreParams) {
@@ -123,16 +240,18 @@ export async function getDelinquencyScoreData(params: DelinquencyScoreParams) {
   return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
-function riskBadge(risk: string): string {
-  if (risk === 'high') return 'Alto';
-  if (risk === 'medium') return 'Médio';
-  return 'Baixo';
+// ─── PDF & Excel ─────────────────────────────────────────────────────────────
+
+function riskLabel(risk: RiskLevel): string {
+  if (risk === 'good') return 'Bom pagador';
+  if (risk === 'attention') return 'Atenção';
+  return 'Alto risco';
 }
 
-function riskColor(risk: string): string {
-  if (risk === 'high') return '#ef4444';
-  if (risk === 'medium') return '#f59e0b';
-  return '#22c55e';
+function riskColor(risk: RiskLevel): string {
+  if (risk === 'good') return '#16a34a';
+  if (risk === 'attention') return '#d97706';
+  return '#dc2626';
 }
 
 function getLogoBase64(): string {
@@ -156,24 +275,20 @@ export async function generateDelinquencyScorePdf(rows: DelinquencyScoreRow[]): 
   const logoSrc = getLogoBase64();
   const dateStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  const rowsHtml = rows
-    .map(
-      (row, idx) => `
+  const rowsHtml = rows.map((row, idx) => `
     <tr>
       <td>${idx + 1}</td>
-      <td>${row.name}</td>
+      <td>${row.name}${row.has_renegotiation ? ' <em style="color:#6b7280;font-size:8px">(ren.)</em>' : ''}</td>
       <td>${row.cpf || '—'}</td>
       <td>${row.phone || '—'}</td>
-      <td>${row.overdue_count}</td>
-      <td>${row.total_days_overdue}</td>
-      <td>${row.late_payments_count}</td>
-      <td>${row.renegotiations_count}</td>
-      <td>${row.date_changes_count}</td>
       <td><strong>${row.score}</strong></td>
-      <td><span style="color:${riskColor(row.risk)};font-weight:600">${riskBadge(row.risk)}</span></td>
-    </tr>`
-    )
-    .join('');
+      <td><span style="color:${riskColor(row.risk)};font-weight:600">${riskLabel(row.risk)}</span></td>
+      <td>${row.late_payments}</td>
+      <td>${row.overdue_8_30}</td>
+      <td>${row.overdue_30plus}</td>
+      <td>${row.date_changes}</td>
+      <td>${row.renegotiations_count}</td>
+    </tr>`).join('');
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -186,6 +301,7 @@ export async function generateDelinquencyScorePdf(rows: DelinquencyScoreRow[]): 
     .logo { height: 60px; width: auto; }
     .title { font-size: 18px; font-weight: bold; color: #9d174d; }
     .subtitle { font-size: 11px; color: #666; margin-top: 4px; }
+    .legend { font-size: 8px; color: #888; margin-top: 4px; }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 9px; }
     th { background: #9d174d; color: white; padding: 6px 4px; text-align: left; white-space: nowrap; }
     td { padding: 5px 4px; border-bottom: 1px solid #eee; vertical-align: top; }
@@ -198,7 +314,8 @@ export async function generateDelinquencyScorePdf(rows: DelinquencyScoreRow[]): 
     <img src="${logoSrc}" class="logo" alt="Logo" />
     <div style="text-align:right">
       <div class="title">Score de Inadimplência</div>
-      <div class="subtitle">Gerado em ${dateStr} · ${rows.length} cliente(s)</div>
+      <div class="subtitle">Gerado em ${dateStr} · ${rows.length} cliente(s) · piores primeiro</div>
+      <div class="legend">Score 0–1000 (estilo Serasa) · carência 7 dias · 🟢 ≥700 · 🟡 400–699 · 🔴 &lt;400</div>
     </div>
   </div>
   <table>
@@ -208,18 +325,18 @@ export async function generateDelinquencyScorePdf(rows: DelinquencyScoreRow[]): 
         <th>Cliente</th>
         <th>CPF</th>
         <th>Telefone</th>
-        <th>Parc. Vencidas</th>
-        <th>Dias em Atraso</th>
-        <th>Pgtos. Atrasados</th>
-        <th>Renegoc.</th>
-        <th>Alt. Data</th>
         <th>Score</th>
         <th>Risco</th>
+        <th>Pgtos. Atrasados</th>
+        <th>Parc. 8–30d</th>
+        <th>Parc. 30+d</th>
+        <th>Alt. Data</th>
+        <th>Renegoc.</th>
       </tr>
     </thead>
     <tbody>${rowsHtml}</tbody>
   </table>
-  <div class="footer">Amor Infinito Enxovais — Relatório confidencial</div>
+  <div class="footer">Amor Infinito Enxovais — Relatório confidencial · (ren.) = métricas calculadas sobre o acordo de renegociação</div>
 </body>
 </html>`;
 
@@ -236,19 +353,20 @@ export async function generateDelinquencyScorePdf(rows: DelinquencyScoreRow[]): 
 
 export function generateDelinquencyScoreExcel(rows: DelinquencyScoreRow[]): Buffer {
   const sheetData = [
-    ['#', 'Cliente', 'CPF', 'Telefone', 'Parc. Vencidas', 'Dias em Atraso', 'Pgtos. Atrasados', 'Renegociações', 'Alt. de Data', 'Score', 'Risco'],
+    ['#', 'Cliente', 'CPF', 'Telefone', 'Score (0–1000)', 'Risco', 'Pgtos. Atrasados', 'Parc. 8–30d', 'Parc. 30+d', 'Alt. Data', 'Renegociações', 'Base Cálculo'],
     ...rows.map((row, idx) => [
       idx + 1,
       row.name,
       row.cpf || '',
       row.phone || '',
-      row.overdue_count,
-      row.total_days_overdue,
-      row.late_payments_count,
-      row.renegotiations_count,
-      row.date_changes_count,
       row.score,
-      riskBadge(row.risk),
+      riskLabel(row.risk),
+      row.late_payments,
+      row.overdue_8_30,
+      row.overdue_30plus,
+      row.date_changes,
+      row.renegotiations_count,
+      row.has_renegotiation ? 'Acordo renegociado' : 'Histórico completo',
     ]),
   ];
 
@@ -256,7 +374,7 @@ export function generateDelinquencyScoreExcel(rows: DelinquencyScoreRow[]): Buff
   const ws = XLSX.utils.aoa_to_sheet(sheetData);
   ws['!cols'] = [
     { wch: 4 }, { wch: 32 }, { wch: 16 }, { wch: 16 },
-    { wch: 14 }, { wch: 15 }, { wch: 17 }, { wch: 13 }, { wch: 12 }, { wch: 8 }, { wch: 10 },
+    { wch: 14 }, { wch: 14 }, { wch: 17 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 13 }, { wch: 18 },
   ];
   XLSX.utils.book_append_sheet(wb, ws, 'Score Inadimplência');
   return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));

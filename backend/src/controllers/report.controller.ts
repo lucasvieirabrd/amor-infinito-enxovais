@@ -77,7 +77,7 @@ export class ReportController {
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
       search: z.string().optional(),
-      riskFilter: z.enum(['low', 'medium', 'high']).optional(),
+      riskFilter: z.enum(['good', 'attention', 'high_risk']).optional(),
       format: z.enum(['json', 'pdf', 'excel']).default('json'),
     });
 
