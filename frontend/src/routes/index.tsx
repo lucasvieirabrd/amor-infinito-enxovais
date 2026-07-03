@@ -15,6 +15,7 @@ import { Messages } from '../pages/Messages';
 import { Billing } from '../pages/Billing';
 import { Settings } from '../pages/Settings';
 import { DelinquencyScore } from '../pages/DelinquencyScore';
+import { Deliveries } from '../pages/Deliveries';
 import { Layout } from '../components/Layout';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -58,6 +59,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="/cobrança" element={<Billing />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/delinquency-score" element={<DelinquencyScore />} />
+        <Route path="/deliveries" element={<Deliveries />} />
         <Route index element={<Navigate to="/dashboard" />} />
         <Route path="*" element={<Navigate to="/dashboard" />} />
       </Route>

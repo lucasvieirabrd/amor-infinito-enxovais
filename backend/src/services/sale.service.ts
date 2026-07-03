@@ -1,6 +1,7 @@
 import { db } from '../database';
 import { SaleRepository } from '../repositories/sale.repository';
 import { ProductRepository } from '../repositories/product.repository';
+import { DeliveryRepository } from '../repositories/delivery.repository';
 import { GoogleSheetsService } from '../integrations/googleSheets.service';
 import { AppError } from '../utils/AppError';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,6 +9,7 @@ import { addMonths } from 'date-fns';
 
 const saleRepository = new SaleRepository();
 const productRepository = new ProductRepository();
+const deliveryRepository = new DeliveryRepository();
 const googleSheetsService = new GoogleSheetsService();
 
 export class SaleService {
@@ -19,7 +21,9 @@ export class SaleService {
     console.log('[sale.register] downPaymentDate recebido:', downPaymentDate);
 
     // Inicia transação de banco de dados
-    return await db.transaction(async (tx) => {
+    let hasFurniture = false;
+
+    const result = await db.transaction(async (tx) => {
       let totalAmount = 0;
 
       // 1. Validar e reservar estoque (Lock Pessimista)
@@ -32,6 +36,8 @@ export class SaleService {
         if (product.quantity < item.quantity) {
           throw new AppError(`Estoque insuficiente para o produto ${product.name}`, 400);
         }
+
+        if (product.category === 'Móveis') hasFurniture = true;
 
         // Decrementar estoque local
         const newQuantity = product.quantity - item.quantity;
@@ -138,6 +144,16 @@ export class SaleService {
 
       return { saleId, saleNumber, totalAmount };
     });
+
+    if (hasFurniture) {
+      try {
+        await deliveryRepository.create({ saleId: result.saleId, customerId });
+      } catch (err: any) {
+        console.error('[sale] Erro ao criar entrega automática:', err?.message);
+      }
+    }
+
+    return result;
   }
 
   async list(page = 1, limit = 10) {

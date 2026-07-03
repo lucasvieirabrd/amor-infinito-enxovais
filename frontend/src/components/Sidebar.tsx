@@ -12,6 +12,7 @@ import {
   FiMenu,
   FiX,
   FiAlertTriangle,
+  FiTruck,
 } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 
@@ -29,6 +30,7 @@ const Sidebar: React.FC = () => {
     { path: '/installments', label: 'Crediário', icon: FiCreditCard },
     { path: '/billing', label: 'Cobrança', icon: FiPhone },
     { path: '/messages', label: 'Mensagens', icon: FiMessageSquare },
+    { path: '/deliveries', label: 'Entregas', icon: FiTruck },
     { path: '/settings', label: 'Configurações', icon: FiSettings },
     ...(isAdmin ? [{ path: '/delinquency-score', label: 'Inadimplência', icon: FiAlertTriangle }] : []),
   ];

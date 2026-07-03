@@ -14,6 +14,7 @@ import { settingsRouter } from './settings.routes';
 import { reportRouter } from './report.routes';
 import { renegotiationRouter } from './renegotiation.routes';
 import { sellerRouter } from './seller.routes';
+import { deliveryRouter } from './delivery.routes';
 
 const routes = Router();
 
@@ -32,5 +33,6 @@ routes.use('/settings', settingsRouter);
 routes.use('/reports', reportRouter);
 routes.use('/renegotiations', renegotiationRouter);
 routes.use('/sellers', sellerRouter);
+routes.use('/deliveries', deliveryRouter);
 
 export { routes };

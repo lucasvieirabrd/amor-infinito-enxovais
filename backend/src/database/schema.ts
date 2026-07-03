@@ -159,6 +159,19 @@ export const saleSequence = mysqlTable('sale_sequence', {
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
 });
 
+export const deliveries = mysqlTable('deliveries', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  saleId: varchar('sale_id', { length: 36 }).notNull(),
+  customerId: varchar('customer_id', { length: 36 }).notNull(),
+  status: mysqlEnum('status', ['pending', 'delivered']).notNull().default('pending'),
+  deliveryType: mysqlEnum('delivery_type', ['com_montagem', 'sem_montagem']),
+  deliveredAt: datetime('delivered_at'),
+  deliveredBy: varchar('delivered_by', { length: 36 }),
+  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  deletedAt: datetime('deleted_at'),
+});
+
 export const sellers = mysqlTable('sellers', {
   id: varchar('id', { length: 36 }).primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
