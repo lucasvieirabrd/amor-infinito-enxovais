@@ -9,6 +9,7 @@ export class ProductController {
     const registerSchema = z.object({
       name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
       sku: z.string().min(1, 'SKU é obrigatório').optional().or(z.literal('')),
+      category: z.string().max(100).optional().nullable(),
       quantity: z.number().int().nonnegative().default(0),
       price: z.number().positive('Preço deve ser maior que zero'),
       minStockLevel: z.number().int().nonnegative().default(0),
@@ -25,10 +26,11 @@ export class ProductController {
       page: z.string().optional().transform(v => Number(v) || 1),
       limit: z.string().optional().transform(v => Number(v) || 10),
       search: z.string().optional(),
+      category: z.string().optional(),
     });
 
-    const { page, limit, search } = listSchema.parse(req.query);
-    const result = await productService.list(page, limit, search);
+    const { page, limit, search, category } = listSchema.parse(req.query);
+    const result = await productService.list(page, limit, search, category);
 
     return res.json(result);
   }
@@ -44,6 +46,7 @@ export class ProductController {
     const updateSchema = z.object({
       name: z.string().min(3).optional(),
       sku: z.string().min(1).optional().or(z.literal('')),
+      category: z.string().max(100).optional().nullable(),
       quantity: z.number().int().nonnegative().optional(),
       price: z.number().positive().optional(),
       minStockLevel: z.number().int().nonnegative().optional(),

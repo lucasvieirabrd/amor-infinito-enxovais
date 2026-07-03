@@ -4,10 +4,21 @@ import api from '../../services/api';
 import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { Button, Card, Badge, Loading, Modal, Input } from '../../components/ui';
 
+const CATEGORIES = [
+  'Cama',
+  'Banho',
+  'Mesa',
+  'Cozinha',
+  'Móveis',
+  'Decoração',
+  'Outros',
+];
+
 interface Product {
   id: string;
   name: string;
   sku: string;
+  category: string | null;
   price: string | number;
   priceDisplay?: string;
   quantity: number;
@@ -25,25 +36,24 @@ interface PaginatedResponse {
 export const Products: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [page, setPage] = useState(1);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [editFormData, setEditFormData] = useState({ quantity: 0, price: 0 });
+  const [editFormData, setEditFormData] = useState({ quantity: 0, price: 0, category: '' });
   const queryClient = useQueryClient();
 
   const ITEMS_PER_PAGE = 12;
 
-  // Busca de produtos via API com paginação
   const { data: response, isLoading } = useQuery({
-    queryKey: ['products', search, page],
+    queryKey: ['products', search, categoryFilter, page],
     queryFn: async () => {
       const res = await api.get('/products', {
-        params: { search, page, limit: ITEMS_PER_PAGE },
+        params: { search, page, limit: ITEMS_PER_PAGE, ...(categoryFilter && { category: categoryFilter }) },
       });
       return res.data as PaginatedResponse;
     },
   });
 
-  // Mutação para sincronizar com Google Sheets
   const syncMutation = useMutation({
     mutationFn: () => api.post('/products/sync'),
     onSuccess: () => {
@@ -55,7 +65,6 @@ export const Products: React.FC = () => {
     },
   });
 
-  // Mutação para atualizar produto
   const updateMutation = useMutation({
     mutationFn: (data: any) => api.put(`/products/${editingProduct?.id}`, data),
     onSuccess: () => {
@@ -73,12 +82,16 @@ export const Products: React.FC = () => {
     setEditFormData({
       quantity: product.quantity,
       price: typeof product.price === 'string' ? parseFloat(product.price) : product.price,
+      category: product.category ?? '',
     });
   };
 
   const handleSaveEdit = () => {
     if (editingProduct) {
-      updateMutation.mutate(editFormData);
+      updateMutation.mutate({
+        ...editFormData,
+        category: editFormData.category || null,
+      });
     }
   };
 
@@ -94,7 +107,6 @@ export const Products: React.FC = () => {
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header com título e contadores */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold text-gray-900">Produtos</h1>
@@ -125,10 +137,10 @@ export const Products: React.FC = () => {
           </div>
         </div>
 
-        {/* Barra de busca */}
+        {/* Filtros */}
         <Card className="p-4">
-          <div className="flex gap-3">
-            <div className="flex-1 relative">
+          <div className="flex flex-wrap gap-3">
+            <div className="flex-1 min-w-[200px] relative">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <Input
                 placeholder="Buscar por nome ou SKU..."
@@ -143,6 +155,16 @@ export const Products: React.FC = () => {
                 className="pl-10"
               />
             </div>
+            <select
+              value={categoryFilter}
+              onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">Todas as categorias</option>
+              {CATEGORIES.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
         </Card>
 
@@ -167,7 +189,14 @@ export const Products: React.FC = () => {
                   </div>
 
                   <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{product.name}</h3>
-                  <p className="text-xs text-gray-500 mb-3">SKU: {product.sku || '-'}</p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <p className="text-xs text-gray-500">SKU: {product.sku || '-'}</p>
+                    {product.category && (
+                      <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                        {product.category}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="space-y-2 mb-4">
                     <div className="flex justify-between items-center">
@@ -247,6 +276,19 @@ export const Products: React.FC = () => {
         title={`Editar ${editingProduct?.name}`}
       >
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+            <select
+              value={editFormData.category}
+              onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">Sem categoria</option>
+              {CATEGORIES.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Quantidade</label>
             <Input

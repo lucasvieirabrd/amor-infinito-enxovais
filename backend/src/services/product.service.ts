@@ -26,8 +26,8 @@ export class ProductService {
     return product;
   }
 
-  async list(page = 1, limit = 10, search?: string) {
-    return productRepository.list(page, limit, search);
+  async list(page = 1, limit = 10, search?: string, category?: string) {
+    return productRepository.list(page, limit, search, category);
   }
 
   async getById(id: string) {
@@ -72,22 +72,26 @@ export class ProductService {
         const localProduct = await productRepository.findBySku(sheetProduct.sku);
         
         if (localProduct) {
-          // Atualiza se houver diferença de quantidade ou preço
           const localPrice = typeof localProduct.price === 'string' ? parseFloat(localProduct.price) : localProduct.price;
-          if (localProduct.quantity !== sheetProduct.quantity || localPrice !== sheetProduct.price) {
+          if (
+            localProduct.quantity !== sheetProduct.quantity ||
+            localPrice !== sheetProduct.price ||
+            localProduct.category !== (sheetProduct.category || null)
+          ) {
             await productRepository.update(localProduct.id, {
               quantity: sheetProduct.quantity,
               price: sheetProduct.price,
-              name: sheetProduct.name, // Opcional: atualizar nome também
+              name: sheetProduct.name,
+              category: sheetProduct.category || null,
             });
           }
         } else {
-          // Cria novo produto se não existir localmente
           await productRepository.create({
             sku: sheetProduct.sku,
             name: sheetProduct.name,
             price: sheetProduct.price,
             quantity: sheetProduct.quantity,
+            category: sheetProduct.category || null,
           });
         }
       }

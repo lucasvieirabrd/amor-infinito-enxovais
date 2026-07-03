@@ -36,48 +36,31 @@ export class ProductRepository {
     return result[0];
   }
 
-  async list(page: number, limit: number, search?: string) {
+  async list(page: number, limit: number, search?: string, category?: string) {
     const offset = (page - 1) * limit;
-    
-    let query = db
-      .select()
-      .from(products)
-      .where(isNull(products.deletedAt));
 
+    const conditions = [isNull(products.deletedAt)];
     if (search) {
-      query = db
-        .select()
-        .from(products)
-        .where(
-          and(
-            isNull(products.deletedAt),
-            or(
-              like(products.name, `%${search}%`),
-              like(products.sku, `%${search}%`)
-            )
-          )
-        );
+      conditions.push(or(
+        like(products.name, `%${search}%`),
+        like(products.sku, `%${search}%`),
+      )!);
+    }
+    if (category) {
+      conditions.push(eq(products.category, category));
     }
 
-    const data = await query.limit(limit).offset(offset);
-    
+    const where = and(...conditions);
+
+    const data = await db.select().from(products).where(where).limit(limit).offset(offset);
+
     const countResult = await db
       .select({ count: sql<number>`count(*)` })
       .from(products)
-      .where(
-        search 
-          ? and(
-              isNull(products.deletedAt),
-              or(
-                like(products.name, `%${search}%`),
-                like(products.sku, `%${search}%`)
-              )
-            )
-          : isNull(products.deletedAt)
-      );
+      .where(where);
 
     const totalPages = Math.ceil(countResult[0].count / limit);
-    
+
     return {
       data,
       total: countResult[0].count,

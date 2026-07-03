@@ -36,6 +36,7 @@ export const products = mysqlTable("products", {
   id: varchar("id", { length: 36 }).primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   sku: varchar("sku", { length: 50 }).unique(),
+  category: varchar("category", { length: 100 }),
   quantity: int("quantity").notNull().default(0),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   minStockLevel: int("min_stock_level").notNull().default(0),
