@@ -30,6 +30,10 @@ export class ProductService {
     return productRepository.list(page, limit, search, category);
   }
 
+  async listCategories() {
+    return productRepository.listCategories();
+  }
+
   async getById(id: string) {
     const product = await productRepository.findById(id);
     if (!product) {

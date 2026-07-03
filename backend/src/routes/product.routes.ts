@@ -9,6 +9,7 @@ const productController = new ProductController();
 // Todas as rotas de produtos requerem autenticação
 productRouter.use(ensureAuthenticated);
 
+productRouter.get('/categories', productController.categories);
 productRouter.get('/', productController.list);
 productRouter.get('/:id', productController.getById);
 

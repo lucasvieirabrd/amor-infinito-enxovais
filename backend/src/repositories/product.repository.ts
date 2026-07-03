@@ -70,6 +70,15 @@ export class ProductRepository {
     };
   }
 
+  async listCategories(): Promise<string[]> {
+    const rows = await db
+      .selectDistinct({ category: products.category })
+      .from(products)
+      .where(and(isNull(products.deletedAt), sql`${products.category} IS NOT NULL`))
+      .orderBy(products.category);
+    return rows.map(r => r.category as string);
+  }
+
   async create(data: any) {
     const id = uuidv4();
     await db.insert(products).values({

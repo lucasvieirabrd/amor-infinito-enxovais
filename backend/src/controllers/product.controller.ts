@@ -58,6 +58,11 @@ export class ProductController {
     return res.json(product);
   }
 
+  async categories(req: Request, res: Response) {
+    const data = await productService.listCategories();
+    return res.json(data);
+  }
+
   async delete(req: Request, res: Response) {
     const { id } = req.params;
     await productService.delete(id);

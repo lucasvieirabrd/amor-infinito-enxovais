@@ -4,16 +4,6 @@ import api from '../../services/api';
 import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { Button, Card, Badge, Loading, Modal, Input } from '../../components/ui';
 
-const CATEGORIES = [
-  'Cama',
-  'Banho',
-  'Mesa',
-  'Cozinha',
-  'Móveis',
-  'Decoração',
-  'Outros',
-];
-
 interface Product {
   id: string;
   name: string;
@@ -43,6 +33,15 @@ export const Products: React.FC = () => {
   const queryClient = useQueryClient();
 
   const ITEMS_PER_PAGE = 12;
+
+  const { data: categories = [] } = useQuery<string[]>({
+    queryKey: ['product-categories'],
+    queryFn: async () => {
+      const res = await api.get('/products/categories');
+      return res.data as string[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   const { data: response, isLoading } = useQuery({
     queryKey: ['products', search, categoryFilter, page],
@@ -161,7 +160,7 @@ export const Products: React.FC = () => {
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">Todas as categorias</option>
-              {CATEGORIES.map(c => (
+              {categories.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
@@ -284,7 +283,7 @@ export const Products: React.FC = () => {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">Sem categoria</option>
-              {CATEGORIES.map(c => (
+              {categories.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
