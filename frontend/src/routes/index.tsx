@@ -10,12 +10,10 @@ import { Customers } from '../pages/Customers';
 import { Products } from '../pages/Products';
 import { Sales } from '../pages/Sales';
 import { SalesHistory } from '../pages/SalesHistory';
-import { Installments } from '../pages/Installments';
 import { Messages } from '../pages/Messages';
-import { Billing } from '../pages/Billing';
 import { Settings } from '../pages/Settings';
-import { DelinquencyScore } from '../pages/DelinquencyScore';
 import { Deliveries } from '../pages/Deliveries';
+import { Crediario } from '../pages/Crediario';
 import { Layout } from '../components/Layout';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -53,12 +51,13 @@ export const AppRoutes: React.FC = () => {
         <Route path="/products" element={<Products />} />
         <Route path="/sales" element={<Sales />} />
         <Route path="/sales/history" element={<SalesHistory />} />
-        <Route path="/installments" element={<Installments />} />
+        <Route path="/crediario" element={<Crediario />} />
+        <Route path="/installments" element={<Navigate to="/crediario" replace />} />
+        <Route path="/billing" element={<Navigate to="/crediario?tab=cobranca" replace />} />
+        <Route path="/cobrança" element={<Navigate to="/crediario?tab=cobranca" replace />} />
+        <Route path="/delinquency-score" element={<Navigate to="/crediario?tab=inadimplencia" replace />} />
         <Route path="/messages" element={<Messages />} />
-        <Route path="/billing" element={<Billing />} />
-        <Route path="/cobrança" element={<Billing />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/delinquency-score" element={<DelinquencyScore />} />
         <Route path="/deliveries" element={<Deliveries />} />
         <Route index element={<Navigate to="/dashboard" />} />
         <Route path="*" element={<Navigate to="/dashboard" />} />

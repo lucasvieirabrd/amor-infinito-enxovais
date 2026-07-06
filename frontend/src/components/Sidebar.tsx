@@ -6,12 +6,10 @@ import {
   FiPackage,
   FiShoppingCart,
   FiCreditCard,
-  FiPhone,
   FiMessageSquare,
   FiSettings,
   FiMenu,
   FiX,
-  FiAlertTriangle,
   FiTruck,
 } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
@@ -27,12 +25,10 @@ const Sidebar: React.FC = () => {
     { path: '/customers', label: 'Clientes', icon: FiUsers },
     { path: '/products', label: 'Produtos', icon: FiPackage },
     { path: '/sales', label: 'Vendas', icon: FiShoppingCart },
-    { path: '/installments', label: 'Crediário', icon: FiCreditCard },
-    { path: '/billing', label: 'Cobrança', icon: FiPhone },
+    { path: '/crediario', label: 'Crediário', icon: FiCreditCard },
     { path: '/messages', label: 'Mensagens', icon: FiMessageSquare },
     { path: '/deliveries', label: 'Entregas', icon: FiTruck },
     { path: '/settings', label: 'Configurações', icon: FiSettings },
-    ...(isAdmin ? [{ path: '/delinquency-score', label: 'Inadimplência', icon: FiAlertTriangle }] : []),
   ];
 
   const isActive = (path: string) => location.pathname === path;
