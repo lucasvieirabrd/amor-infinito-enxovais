@@ -6,6 +6,7 @@ import api from '../../services/api';
 interface DeliveryItem {
   quantity: number;
   productName: string;
+  productDescription: string | null;
 }
 
 interface Delivery {
@@ -200,7 +201,11 @@ export const Deliveries: React.FC = () => {
                 <ul className="space-y-0.5">
                   {delivery.items.map((item, idx) => (
                     <li key={idx} className="text-sm text-gray-700">
-                      <span className="font-medium">{item.quantity}×</span> {item.productName}
+                      <span className="font-medium">{item.quantity}×</span>{' '}
+                      {item.productName}
+                      {item.productDescription && (
+                        <span className="text-gray-400"> — {item.productDescription}</span>
+                      )}
                     </li>
                   ))}
                 </ul>

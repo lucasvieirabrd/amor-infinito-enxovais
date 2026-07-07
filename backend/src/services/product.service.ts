@@ -80,13 +80,15 @@ export class ProductService {
           if (
             localProduct.quantity !== sheetProduct.quantity ||
             localPrice !== sheetProduct.price ||
-            localProduct.category !== (sheetProduct.category || null)
+            localProduct.category !== (sheetProduct.category || null) ||
+            localProduct.description !== (sheetProduct.description || null)
           ) {
             await productRepository.update(localProduct.id, {
               quantity: sheetProduct.quantity,
               price: sheetProduct.price,
               name: sheetProduct.name,
               category: sheetProduct.category || null,
+              description: sheetProduct.description || null,
             });
           }
         } else {
@@ -96,6 +98,7 @@ export class ProductService {
             price: sheetProduct.price,
             quantity: sheetProduct.quantity,
             category: sheetProduct.category || null,
+            description: sheetProduct.description || null,
           });
         }
       }

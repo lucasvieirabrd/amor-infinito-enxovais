@@ -26,47 +26,50 @@ export class DeliveryService {
 
     await deliveryRepository.deliver(id, data);
 
-    try {
-      const typeLabel = data.deliveryType === 'com_montagem' ? 'Com montagem' : 'Sem montagem';
+    if (data.deliveryType === 'com_montagem') {
+      try {
+        const addressParts = [
+          delivery.addressStreet,
+          delivery.addressNumber,
+          delivery.addressNeighborhood,
+          delivery.addressCity,
+        ].filter(Boolean);
+        const addressLine = addressParts.join(', ') || 'Endereço não informado';
 
-      const addressParts = [
-        delivery.addressStreet,
-        delivery.addressNumber,
-        delivery.addressNeighborhood,
-        delivery.addressCity,
-      ].filter(Boolean);
-      const addressLine = addressParts.join(', ') || 'Endereço não informado';
+        const itemsList = delivery.items
+          .map(i => {
+            const desc = i.productDescription ? ` — ${i.productDescription}` : '';
+            return `  ${i.quantity}x ${i.productName}${desc}`;
+          })
+          .join('\n');
 
-      const itemsList = delivery.items
-        .map(i => `  ${i.quantity} x ${i.productName}`)
-        .join('\n');
+        const text =
+          `🚚 Nova entrega para o montador!\n\n` +
+          `Cliente: ${delivery.customerName}\n` +
+          `Telefone: ${delivery.customerPhone}\n` +
+          `Endereço: ${addressLine}\n\n` +
+          `Itens:\n${itemsList}\n\n` +
+          `Tipo: Com montagem\n` +
+          `Venda: ${delivery.saleNumber}`;
 
-      const text =
-        `🚚 Nova entrega para o montador!\n\n` +
-        `Cliente: ${delivery.customerName}\n` +
-        `Telefone: ${delivery.customerPhone}\n` +
-        `Endereço: ${addressLine}\n\n` +
-        `Itens:\n${itemsList}\n\n` +
-        `Tipo: ${typeLabel}\n` +
-        `Venda: ${delivery.saleNumber}`;
+        const result = await whatsAppService.sendTextMessage(MARCELO_PHONE, text);
 
-      const result = await whatsAppService.sendTextMessage(MARCELO_PHONE, text);
-
-      await messageRepository.create({
-        metaMessageId: result?.messages?.[0]?.id,
-        customerId: delivery.customerId,
-        fromPhone: 'SISTEMA',
-        toPhone: MARCELO_PHONE,
-        type: 'text',
-        content: text,
-        direction: 'outbound',
-        status: result?.error ? 'failed' : 'sent',
-        tag: 'none',
-        errorMessage: result?.error ? String(result.message ?? '') : null,
-        timestamp: new Date(),
-      });
-    } catch (err: any) {
-      console.error('[delivery] Erro ao notificar Marcelo via WhatsApp:', err?.message);
+        await messageRepository.create({
+          metaMessageId: result?.messages?.[0]?.id,
+          customerId: delivery.customerId,
+          fromPhone: 'SISTEMA',
+          toPhone: MARCELO_PHONE,
+          type: 'text',
+          content: text,
+          direction: 'outbound',
+          status: result?.error ? 'failed' : 'sent',
+          tag: 'none',
+          errorMessage: result?.error ? String(result.message ?? '') : null,
+          timestamp: new Date(),
+        });
+      } catch (err: any) {
+        console.error('[delivery] Erro ao notificar Marcelo via WhatsApp:', err?.message);
+      }
     }
 
     return { message: 'Entrega registrada com sucesso' };

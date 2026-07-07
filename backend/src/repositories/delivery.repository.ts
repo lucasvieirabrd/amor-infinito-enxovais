@@ -18,7 +18,7 @@ export interface DeliveryRow {
   addressCity: string | null;
   saleNumber: string;
   saleDate: Date;
-  items: Array<{ quantity: number; productName: string }>;
+  items: Array<{ quantity: number; productName: string; productDescription: string | null }>;
 }
 
 const SELECT_COLS = sql`
@@ -36,7 +36,7 @@ const SELECT_COLS = sql`
   c.address_city         AS addressCity,
   s.sale_number          AS saleNumber,
   s.sale_date            AS saleDate,
-  GROUP_CONCAT(CONCAT(si.quantity, '|', p.name) ORDER BY p.name SEPARATOR '~~') AS itemsRaw
+  GROUP_CONCAT(CONCAT(si.quantity, '|||', p.name, '|||', COALESCE(p.description, '')) ORDER BY p.name SEPARATOR '~~') AS itemsRaw
 `;
 
 const BASE_JOINS = sql`
@@ -70,10 +70,11 @@ function parseRow(r: any): DeliveryRow {
     saleDate: r.saleDate,
     items: r.itemsRaw
       ? String(r.itemsRaw).split('~~').map((part: string) => {
-          const pipeIdx = part.indexOf('|');
+          const [qtyStr, name, desc] = part.split('|||');
           return {
-            quantity: Number(part.slice(0, pipeIdx)),
-            productName: part.slice(pipeIdx + 1),
+            quantity: Number(qtyStr),
+            productName: name ?? '',
+            productDescription: desc || null,
           };
         })
       : [],
