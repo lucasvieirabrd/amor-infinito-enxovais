@@ -48,8 +48,7 @@ export class InstallmentService {
     });
 
     if (updated && isFullyPaid) {
-      await billingService.sendPaymentConfirmation(updated.customerId, newPaidTotal);
-      await billingService.sendSaldoParcelas(updated.customerId, installment.saleId);
+      await billingService.handlePostPaymentMessages(updated.customerId, installment.saleId, newPaidTotal);
     }
 
     return updated;

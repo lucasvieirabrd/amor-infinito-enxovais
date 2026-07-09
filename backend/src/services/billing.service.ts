@@ -407,23 +407,11 @@ export class BillingService {
   /**
    * Envia o template saldo_parcelas após confirmação de pagamento.
    * {{1}}=nome, {{2}}=qtd parcelas restantes, {{3}}=valor da parcela
-   * Só envia se ainda houver parcelas pendentes/vencidas na mesma venda.
+   * Recebe remaining pré-calculado de handlePostPaymentMessages para evitar query dupla.
    * Totalmente silencioso em caso de erro — nunca quebra o fluxo de baixa.
    */
-  async sendSaldoParcelas(customerId: string, saleId: string): Promise<void> {
+  async sendSaldoParcelas(customerId: string, remaining: any[]): Promise<void> {
     try {
-      const remaining = await db
-        .select()
-        .from(installments)
-        .where(
-          and(
-            eq(installments.saleId, saleId),
-            sql`${installments.status} IN ('pending', 'overdue')`,
-            sql`${installments.installmentNumber} > 0`,
-            isNull(installments.deletedAt),
-          )
-        );
-
       if (remaining.length === 0) return;
 
       const customer = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
@@ -459,6 +447,69 @@ export class BillingService {
       }
     } catch (err: any) {
       console.error('[BillingService] sendSaldoParcelas error (ignorado):', err?.message);
+    }
+  }
+
+  /**
+   * Envia o template quitacao_parcelas quando o cliente quita a última parcela.
+   * {{1}}=nome do cliente
+   * Tem fallback em texto simples caso o template falhe na Meta.
+   */
+  async sendQuitacaoParcelas(customerId: string): Promise<void> {
+    const customer = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
+    if (!customer[0]) return;
+
+    const contentText =
+      `Olá ${customer[0].name}, confirmamos a quitação de todas as parcelas do seu crediário com a ` +
+      `Amor Infinito Enxovais. Seu saldo devedor está zerado. Guarde esta mensagem como comprovante.`;
+
+    const components = [{
+      type: 'body',
+      parameters: [{ type: 'text', text: customer[0].name }],
+    }];
+
+    const result = await whatsAppService.sendTemplateMessage(customer[0].phone, 'quitacao_parcelas', components);
+
+    if (result && !result.error) {
+      await saveMessage(result.messages?.[0]?.id, customer[0].id, customer[0].phone, contentText, 'template', 'sent', 'Pago');
+      console.log(`[BillingService] quitacao_parcelas enviado para ${customer[0].name}`);
+    } else {
+      console.warn(`[BillingService] quitacao_parcelas template falhou para ${customer[0].name}, tentando texto`);
+      const fallback = await whatsAppService.sendTextMessage(customer[0].phone, contentText);
+      if (fallback && !fallback.error) {
+        await saveMessage(fallback.messages?.[0]?.id, customer[0].id, customer[0].phone, contentText, 'text', 'sent', 'Pago');
+      }
+    }
+  }
+
+  /**
+   * Orquestra as mensagens pós-baixa. Calcula remaining UMA vez e decide:
+   * - remaining > 0 → confirmacao_pagamento + saldo_parcelas
+   * - remaining = 0 → apenas quitacao_parcelas (cliente quitou tudo)
+   * Totalmente silencioso em caso de erro — nunca quebra o fluxo de baixa.
+   */
+  async handlePostPaymentMessages(customerId: string, saleId: string, paidAmount: number): Promise<void> {
+    try {
+      const remaining = await db
+        .select()
+        .from(installments)
+        .where(
+          and(
+            eq(installments.saleId, saleId),
+            sql`${installments.status} IN ('pending', 'overdue')`,
+            sql`${installments.installmentNumber} > 0`,
+            isNull(installments.deletedAt),
+          )
+        );
+
+      if (remaining.length > 0) {
+        await this.sendPaymentConfirmation(customerId, paidAmount);
+        await this.sendSaldoParcelas(customerId, remaining);
+      } else {
+        await this.sendQuitacaoParcelas(customerId);
+      }
+    } catch (err: any) {
+      console.error('[BillingService] handlePostPaymentMessages error (ignorado):', err?.message);
     }
   }
 
