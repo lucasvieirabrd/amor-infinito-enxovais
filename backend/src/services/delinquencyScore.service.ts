@@ -30,8 +30,8 @@ export interface DelinquencyScoreParams {
 }
 
 function calcRisk(score: number): RiskLevel {
-  if (score >= 700) return 'good';
-  if (score >= 400) return 'attention';
+  if (score <= 30) return 'good';
+  if (score <= 80) return 'attention';
   return 'high_risk';
 }
 
@@ -44,23 +44,21 @@ function computeScore(row: {
 }): number {
   if (row.latest_ren_id) {
     // Renegotiation clean-slate: only count behaviour on the new agreement
-    return Math.max(0, Math.round(
-      1000
-      - row.ren_late    * 15
-      - row.ren_o8_30   * 10
-      - row.ren_o30plus * 30
-      - Math.min(row.ren_grace_days, 365) * 0.5
-      - row.ren_dc      * 12  // reoffending on dates weighs more after renegotiation
-    ));
+    return Math.round(
+      row.ren_late    * 15
+      + row.ren_o8_30   * 10
+      + row.ren_o30plus * 30
+      + Math.min(row.ren_grace_days, 365) * 0.5
+      + row.ren_dc      * 12  // reoffending on dates weighs more after renegotiation
+    );
   }
-  return Math.max(0, Math.round(
-    1000
-    - row.noren_late    * 15
-    - row.noren_o8_30   * 10
-    - row.noren_o30plus * 30
-    - Math.min(row.noren_grace_days, 365) * 0.5
-    - row.noren_dc      * 5
-  ));
+  return Math.round(
+    row.noren_late    * 15
+    + row.noren_o8_30   * 10
+    + row.noren_o30plus * 30
+    + Math.min(row.noren_grace_days, 365) * 0.5
+    + row.noren_dc      * 5
+  );
 }
 
 async function fetchAllScores(search?: string): Promise<DelinquencyScoreRow[]> {
@@ -223,8 +221,8 @@ async function fetchAllScores(search?: string): Promise<DelinquencyScoreRow[]> {
       risk: calcRisk(score),
     } as DelinquencyScoreRow;
   })
-    // Piores no topo (score ASC), empates em ordem alfabética
-    .sort((a, b) => a.score - b.score || a.name.localeCompare(b.name, 'pt-BR'));
+    // Piores no topo (score DESC = maior risco primeiro), empates em ordem alfabética
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'pt-BR'));
 }
 
 export async function getDelinquencyScoreData(params: DelinquencyScoreParams) {
@@ -314,8 +312,8 @@ export async function generateDelinquencyScorePdf(rows: DelinquencyScoreRow[]): 
     <img src="${logoSrc}" class="logo" alt="Logo" />
     <div style="text-align:right">
       <div class="title">Score de Inadimplência</div>
-      <div class="subtitle">Gerado em ${dateStr} · ${rows.length} cliente(s) · piores primeiro</div>
-      <div class="legend">Score 0–1000 (estilo Serasa) · carência 7 dias · 🟢 ≥700 · 🟡 400–699 · 🔴 &lt;400</div>
+      <div class="subtitle">Gerado em ${dateStr} · ${rows.length} cliente(s) · maior score = maior risco · piores primeiro</div>
+      <div class="legend">Score de Risco · 0 = sem risco · carência 7 dias · 🟢 0–30 · 🟡 31–80 · 🔴 &gt;80</div>
     </div>
   </div>
   <table>
@@ -353,7 +351,7 @@ export async function generateDelinquencyScorePdf(rows: DelinquencyScoreRow[]): 
 
 export function generateDelinquencyScoreExcel(rows: DelinquencyScoreRow[]): Buffer {
   const sheetData = [
-    ['#', 'Cliente', 'CPF', 'Telefone', 'Score (0–1000)', 'Risco', 'Pgtos. Atrasados', 'Parc. 8–30d', 'Parc. 30+d', 'Alt. Data', 'Renegociações', 'Base Cálculo'],
+    ['#', 'Cliente', 'CPF', 'Telefone', 'Score de Risco', 'Risco', 'Pgtos. Atrasados', 'Parc. 8–30d', 'Parc. 30+d', 'Alt. Data', 'Renegociações', 'Base Cálculo'],
     ...rows.map((row, idx) => [
       idx + 1,
       row.name,

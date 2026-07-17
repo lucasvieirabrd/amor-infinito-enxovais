@@ -120,7 +120,7 @@ export const DelinquencyScore: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Score de Inadimplência</h1>
             <p className="text-sm text-gray-500">
-              Ranking estilo Serasa · 1000 = excelente · piores no topo · somente administradores
+              Score de risco · maior score = pior cliente · carência 7 dias · somente administradores
             </p>
           </div>
         </div>
@@ -162,9 +162,9 @@ export const DelinquencyScore: React.FC = () => {
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="">Todos os níveis</option>
-          <option value="high_risk">🔴 Alto risco (&lt;400)</option>
-          <option value="attention">🟡 Atenção (400–699)</option>
-          <option value="good">🟢 Bom pagador (≥700)</option>
+          <option value="high_risk">🔴 Alto risco (&gt;80)</option>
+          <option value="attention">🟡 Atenção (31–80)</option>
+          <option value="good">🟢 Bom pagador (0–30)</option>
         </select>
       </div>
 
@@ -292,17 +292,17 @@ export const DelinquencyScore: React.FC = () => {
 
       {/* Legend */}
       <div className="mt-6 p-4 bg-gray-50 rounded-xl text-xs text-gray-500 space-y-1">
-        <p className="font-semibold text-gray-600 mb-2">Como o Score funciona (estilo Serasa)</p>
-        <p>Todo cliente começa com <strong>1000 pontos</strong> e perde pontos por comportamentos ruins. Score alto = bom pagador.</p>
+        <p className="font-semibold text-gray-600 mb-2">Como o Score de Risco funciona</p>
+        <p>Score começa em <strong>0</strong> e acumula pontos de risco. <strong>Quanto maior o score, pior o cliente.</strong> Piores clientes aparecem no topo.</p>
         <div className="mt-2 space-y-0.5">
-          <p>• <strong>Pagamentos feitos com atraso (fator mais forte):</strong> −15 pts cada</p>
-          <p>• Parcelas vencidas há 8–30 dias: −10 pts cada</p>
-          <p>• Parcelas vencidas há mais de 30 dias: −30 pts cada</p>
-          <p>• Dias de atraso acima de 7 (soma, máx. 365d): −0,5 pt por dia</p>
-          <p>• Alterações de data de vencimento: −5 pts cada (−12 se em renegociação)</p>
+          <p>• <strong>Pagamentos feitos com atraso (fator mais forte):</strong> +15 pts cada</p>
+          <p>• Parcelas vencidas há 8–30 dias: +10 pts cada</p>
+          <p>• Parcelas vencidas há mais de 30 dias: +30 pts cada</p>
+          <p>• Dias de atraso acima de 7 (soma, máx. 365d): +0,5 pt por dia</p>
+          <p>• Alterações de data de vencimento: +5 pts cada (+12 se em renegociação)</p>
         </div>
         <p className="mt-2 text-gray-400 italic">
-          Carência de 7 dias: atrasos de 1 a 7 dias não penalizam (pode ser apenas baixa manual pendente).
+          Carência de 7 dias: atrasos de 1 a 7 dias não pontuam (pode ser apenas baixa manual pendente).
         </p>
         <p className="mt-1 text-gray-400 italic">
           Renegociação = recomeço limpo: clientes com acordo renegociado são avaliados apenas pelo comportamento pós-acordo.
@@ -310,9 +310,9 @@ export const DelinquencyScore: React.FC = () => {
         </p>
         <p className="mt-2">
           Faixas:{' '}
-          <span className="text-green-700 font-semibold">🟢 Bom pagador ≥700</span> ·{' '}
-          <span className="text-yellow-700 font-semibold">🟡 Atenção 400–699</span> ·{' '}
-          <span className="text-red-700 font-semibold">🔴 Alto risco &lt;400</span>
+          <span className="text-green-700 font-semibold">🟢 Bom pagador 0–30</span> ·{' '}
+          <span className="text-yellow-700 font-semibold">🟡 Atenção 31–80</span> ·{' '}
+          <span className="text-red-700 font-semibold">🔴 Alto risco &gt;80</span>
         </p>
       </div>
     </div>
