@@ -11,6 +11,7 @@ import {
   FiMenu,
   FiX,
   FiTruck,
+  FiDollarSign,
 } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 
@@ -28,6 +29,7 @@ const Sidebar: React.FC = () => {
     { path: '/crediario', label: 'Crediário', icon: FiCreditCard },
     { path: '/messages', label: 'Mensagens', icon: FiMessageSquare },
     { path: '/deliveries', label: 'Entregas', icon: FiTruck },
+    ...(isAdmin ? [{ path: '/contas-a-pagar', label: 'Contas a Pagar', icon: FiDollarSign }] : []),
     { path: '/settings', label: 'Configurações', icon: FiSettings },
   ];
 

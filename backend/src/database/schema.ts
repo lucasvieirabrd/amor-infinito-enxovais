@@ -181,3 +181,34 @@ export const sellers = mysqlTable('sellers', {
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime('deleted_at'),
 });
+
+export const payableRecurrences = mysqlTable('payable_recurrences', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  description: varchar('description', { length: 255 }).notNull(),
+  category: mysqlEnum('category', ['fixas', 'fornecedores', 'salarios', 'impostos', 'outras']).notNull(),
+  amount: decimal('amount', { precision: 10, scale: 2 }),
+  isVariable: boolean('is_variable').notNull().default(false),
+  dueDay: int('due_day').notNull(),
+  active: boolean('active').notNull().default(true),
+  notes: text('notes'),
+  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  deletedAt: datetime('deleted_at'),
+});
+
+export const payables = mysqlTable('payables', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  recurrenceId: varchar('recurrence_id', { length: 36 }),
+  description: varchar('description', { length: 255 }).notNull(),
+  category: mysqlEnum('category', ['fixas', 'fornecedores', 'salarios', 'impostos', 'outras']).notNull(),
+  amount: decimal('amount', { precision: 10, scale: 2 }),
+  dueDate: datetime('due_date').notNull(),
+  status: mysqlEnum('status', ['pending', 'paid']).notNull().default('pending'),
+  paidAt: datetime('paid_at'),
+  paidAmount: decimal('paid_amount', { precision: 10, scale: 2 }),
+  notes: text('notes'),
+  createdBy: varchar('created_by', { length: 36 }),
+  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  deletedAt: datetime('deleted_at'),
+});

@@ -1,9 +1,11 @@
 import cron from 'node-cron';
 import { BillingService } from '../services/billing.service';
+import { PayableService } from '../services/payable.service';
 import { db } from '../database';
 import { sql } from 'drizzle-orm';
 
 const billingService = new BillingService();
+const payableService = new PayableService();
 
 /**
  * Agendamento de tarefas automáticas.
@@ -53,6 +55,31 @@ export function setupCronJobs() {
   cron.schedule('0 2 * * *', async () => {
     console.log('[CRON] Iniciando backup diário (02h00)...');
     console.log('[CRON] Backup concluído.');
+  }, {
+    timezone: 'America/Sao_Paulo'
+  });
+
+  // 00h30 do dia 1 de cada mês: gerar contas a pagar do mês a partir das recorrências
+  cron.schedule('30 0 1 * *', async () => {
+    console.log('[CRON] Gerando contas a pagar mensais (dia 1, 00h30)...');
+    try {
+      const result = await payableService.generateMonthlyPayables();
+      console.log(`[CRON] Contas a pagar geradas: ${result.created} conta(s).`);
+    } catch (error: any) {
+      console.error('[CRON] Erro ao gerar contas a pagar:', error.message);
+    }
+  }, {
+    timezone: 'America/Sao_Paulo'
+  });
+
+  // 08h30: Enviar alerta de contas a pagar vencidas ou vencendo em 3 dias para Celita
+  cron.schedule('30 8 * * *', async () => {
+    console.log('[CRON] Enviando alerta de contas a pagar (08h30)...');
+    try {
+      await payableService.sendPayablesAlert();
+    } catch (error: any) {
+      console.error('[CRON] Erro ao enviar alerta de contas a pagar:', error.message);
+    }
   }, {
     timezone: 'America/Sao_Paulo'
   });
