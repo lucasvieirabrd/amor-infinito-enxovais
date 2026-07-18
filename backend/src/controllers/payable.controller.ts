@@ -71,7 +71,8 @@ export class PayableController {
       res.status(400).json({ success: false, message: 'Nenhum arquivo enviado.', linhaDigitavel: null, amount: null, dueDate: null, type: null });
       return;
     }
-    const result = await payableService.parseBoleto(req.file.buffer);
+    const debug = req.query.debug === 'true';
+    const result = await payableService.parseBoleto(req.file.buffer, debug);
     res.json({
       success: result.linhaDigitavel !== null,
       message: result.linhaDigitavel

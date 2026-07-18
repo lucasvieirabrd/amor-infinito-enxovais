@@ -114,8 +114,8 @@ export class PayableService {
     return boleto;
   }
 
-  async parseBoleto(buffer: Buffer) {
-    return parseBoletoFromPDF(buffer);
+  async parseBoleto(buffer: Buffer, debug = false) {
+    return parseBoletoFromPDF(buffer, debug);
   }
 
   async removeBoleto(id: string, userId: string) {
