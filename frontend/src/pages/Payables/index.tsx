@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FiPlus, FiChevronLeft, FiChevronRight, FiEdit2, FiTrash2,
   FiCheckCircle, FiRotateCcw, FiAlertTriangle, FiClock,
-  FiDollarSign, FiRepeat, FiPaperclip, FiX,
+  FiDollarSign, FiRepeat, FiPaperclip, FiX, FiFileText, FiLoader,
 } from 'react-icons/fi';
 import api from '../../services/api';
 import { Navigate } from 'react-router-dom';
@@ -76,17 +76,23 @@ const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julh
 
 interface PayableModalProps {
   initial?: Payable | null;
+  prefillAmount?: number | null;
+  prefillDueDate?: string | null;
+  fromBoleto?: boolean;
   onClose: () => void;
   onSave: (data: any) => void;
   saving: boolean;
 }
 
-const PayableModal: React.FC<PayableModalProps> = ({ initial, onClose, onSave, saving }) => {
+const PayableModal: React.FC<PayableModalProps> = ({ initial, prefillAmount, prefillDueDate, fromBoleto, onClose, onSave, saving }) => {
+  const resolvedAmount = initial?.amount ?? prefillAmount;
+  const resolvedDate   = initial?.dueDate?.slice(0, 10) ?? prefillDueDate ?? '';
+
   const [form, setForm] = useState({
     description: initial?.description ?? '',
     category: (initial?.category ?? 'fixas') as Category,
-    amount: initial?.amount != null ? String(initial.amount) : '',
-    dueDate: initial?.dueDate ? initial.dueDate.slice(0, 10) : '',
+    amount: resolvedAmount != null ? String(resolvedAmount) : '',
+    dueDate: resolvedDate,
     notes: initial?.notes ?? '',
   });
 
@@ -109,6 +115,16 @@ const PayableModal: React.FC<PayableModalProps> = ({ initial, onClose, onSave, s
         <h2 className="text-lg font-bold text-gray-800 mb-4">
           {initial ? 'Editar Conta' : 'Nova Conta a Pagar'}
         </h2>
+        {fromBoleto && (
+          <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 flex items-center gap-1.5">
+            <FiFileText size={13} />
+            {(prefillAmount != null || prefillDueDate) ? (
+              <span>Valor e vencimento lidos do boleto — confirme antes de salvar.</span>
+            ) : (
+              <span>Boleto selecionado — linha digitável não encontrada; preencha os dados manualmente.</span>
+            )}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Descrição *</label>
@@ -335,6 +351,12 @@ export const Payables: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
 
+  // Boleto scan (parse-boleto flow)
+  const boletoScanInputRef = useRef<HTMLInputElement>(null);
+  const [parsingBoleto, setParsingBoleto] = useState(false);
+  const [pendingBoletoFile, setPendingBoletoFile] = useState<File | null>(null);
+  const [boletoCreatePrefill, setBoletoCreatePrefill] = useState<{ amount: number | null; dueDate: string | null } | null>(null);
+
   if (user && user.role !== 'admin') return <Navigate to="/dashboard" />;
 
   const navigateMonth = (dir: -1 | 1) => {
@@ -407,6 +429,24 @@ export const Payables: React.FC = () => {
     onSuccess: () => invalidate(),
   });
 
+  const createPayableWithBoleto = useMutation({
+    mutationFn: async ({ payableData, file }: { payableData: any; file: File }) => {
+      const created = await api.post('/payables', payableData);
+      const formData = new FormData();
+      formData.append('boleto', file);
+      await api.post(`/payables/${created.data.id}/boleto`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    onSuccess: () => {
+      invalidate();
+      setShowPayableModal(false);
+      setPendingBoletoFile(null);
+      setBoletoCreatePrefill(null);
+    },
+    onError: (err: any) => alert(err?.response?.data?.message ?? err?.message ?? 'Erro ao criar conta.'),
+  });
+
   const uploadBoleto = useMutation({
     mutationFn: async ({ id, file }: { id: string; file: File }) => {
       if (file.size > 5 * 1024 * 1024) throw new Error('Arquivo muito grande. Limite: 5MB.');
@@ -456,6 +496,35 @@ export const Payables: React.FC = () => {
     e.target.value = '';
   };
 
+  const handleBoletoScanFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setParsingBoleto(true);
+    let prefill: { amount: number | null; dueDate: string | null } | null = null;
+    try {
+      const formData = new FormData();
+      formData.append('boleto', file);
+      const res = await api.post('/payables/parse-boleto', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const d = res.data;
+      if (d.amount != null || d.dueDate != null) {
+        prefill = { amount: d.amount ?? null, dueDate: d.dueDate ?? null };
+      }
+    } catch {
+      // sem parse — abre modal vazio mesmo assim
+    } finally {
+      setParsingBoleto(false);
+    }
+
+    setPendingBoletoFile(file);
+    setBoletoCreatePrefill(prefill);
+    setEditingPayable(null);
+    setShowPayableModal(true);
+  };
+
   const openBoleto = async (payableId: string, filename: string) => {
     try {
       const res = await api.get(`/payables/${payableId}/boleto`, { responseType: 'blob' });
@@ -481,13 +550,21 @@ export const Payables: React.FC = () => {
 
   return (
     <div className="p-6">
-      {/* Hidden file input for boleto upload */}
+      {/* Hidden file input for boleto upload (attachment) */}
       <input
         ref={fileInputRef}
         type="file"
         accept=".pdf,.jpg,.jpeg,.png,.webp"
         className="hidden"
         onChange={handleFileChange}
+      />
+      {/* Hidden file input for boleto PDF scan (parse-boleto flow) */}
+      <input
+        ref={boletoScanInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        className="hidden"
+        onChange={handleBoletoScanFileChange}
       />
 
       {/* Header */}
@@ -507,7 +584,16 @@ export const Payables: React.FC = () => {
             <FiRepeat size={16} /> Nova Recorrência
           </button>
           <button
-            onClick={() => { setShowPayableModal(true); setEditingPayable(null); }}
+            onClick={() => boletoScanInputRef.current?.click()}
+            disabled={parsingBoleto}
+            title="Ler dados de um boleto PDF automaticamente"
+            className="flex items-center gap-2 px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 text-sm disabled:opacity-50"
+          >
+            {parsingBoleto ? <FiLoader size={16} className="animate-spin" /> : <FiFileText size={16} />}
+            {parsingBoleto ? 'Lendo...' : 'Novo boleto'}
+          </button>
+          <button
+            onClick={() => { setPendingBoletoFile(null); setBoletoCreatePrefill(null); setShowPayableModal(true); setEditingPayable(null); }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 text-sm"
           >
             <FiPlus size={16} /> Nova Conta
@@ -801,8 +887,25 @@ export const Payables: React.FC = () => {
 
       {/* Modals */}
       {showPayableModal && (
-        <PayableModal initial={null} onClose={() => setShowPayableModal(false)}
-          onSave={d => createPayable.mutate(d)} saving={createPayable.isPending} />
+        <PayableModal
+          initial={null}
+          prefillAmount={boletoCreatePrefill?.amount}
+          prefillDueDate={boletoCreatePrefill?.dueDate}
+          fromBoleto={pendingBoletoFile !== null}
+          onClose={() => {
+            setShowPayableModal(false);
+            setPendingBoletoFile(null);
+            setBoletoCreatePrefill(null);
+          }}
+          onSave={d => {
+            if (pendingBoletoFile) {
+              createPayableWithBoleto.mutate({ payableData: d, file: pendingBoletoFile });
+            } else {
+              createPayable.mutate(d);
+            }
+          }}
+          saving={pendingBoletoFile ? createPayableWithBoleto.isPending : createPayable.isPending}
+        />
       )}
       {editingPayable && (
         <PayableModal initial={editingPayable} onClose={() => setEditingPayable(null)}

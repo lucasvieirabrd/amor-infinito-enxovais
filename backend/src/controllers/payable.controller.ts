@@ -66,6 +66,21 @@ export class PayableController {
 
   // ─── Boleto ────────────────────────────────────────────────────────────────
 
+  parseBoleto = async (req: Request, res: Response) => {
+    if (!req.file) {
+      res.status(400).json({ success: false, message: 'Nenhum arquivo enviado.', linhaDigitavel: null, amount: null, dueDate: null, type: null });
+      return;
+    }
+    const result = await payableService.parseBoleto(req.file.buffer);
+    res.json({
+      success: result.linhaDigitavel !== null,
+      message: result.linhaDigitavel
+        ? 'Linha digitável extraída com sucesso.'
+        : 'Não foi possível encontrar a linha digitável neste PDF. Preencha os dados manualmente.',
+      ...result,
+    });
+  };
+
   uploadBoleto = async (req: Request, res: Response) => {
     const { id } = req.params;
     if (!req.file) {

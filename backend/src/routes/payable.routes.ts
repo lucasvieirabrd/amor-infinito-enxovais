@@ -29,6 +29,17 @@ payableRouter.post('/recurrences', controller.createRecurrence);
 payableRouter.patch('/recurrences/:id', controller.updateRecurrence);
 payableRouter.delete('/recurrences/:id', controller.removeRecurrence);
 
+// Parse boleto PDF (before /:id)
+const boletoParseUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('Use um arquivo PDF para extração da linha digitável.'));
+  },
+});
+payableRouter.post('/parse-boleto', boletoParseUpload.single('boleto'), controller.parseBoleto);
+
 // Summary (before /:id)
 payableRouter.get('/summary', controller.summary);
 

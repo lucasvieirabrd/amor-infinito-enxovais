@@ -5,6 +5,7 @@ import { getDaysInMonth } from 'date-fns';
 import { db } from '../database';
 import { auditLogs, messages } from '../database/schema';
 import { v4 as uuidv4 } from 'uuid';
+import { parseBoletoFromPDF } from '../utils/boleto';
 
 const payableRepository = new PayableRepository();
 const whatsAppService = new WhatsAppService();
@@ -111,6 +112,10 @@ export class PayableService {
     if (!boleto) throw new AppError('Nenhum boleto anexado a esta conta', 404);
 
     return boleto;
+  }
+
+  async parseBoleto(buffer: Buffer) {
+    return parseBoletoFromPDF(buffer);
   }
 
   async removeBoleto(id: string, userId: string) {
