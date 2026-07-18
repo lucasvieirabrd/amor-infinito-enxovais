@@ -39,7 +39,7 @@
     "mysql2": "^3.6.2",
     "node-cron": "^3.0.2",
     "nodemailer": "^8.0.5",
-    "pdf-parse": "^2.4.5",
+    "pdf-parse": "^1.1.1",
     "puppeteer": "^24.42.0",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.3",
