@@ -164,6 +164,28 @@ export class PayableRepository {
     };
   }
 
+  async findBoletosForToday() {
+    const rows = await db.execute(sql`
+      SELECT id, description, due_date,
+             boleto_file, boleto_filename, boleto_mimetype, boleto_size
+      FROM payables
+      WHERE deleted_at IS NULL
+        AND status = 'pending'
+        AND boleto_file IS NOT NULL
+        AND DATE(CONVERT_TZ(due_date, '+00:00', '-03:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+      ORDER BY due_date ASC
+    `);
+    return (rows[0] as unknown as any[]).map(r => ({
+      id: String(r.id),
+      description: String(r.description),
+      dueDate: r.due_date,
+      boletoBuffer: r.boleto_file as Buffer,
+      boletoFilename: String(r.boleto_filename),
+      boletoMimetype: String(r.boleto_mimetype),
+      boletoSize: Number(r.boleto_size),
+    }));
+  }
+
   async findPendingOrSoonPayables() {
     const rows = await db.execute(sql`
       SELECT description, amount, due_date,

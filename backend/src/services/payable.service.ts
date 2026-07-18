@@ -3,7 +3,7 @@ import { AppError } from '../utils/AppError';
 import { WhatsAppService } from '../integrations/whatsapp.service';
 import { getDaysInMonth } from 'date-fns';
 import { db } from '../database';
-import { auditLogs } from '../database/schema';
+import { auditLogs, messages } from '../database/schema';
 import { v4 as uuidv4 } from 'uuid';
 
 const payableRepository = new PayableRepository();
@@ -223,24 +223,85 @@ export class PayableService {
     };
 
     const parts: string[] = ['📋 *Contas a Pagar — Alerta Diário*'];
-
     if (overdue.length > 0) {
       parts.push(`\n🔴 *Vencidas (${overdue.length}):*`);
       overdue.forEach(p => parts.push(fmt(p)));
     }
-
     if (soon.length > 0) {
       parts.push(`\n🟡 *Vencendo em até 3 dias (${soon.length}):*`);
       soon.forEach(p => parts.push(fmt(p)));
     }
-
     const text = parts.join('\n');
 
+    // 1º — enviar texto (resumo)
     try {
       await whatsAppService.sendTextMessage(CELITA_PHONE, text);
       console.log(`[PayableService] Alerta de contas enviado para Celita: ${overdue.length} vencidas, ${soon.length} vencendo em breve.`);
     } catch (err: any) {
-      console.error('[PayableService] Erro ao enviar alerta de contas:', err?.message);
+      console.error('[PayableService] Erro ao enviar alerta de contas (texto):', err?.message);
+    }
+
+    // 2º — boletos vencendo HOJE: upload → sendDocument, um por vez
+    const boletosHoje = await payableRepository.findBoletosForToday();
+    if (boletosHoje.length === 0) return;
+
+    console.log(`[PayableService] Enviando ${boletosHoje.length} boleto(s) vencendo hoje para Celita...`);
+
+    for (const boleto of boletosHoje) {
+      const dateStr = new Date(boleto.dueDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      const caption = `📎 Boleto: ${boleto.description} — vence hoje ${dateStr}`;
+
+      try {
+        const mediaId = await whatsAppService.uploadMedia(
+          boleto.boletoBuffer,
+          boleto.boletoMimetype,
+          boleto.boletoFilename,
+        );
+
+        const result = await whatsAppService.sendDocumentMessage(
+          CELITA_PHONE,
+          mediaId,
+          boleto.boletoFilename,
+          caption,
+        );
+
+        if (result && !result.error) {
+          await db.insert(messages).values({
+            id: uuidv4(),
+            metaMessageId: result.messages?.[0]?.id ?? null,
+            customerId: null,
+            fromPhone: 'SISTEMA',
+            toPhone: CELITA_PHONE,
+            type: 'document',
+            content: caption,
+            mediaId,
+            mediaFilename: boleto.boletoFilename,
+            direction: 'outbound',
+            status: 'sent',
+            tag: 'none',
+            timestamp: new Date(),
+          });
+          console.log(`[PayableService] Boleto enviado ✓: ${boleto.boletoFilename}`);
+        } else {
+          await db.insert(messages).values({
+            id: uuidv4(),
+            customerId: null,
+            fromPhone: 'SISTEMA',
+            toPhone: CELITA_PHONE,
+            type: 'document',
+            content: caption,
+            direction: 'outbound',
+            status: 'failed',
+            tag: 'none',
+            errorMessage: result?.message ?? 'Erro desconhecido ao enviar documento',
+            timestamp: new Date(),
+          });
+          console.error(`[PayableService] Falha ao enviar boleto ${boleto.boletoFilename}:`, result?.message);
+        }
+      } catch (err: any) {
+        console.error(`[PayableService] Erro inesperado ao enviar boleto ${boleto.boletoFilename}:`, err?.message);
+        // não interrompe o loop — próximo boleto continua
+      }
     }
   }
 }
