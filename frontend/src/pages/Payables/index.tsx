@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FiPlus, FiChevronLeft, FiChevronRight, FiEdit2, FiTrash2, FiCheckCircle, FiRotateCcw, FiAlertTriangle, FiClock, FiDollarSign, FiRepeat } from 'react-icons/fi';
+import {
+  FiPlus, FiChevronLeft, FiChevronRight, FiEdit2, FiTrash2,
+  FiCheckCircle, FiRotateCcw, FiAlertTriangle, FiClock,
+  FiDollarSign, FiRepeat, FiPaperclip, FiX,
+} from 'react-icons/fi';
 import api from '../../services/api';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
@@ -19,6 +23,10 @@ interface Payable {
   paidAt: string | null;
   paidAmount: number | null;
   notes: string | null;
+  boletoFilename: string | null;
+  boletoMimetype: string | null;
+  boletoSize: number | null;
+  boletoUploadedAt: string | null;
 }
 
 interface Recurrence {
@@ -66,14 +74,6 @@ const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julh
 
 // ─── Modal: Create/Edit Payable ───────────────────────────────────────────────
 
-interface PayableFormData {
-  description: string;
-  category: Category;
-  amount: string;
-  dueDate: string;
-  notes: string;
-}
-
 interface PayableModalProps {
   initial?: Payable | null;
   onClose: () => void;
@@ -82,15 +82,15 @@ interface PayableModalProps {
 }
 
 const PayableModal: React.FC<PayableModalProps> = ({ initial, onClose, onSave, saving }) => {
-  const [form, setForm] = useState<PayableFormData>({
+  const [form, setForm] = useState({
     description: initial?.description ?? '',
-    category: initial?.category ?? 'fixas',
+    category: (initial?.category ?? 'fixas') as Category,
     amount: initial?.amount != null ? String(initial.amount) : '',
     dueDate: initial?.dueDate ? initial.dueDate.slice(0, 10) : '',
     notes: initial?.notes ?? '',
   });
 
-  const set = (k: keyof PayableFormData, v: string) => setForm(p => ({ ...p, [k]: v }));
+  const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,22 +112,15 @@ const PayableModal: React.FC<PayableModalProps> = ({ initial, onClose, onSave, s
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Descrição *</label>
-            <input
-              required
-              type="text"
-              value={form.description}
+            <input required type="text" value={form.description}
               onChange={e => set('description', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Categoria *</label>
-              <select
-                value={form.category}
-                onChange={e => set('category', e.target.value as Category)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              >
+              <select value={form.category} onChange={e => set('category', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
                 {(Object.keys(CATEGORY_LABELS) as Category[]).map(k => (
                   <option key={k} value={k}>{CATEGORY_LABELS[k]}</option>
                 ))}
@@ -135,41 +128,27 @@ const PayableModal: React.FC<PayableModalProps> = ({ initial, onClose, onSave, s
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Valor (vazio = variável)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.amount}
-                onChange={e => set('amount', e.target.value)}
-                placeholder="R$ 0,00"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <input type="number" min="0" step="0.01" value={form.amount}
+                onChange={e => set('amount', e.target.value)} placeholder="R$ 0,00"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Vencimento *</label>
-            <input
-              required
-              type="date"
-              value={form.dueDate}
+            <input required type="date" value={form.dueDate}
               onChange={e => set('dueDate', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-            <textarea
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
-              rows={2}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
-              Cancelar
-            </button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 disabled:opacity-50">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancelar</button>
+            <button type="submit" disabled={saving}
+              className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 disabled:opacity-50">
               {saving ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
@@ -203,34 +182,32 @@ const PayModal: React.FC<PayModalProps> = ({ payable, onClose, onConfirm, saving
       <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
         <h2 className="text-lg font-bold text-gray-800 mb-1">Registrar Pagamento</h2>
         <p className="text-sm text-gray-500 mb-4">{payable.description}</p>
+
+        {payable.boletoFilename && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+            <strong>⚠️ Atenção:</strong> Ao marcar como paga, o boleto anexado
+            (<strong>{payable.boletoFilename}</strong>) será removido automaticamente.
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Valor pago *</label>
-            <input
-              required
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={paidAmount}
+            <input required type="number" min="0.01" step="0.01" value={paidAmount}
               onChange={e => setPaidAmount(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Data do pagamento *</label>
-            <input
-              required
-              type="date"
-              value={paidAt}
+            <input required type="date" value={paidAt}
               onChange={e => setPaidAt(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
-              Cancelar
-            </button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancelar</button>
+            <button type="submit" disabled={saving}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
               {saving ? 'Salvando...' : 'Confirmar Pagamento'}
             </button>
           </div>
@@ -282,22 +259,15 @@ const RecurrenceModal: React.FC<RecurrenceModalProps> = ({ initial, onClose, onS
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Descrição *</label>
-            <input
-              required
-              type="text"
-              value={form.description}
+            <input required type="text" value={form.description}
               onChange={e => set('description', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Categoria *</label>
-              <select
-                value={form.category}
-                onChange={e => set('category', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              >
+              <select value={form.category} onChange={e => set('category', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
                 {(Object.keys(CATEGORY_LABELS) as Category[]).map(k => (
                   <option key={k} value={k}>{CATEGORY_LABELS[k]}</option>
                 ))}
@@ -305,55 +275,34 @@ const RecurrenceModal: React.FC<RecurrenceModalProps> = ({ initial, onClose, onS
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Dia de vencimento *</label>
-              <input
-                required
-                type="number"
-                min={1}
-                max={31}
-                value={form.dueDay}
+              <input required type="number" min={1} max={31} value={form.dueDay}
                 onChange={e => set('dueDay', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="isVariable"
-              checked={form.isVariable}
-              onChange={e => set('isVariable', e.target.checked)}
-              className="h-4 w-4"
-            />
+            <input type="checkbox" id="isVariable" checked={form.isVariable}
+              onChange={e => set('isVariable', e.target.checked)} className="h-4 w-4" />
             <label htmlFor="isVariable" className="text-sm text-gray-700">Valor variável (definido a cada mês)</label>
           </div>
           {!form.isVariable && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Valor fixo</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.amount}
-                onChange={e => set('amount', e.target.value)}
-                placeholder="R$ 0,00"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <input type="number" min="0" step="0.01" value={form.amount}
+                onChange={e => set('amount', e.target.value)} placeholder="R$ 0,00"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
           )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-            <textarea
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
-              rows={2}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
-              Cancelar
-            </button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 disabled:opacity-50">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancelar</button>
+            <button type="submit" disabled={saving}
+              className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 disabled:opacity-50">
               {saving ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
@@ -376,12 +325,15 @@ export const Payables: React.FC = () => {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
 
-  // Modals
   const [showPayableModal, setShowPayableModal] = useState(false);
   const [editingPayable, setEditingPayable] = useState<Payable | null>(null);
   const [payingPayable, setPayingPayable] = useState<Payable | null>(null);
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
   const [editingRecurrence, setEditingRecurrence] = useState<Recurrence | null>(null);
+
+  // Hidden file input for boleto upload; uploadTargetId tracks which payable
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
 
   if (user && user.role !== 'admin') return <Navigate to="/dashboard" />;
 
@@ -394,7 +346,13 @@ export const Payables: React.FC = () => {
     setYear(y);
   };
 
-  // Queries
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['payables'] });
+    queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
+  };
+
+  // ── Queries ──────────────────────────────────────────────────────────────────
+
   const { data: payablesList = [], isLoading: loadingPayables } = useQuery<Payable[]>({
     queryKey: ['payables', month, year, search, categoryFilter],
     queryFn: async () => {
@@ -422,12 +380,8 @@ export const Payables: React.FC = () => {
     },
   });
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['payables'] });
-    queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
-  };
+  // ── Mutations ─────────────────────────────────────────────────────────────────
 
-  // Mutations
   const createPayable = useMutation({
     mutationFn: (d: any) => api.post('/payables', d),
     onSuccess: () => { invalidate(); setShowPayableModal(false); },
@@ -453,6 +407,24 @@ export const Payables: React.FC = () => {
     onSuccess: () => invalidate(),
   });
 
+  const uploadBoleto = useMutation({
+    mutationFn: async ({ id, file }: { id: string; file: File }) => {
+      if (file.size > 5 * 1024 * 1024) throw new Error('Arquivo muito grande. Limite: 5MB.');
+      const formData = new FormData();
+      formData.append('boleto', file);
+      await api.post(`/payables/${id}/boleto`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    onSuccess: () => invalidate(),
+    onError: (err: any) => alert(err?.response?.data?.message ?? err?.message ?? 'Erro ao anexar boleto.'),
+  });
+
+  const removeBoleto = useMutation({
+    mutationFn: (id: string) => api.delete(`/payables/${id}/boleto`),
+    onSuccess: () => invalidate(),
+  });
+
   const createRecurrence = useMutation({
     mutationFn: (d: any) => api.post('/payables/recurrences', d),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['payable-recurrences'] }); setShowRecurrenceModal(false); },
@@ -468,10 +440,40 @@ export const Payables: React.FC = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payable-recurrences'] }),
   });
 
+  // ── Boleto helpers ────────────────────────────────────────────────────────────
+
+  const handleBoletoUploadClick = (payableId: string) => {
+    setUploadTargetId(payableId);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && uploadTargetId) {
+      uploadBoleto.mutate({ id: uploadTargetId, file });
+    }
+    // reset so same file can be re-selected if needed
+    e.target.value = '';
+  };
+
+  const openBoleto = async (payableId: string, filename: string) => {
+    try {
+      const res = await api.get(`/payables/${payableId}/boleto`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const win = window.open(url, '_blank');
+      // revoke after a short delay to allow the tab to load
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      if (!win) alert('Permita pop-ups para visualizar o boleto.');
+    } catch {
+      alert('Erro ao abrir boleto.');
+    }
+  };
+
+  // ── Row styling ───────────────────────────────────────────────────────────────
+
   const getRowBg = (p: Payable) => {
     if (p.status === 'paid') return 'bg-green-50';
     if (p.status === 'overdue') return 'bg-red-50';
-    // due ≤ 3 days?
     const diff = Math.floor((new Date(p.dueDate).getTime() - Date.now()) / 86400000);
     if (diff >= 0 && diff <= 3) return 'bg-yellow-50';
     return '';
@@ -479,6 +481,15 @@ export const Payables: React.FC = () => {
 
   return (
     <div className="p-6">
+      {/* Hidden file input for boleto upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png,.webp"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -493,15 +504,13 @@ export const Payables: React.FC = () => {
             onClick={() => { setShowRecurrenceModal(true); setEditingRecurrence(null); }}
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm"
           >
-            <FiRepeat size={16} />
-            Nova Recorrência
+            <FiRepeat size={16} /> Nova Recorrência
           </button>
           <button
             onClick={() => { setShowPayableModal(true); setEditingPayable(null); }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 text-sm"
           >
-            <FiPlus size={16} />
-            Nova Conta
+            <FiPlus size={16} /> Nova Conta
           </button>
         </div>
       </div>
@@ -550,40 +559,25 @@ export const Payables: React.FC = () => {
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-4">
-        <button
-          onClick={() => setTab('payables')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            tab === 'payables' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Contas do Mês
-        </button>
-        <button
-          onClick={() => setTab('recurrences')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            tab === 'recurrences' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Recorrências
-        </button>
+        {(['payables', 'recurrences'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === t ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}>
+            {t === 'payables' ? 'Contas do Mês' : 'Recorrências'}
+          </button>
+        ))}
       </div>
 
       {/* Tab: Payables */}
       {tab === 'payables' && (
         <>
           <div className="flex flex-wrap gap-3 mb-4">
-            <input
-              type="text"
-              placeholder="Buscar por descrição..."
-              value={search}
+            <input type="text" placeholder="Buscar por descrição..." value={search}
               onChange={e => setSearch(e.target.value)}
-              className="flex-1 min-w-[200px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            <select
-              value={categoryFilter}
-              onChange={e => setCategoryFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            >
+              className="flex-1 min-w-[200px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
               <option value="">Todas as categorias</option>
               {(Object.entries(CATEGORY_LABELS) as [Category, string][]).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
@@ -600,21 +594,25 @@ export const Payables: React.FC = () => {
                   <th className="text-right px-4 py-3 font-semibold text-gray-600">Valor</th>
                   <th className="text-center px-4 py-3 font-semibold text-gray-600">Vencimento</th>
                   <th className="text-center px-4 py-3 font-semibold text-gray-600">Status</th>
+                  <th className="text-center px-4 py-3 font-semibold text-gray-600">Boleto</th>
                   <th className="text-center px-4 py-3 font-semibold text-gray-600">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {loadingPayables ? (
-                  <tr><td colSpan={6} className="text-center py-10 text-gray-400">Carregando...</td></tr>
+                  <tr><td colSpan={7} className="text-center py-10 text-gray-400">Carregando...</td></tr>
                 ) : payablesList.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-10 text-gray-400">Nenhuma conta encontrada para {MONTH_NAMES[month-1]}/{year}.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-10 text-gray-400">
+                    Nenhuma conta encontrada para {MONTH_NAMES[month - 1]}/{year}.
+                  </td></tr>
                 ) : (
                   payablesList.map(p => (
-                    <tr key={p.id} className={`border-b border-gray-100 hover:brightness-95 ${getRowBg(p)}`}>
+                    <tr key={p.id} className={`border-b border-gray-100 hover:brightness-95 transition-colors ${getRowBg(p)}`}>
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-800">{p.description}</span>
                         {p.recurrenceId && (
-                          <span className="ml-2 text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded" title="Gerada por recorrência">
+                          <span className="ml-2 text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded"
+                            title="Gerada por recorrência">
                             <FiRepeat size={10} className="inline" />
                           </span>
                         )}
@@ -637,35 +635,61 @@ export const Payables: React.FC = () => {
                       <td className="px-4 py-3 text-center text-gray-600">{fmtDate(p.dueDate)}</td>
                       <td className="px-4 py-3 text-center">
                         {p.status === 'paid' ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                            ✓ Pago
-                          </span>
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">✓ Pago</span>
                         ) : p.status === 'overdue' ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                            Vencida
-                          </span>
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">Vencida</span>
                         ) : (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
-                            Pendente
-                          </span>
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">Pendente</span>
                         )}
                       </td>
+
+                      {/* Boleto column */}
+                      <td className="px-4 py-3 text-center">
+                        {p.boletoFilename ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => openBoleto(p.id, p.boletoFilename!)}
+                              title={`Abrir: ${p.boletoFilename}`}
+                              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              <FiPaperclip size={13} />
+                              <span className="max-w-[80px] truncate">{p.boletoFilename}</span>
+                            </button>
+                            {p.status !== 'paid' && (
+                              <button
+                                onClick={() => { if (confirm('Remover boleto anexado?')) removeBoleto.mutate(p.id); }}
+                                title="Remover boleto"
+                                className="p-0.5 text-gray-400 hover:text-red-500 rounded"
+                              >
+                                <FiX size={13} />
+                              </button>
+                            )}
+                          </div>
+                        ) : p.status !== 'paid' ? (
+                          <button
+                            onClick={() => handleBoletoUploadClick(p.id)}
+                            title="Anexar boleto (PDF, JPEG, PNG, WebP · máx. 5MB)"
+                            className="flex items-center justify-center gap-1 text-xs text-gray-400 hover:text-primary mx-auto"
+                          >
+                            <FiPaperclip size={13} />
+                            <span>Anexar</span>
+                          </button>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+
+                      {/* Actions column */}
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1">
                           {p.status !== 'paid' && (
                             <>
-                              <button
-                                onClick={() => setPayingPayable(p)}
-                                title="Registrar pagamento"
-                                className="p-1.5 text-green-600 hover:bg-green-50 rounded"
-                              >
+                              <button onClick={() => setPayingPayable(p)} title="Registrar pagamento"
+                                className="p-1.5 text-green-600 hover:bg-green-50 rounded">
                                 <FiCheckCircle size={16} />
                               </button>
-                              <button
-                                onClick={() => { setEditingPayable(p); }}
-                                title="Editar"
-                                className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
-                              >
+                              <button onClick={() => setEditingPayable(p)} title="Editar"
+                                className="p-1.5 text-gray-500 hover:bg-gray-100 rounded">
                                 <FiEdit2 size={16} />
                               </button>
                             </>
@@ -674,8 +698,7 @@ export const Payables: React.FC = () => {
                             <button
                               onClick={() => { if (confirm('Reverter pagamento?')) revertPayable.mutate(p.id); }}
                               title="Reverter pagamento"
-                              className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded"
-                            >
+                              className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded">
                               <FiRotateCcw size={16} />
                             </button>
                           )}
@@ -683,8 +706,7 @@ export const Payables: React.FC = () => {
                             <button
                               onClick={() => { if (confirm('Excluir esta conta?')) deletePayable.mutate(p.id); }}
                               title="Excluir"
-                              className="p-1.5 text-red-500 hover:bg-red-50 rounded"
-                            >
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded">
                               <FiTrash2 size={16} />
                             </button>
                           )}
@@ -697,10 +719,11 @@ export const Payables: React.FC = () => {
             </table>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-500">
+          <div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-red-100 border border-red-200"></span> Vencida</span>
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-yellow-100 border border-yellow-200"></span> Vence em 3 dias</span>
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-green-100 border border-green-200"></span> Paga</span>
+            <span className="flex items-center gap-1 ml-2"><FiPaperclip size={11} /> Clique no nome do arquivo para abrir o boleto em nova aba</span>
           </div>
         </>
       )}
@@ -753,25 +776,17 @@ export const Payables: React.FC = () => {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={() => updateRecurrence.mutate({ id: r.id, active: !r.active })}
-                          title={r.active ? 'Desativar' : 'Ativar'}
-                          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded text-xs"
-                        >
+                        <button onClick={() => updateRecurrence.mutate({ id: r.id, active: !r.active })}
+                          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded text-xs">
                           {r.active ? 'Desativar' : 'Ativar'}
                         </button>
-                        <button
-                          onClick={() => setEditingRecurrence(r)}
-                          title="Editar"
-                          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
-                        >
+                        <button onClick={() => setEditingRecurrence(r)} title="Editar"
+                          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded">
                           <FiEdit2 size={16} />
                         </button>
                         <button
                           onClick={() => { if (confirm('Excluir esta recorrência? As contas já geradas não serão afetadas.')) deleteRecurrence.mutate(r.id); }}
-                          title="Excluir"
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded"
-                        >
+                          title="Excluir" className="p-1.5 text-red-500 hover:bg-red-50 rounded">
                           <FiTrash2 size={16} />
                         </button>
                       </div>
@@ -786,44 +801,27 @@ export const Payables: React.FC = () => {
 
       {/* Modals */}
       {showPayableModal && (
-        <PayableModal
-          initial={null}
-          onClose={() => setShowPayableModal(false)}
-          onSave={d => createPayable.mutate(d)}
-          saving={createPayable.isPending}
-        />
+        <PayableModal initial={null} onClose={() => setShowPayableModal(false)}
+          onSave={d => createPayable.mutate(d)} saving={createPayable.isPending} />
       )}
       {editingPayable && (
-        <PayableModal
-          initial={editingPayable}
-          onClose={() => setEditingPayable(null)}
+        <PayableModal initial={editingPayable} onClose={() => setEditingPayable(null)}
           onSave={d => updatePayable.mutate({ id: editingPayable.id, ...d })}
-          saving={updatePayable.isPending}
-        />
+          saving={updatePayable.isPending} />
       )}
       {payingPayable && (
-        <PayModal
-          payable={payingPayable}
-          onClose={() => setPayingPayable(null)}
+        <PayModal payable={payingPayable} onClose={() => setPayingPayable(null)}
           onConfirm={(paidAmount, paidAt) => payPayable.mutate({ id: payingPayable.id, paidAmount, paidAt })}
-          saving={payPayable.isPending}
-        />
+          saving={payPayable.isPending} />
       )}
       {showRecurrenceModal && (
-        <RecurrenceModal
-          initial={null}
-          onClose={() => setShowRecurrenceModal(false)}
-          onSave={d => createRecurrence.mutate(d)}
-          saving={createRecurrence.isPending}
-        />
+        <RecurrenceModal initial={null} onClose={() => setShowRecurrenceModal(false)}
+          onSave={d => createRecurrence.mutate(d)} saving={createRecurrence.isPending} />
       )}
       {editingRecurrence && (
-        <RecurrenceModal
-          initial={editingRecurrence}
-          onClose={() => setEditingRecurrence(null)}
+        <RecurrenceModal initial={editingRecurrence} onClose={() => setEditingRecurrence(null)}
           onSave={d => updateRecurrence.mutate({ id: editingRecurrence.id, ...d })}
-          saving={updateRecurrence.isPending}
-        />
+          saving={updateRecurrence.isPending} />
       )}
     </div>
   );

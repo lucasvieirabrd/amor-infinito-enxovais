@@ -64,6 +64,41 @@ export class PayableController {
     res.status(204).send();
   };
 
+  // ─── Boleto ────────────────────────────────────────────────────────────────
+
+  uploadBoleto = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!req.file) {
+      res.status(400).json({ message: 'Nenhum arquivo enviado.' });
+      return;
+    }
+    await payableService.uploadBoleto(
+      id,
+      req.user!.id,
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      req.file.size,
+    );
+    res.json({ message: 'Boleto anexado com sucesso.' });
+  };
+
+  downloadBoleto = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const boleto = await payableService.getBoleto(id);
+
+    res.setHeader('Content-Type', boleto.mimetype);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(boleto.filename)}"`);
+    res.setHeader('Content-Length', String(boleto.size));
+    res.send(boleto.buffer);
+  };
+
+  removeBoleto = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    await payableService.removeBoleto(id, req.user!.id);
+    res.status(204).send();
+  };
+
   // ─── Recurrences ───────────────────────────────────────────────────────────
 
   listRecurrences = async (req: Request, res: Response) => {

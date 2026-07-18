@@ -208,6 +208,11 @@ export const payables = mysqlTable('payables', {
   paidAmount: decimal('paid_amount', { precision: 10, scale: 2 }),
   notes: text('notes'),
   createdBy: varchar('created_by', { length: 36 }),
+  // boleto_file (LONGBLOB) intentionally excluded — handled via raw SQL only to prevent SELECT * loading binaries
+  boletoFilename: varchar('boleto_filename', { length: 255 }),
+  boletoMimetype: varchar('boleto_mimetype', { length: 100 }),
+  boletoSize: int('boleto_size'),
+  boletoUploadedAt: datetime('boleto_uploaded_at'),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime('deleted_at'),

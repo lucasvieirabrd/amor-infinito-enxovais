@@ -2,19 +2,16 @@ import { PayableRepository } from '../repositories/payable.repository';
 import { AppError } from '../utils/AppError';
 import { WhatsAppService } from '../integrations/whatsapp.service';
 import { getDaysInMonth } from 'date-fns';
+import { db } from '../database';
+import { auditLogs } from '../database/schema';
+import { v4 as uuidv4 } from 'uuid';
 
 const payableRepository = new PayableRepository();
 const whatsAppService = new WhatsAppService();
 
 const CELITA_PHONE = '5516997977302';
-
-const CATEGORY_LABELS: Record<string, string> = {
-  fixas: 'Fixas',
-  fornecedores: 'Fornecedores',
-  salarios: 'Salários',
-  impostos: 'Impostos',
-  outras: 'Outras',
-};
+const BOLETO_MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const BOLETO_ALLOWED_MIMETYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
 export class PayableService {
   async listPayables(month: number, year: number, search?: string, category?: string) {
@@ -78,6 +75,61 @@ export class PayableService {
     const existing = await payableRepository.findPayableById(id);
     if (!existing) throw new AppError('Conta não encontrada', 404);
     await payableRepository.softDeletePayable(id);
+  }
+
+  // ─── Boleto ───────────────────────────────────────────────────────────────────
+
+  async uploadBoleto(id: string, userId: string, buffer: Buffer, originalname: string, mimetype: string, size: number) {
+    if (!BOLETO_ALLOWED_MIMETYPES.includes(mimetype)) {
+      throw new AppError('Tipo de arquivo não permitido. Use PDF, JPEG, PNG ou WebP.', 400);
+    }
+    if (size > BOLETO_MAX_SIZE) {
+      throw new AppError('Arquivo muito grande. Limite máximo: 5MB.', 400);
+    }
+
+    const existing = await payableRepository.findPayableById(id);
+    if (!existing) throw new AppError('Conta não encontrada', 404);
+
+    await payableRepository.uploadBoleto(id, buffer, originalname, mimetype, size);
+
+    await db.insert(auditLogs).values({
+      id: uuidv4(),
+      userId,
+      action: 'UPLOAD_BOLETO',
+      entityType: 'Payable',
+      entityId: id,
+      oldValue: existing.boletoFilename ? { filename: existing.boletoFilename } : null,
+      newValue: { filename: originalname, size, mimetype },
+    });
+  }
+
+  async getBoleto(id: string) {
+    const existing = await payableRepository.findPayableById(id);
+    if (!existing) throw new AppError('Conta não encontrada', 404);
+
+    const boleto = await payableRepository.getBoleto(id);
+    if (!boleto) throw new AppError('Nenhum boleto anexado a esta conta', 404);
+
+    return boleto;
+  }
+
+  async removeBoleto(id: string, userId: string) {
+    const existing = await payableRepository.findPayableById(id);
+    if (!existing) throw new AppError('Conta não encontrada', 404);
+    if (!existing.boletoFilename) throw new AppError('Nenhum boleto anexado a esta conta', 404);
+
+    const oldFilename = existing.boletoFilename;
+    await payableRepository.clearBoleto(id);
+
+    await db.insert(auditLogs).values({
+      id: uuidv4(),
+      userId,
+      action: 'DELETE_BOLETO',
+      entityType: 'Payable',
+      entityId: id,
+      oldValue: { filename: oldFilename },
+      newValue: null,
+    });
   }
 
   // ─── Recurrences ─────────────────────────────────────────────────────────────

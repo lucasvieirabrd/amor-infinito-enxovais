@@ -10,11 +10,13 @@ export class PayableRepository {
       : sql``;
     const catCond = category ? sql`AND p.category = ${category}` : sql``;
 
+    // NOTE: boleto_file (LONGBLOB) is intentionally excluded — only metadata columns included
     const rows = await db.execute(sql`
       SELECT
         p.id, p.recurrence_id, p.description, p.category,
         p.amount, p.due_date, p.status, p.paid_at, p.paid_amount, p.notes, p.created_by,
         p.created_at, p.updated_at,
+        p.boleto_filename, p.boleto_mimetype, p.boleto_size, p.boleto_uploaded_at,
         CASE
           WHEN p.status = 'paid' THEN 'paid'
           WHEN p.status = 'pending'
@@ -44,7 +46,7 @@ export class PayableRepository {
   }
 
   async createPayable(data: {
-    recurrenceId?: string;
+    recurrenceId?: string | null;
     description: string;
     category: 'fixas' | 'fornecedores' | 'salarios' | 'impostos' | 'outras';
     amount?: number;
@@ -84,13 +86,21 @@ export class PayableRepository {
     return this.findPayableById(id);
   }
 
+  // Raw SQL to also clear boleto fields atomically when marking as paid
   async markAsPaid(id: string, paidAmount: number, paidAt: Date) {
-    await db.update(payables).set({
-      status: 'paid',
-      paidAmount: String(paidAmount.toFixed(2)),
-      paidAt,
-      updatedAt: new Date(),
-    }).where(eq(payables.id, id));
+    await db.execute(sql`
+      UPDATE payables SET
+        status = 'paid',
+        paid_amount = ${paidAmount.toFixed(2)},
+        paid_at = ${paidAt},
+        boleto_file = NULL,
+        boleto_filename = NULL,
+        boleto_mimetype = NULL,
+        boleto_size = NULL,
+        boleto_uploaded_at = NULL,
+        updated_at = NOW()
+      WHERE id = ${id}
+    `);
     return this.findPayableById(id);
   }
 
@@ -176,6 +186,51 @@ export class PayableRepository {
     }));
   }
 
+  // ─── Boleto ─────────────────────────────────────────────────────────────────
+
+  async uploadBoleto(id: string, buffer: Buffer, filename: string, mimetype: string, size: number) {
+    await db.execute(sql`
+      UPDATE payables SET
+        boleto_file = ${buffer},
+        boleto_filename = ${filename},
+        boleto_mimetype = ${mimetype},
+        boleto_size = ${size},
+        boleto_uploaded_at = NOW(),
+        updated_at = NOW()
+      WHERE id = ${id} AND deleted_at IS NULL
+    `);
+  }
+
+  async getBoleto(id: string) {
+    const rows = await db.execute(sql`
+      SELECT boleto_file, boleto_filename, boleto_mimetype, boleto_size
+      FROM payables
+      WHERE id = ${id} AND deleted_at IS NULL
+      LIMIT 1
+    `);
+    const row = (rows[0] as unknown as any[])[0];
+    if (!row || !row.boleto_file) return null;
+    return {
+      buffer: row.boleto_file as Buffer,
+      filename: String(row.boleto_filename),
+      mimetype: String(row.boleto_mimetype),
+      size: Number(row.boleto_size),
+    };
+  }
+
+  async clearBoleto(id: string) {
+    await db.execute(sql`
+      UPDATE payables SET
+        boleto_file = NULL,
+        boleto_filename = NULL,
+        boleto_mimetype = NULL,
+        boleto_size = NULL,
+        boleto_uploaded_at = NULL,
+        updated_at = NOW()
+      WHERE id = ${id}
+    `);
+  }
+
   // ─── Recurrences ────────────────────────────────────────────────────────────
 
   async findAllRecurrences(includeInactive = false) {
@@ -254,6 +309,10 @@ export class PayableRepository {
       notes: r.notes ?? null,
       createdBy: r.created_by ?? null,
       createdAt: r.created_at,
+      boletoFilename: r.boleto_filename ?? null,
+      boletoMimetype: r.boleto_mimetype ?? null,
+      boletoSize: r.boleto_size != null ? Number(r.boleto_size) : null,
+      boletoUploadedAt: r.boleto_uploaded_at ?? null,
     };
   }
 }
