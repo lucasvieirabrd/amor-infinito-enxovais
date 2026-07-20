@@ -77,7 +77,17 @@ async function getOrdemData(saleId: string) {
       customerAddressNeighborhood: customers.addressNeighborhood,
       customerAddressCity: customers.addressCity,
       customerAddressState: customers.addressState,
+      customerAddressComplement: customers.addressComplement,
       customerCep: customers.cep,
+      customerRef1Name: customers.ref1Name,
+      customerRef1Phone: customers.ref1Phone,
+      customerRef1Relationship: customers.ref1Relationship,
+      customerRef2Name: customers.ref2Name,
+      customerRef2Phone: customers.ref2Phone,
+      customerRef2Relationship: customers.ref2Relationship,
+      customerRef3Name: customers.ref3Name,
+      customerRef3Phone: customers.ref3Phone,
+      customerRef3Relationship: customers.ref3Relationship,
       sellerName: sellers.name,
     })
     .from(sales)
@@ -126,6 +136,7 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
   const addrLine1 = [
     sale.customerAddressStreet,
     sale.customerAddressNumber ? `nº ${sale.customerAddressNumber}` : null,
+    sale.customerAddressComplement || null,
     sale.customerAddressNeighborhood,
   ].filter(Boolean).join(', ');
 
@@ -135,6 +146,17 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
       : sale.customerAddressCity || sale.customerAddressState || null,
     sale.customerCep ? `CEP ${sale.customerCep}` : null,
   ].filter(Boolean).join(' — ');
+
+  // References
+  const refRows: string[] = [];
+  for (const n of [1, 2, 3] as const) {
+    const name = (sale as any)[`customerRef${n}Name`] as string | null;
+    const phone = (sale as any)[`customerRef${n}Phone`] as string | null;
+    const rel  = (sale as any)[`customerRef${n}Relationship`] as string | null;
+    if (!name && !phone && !rel) continue;
+    const parts = ([name, phone ? fmtPhone(phone) : null, rel] as (string | null)[]).filter(Boolean) as string[];
+    refRows.push(`<div class="ref-row">${parts.map(esc).join(' &mdash; ')}</div>`);
+  }
 
   // Products table rows
   const productRows = itemRows.map((item, i) => {
@@ -306,6 +328,11 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
     .inst-date { flex: 1; color: #555; }
     .inst-amt { font-weight: bold; color: #1a1a1a; }
 
+    /* ── References ── */
+    .refs-list { display: flex; flex-direction: column; gap: 0; }
+    .ref-row { font-size: 10.5px; line-height: 1.8; border-bottom: 1px dotted #e5e7eb; }
+    .ref-row:last-child { border-bottom: none; }
+
     /* ── Footer ── */
     .footer {
       margin-top: 8mm;
@@ -378,6 +405,13 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
       </div>` : ''}
     </div>
   </div>
+
+  <!-- Referências -->
+  ${refRows.length > 0 ? `
+  <div class="section">
+    <div class="section-title">Referências</div>
+    <div class="refs-list">${refRows.join('')}</div>
+  </div>` : ''}
 
   <!-- Produtos -->
   <div class="section">
