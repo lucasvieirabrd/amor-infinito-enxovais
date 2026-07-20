@@ -20,6 +20,7 @@ interface Delivery {
   customerPhone: string;
   addressStreet: string | null;
   addressNumber: string | null;
+  addressComplement: string | null;
   addressNeighborhood: string | null;
   addressCity: string | null;
   items: DeliveryItem[];
@@ -36,6 +37,7 @@ interface DeliveriesResponse {
 function formatAddress(d: Delivery): string {
   const parts = [
     d.addressStreet && d.addressNumber ? `${d.addressStreet}, ${d.addressNumber}` : d.addressStreet,
+    d.addressComplement,
     d.addressNeighborhood,
     d.addressCity,
   ].filter(Boolean);

@@ -115,6 +115,58 @@ export class CustomerService {
     await customerRepository.delete(id);
   }
 
+  async uploadPhoto(id: string, userId: string, buffer: Buffer, mimetype: string, originalname: string) {
+    const existing = await customerRepository.findById(id);
+    if (!existing) throw new AppError('Cliente não encontrado', 404);
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const sharp = require('sharp');
+    const compressed: Buffer = await sharp(buffer)
+      .resize({ width: 800, height: 800, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+
+    await customerRepository.uploadPhoto(id, compressed, 'image/jpeg', compressed.length);
+
+    await db.insert(auditLogs).values({
+      id: uuidv4(),
+      userId,
+      action: 'UPLOAD_CUSTOMER_PHOTO',
+      entityType: 'Customer',
+      entityId: id,
+      oldValue: (existing as any).photoMimetype ? { mimetype: (existing as any).photoMimetype } : null,
+      newValue: { filename: originalname, size: compressed.length, mimetype: 'image/jpeg' },
+    });
+  }
+
+  async getPhoto(id: string) {
+    const existing = await customerRepository.findById(id);
+    if (!existing) throw new AppError('Cliente não encontrado', 404);
+
+    const photo = await customerRepository.getPhoto(id);
+    if (!photo) throw new AppError('Nenhuma foto anexada a este cliente', 404);
+
+    return photo;
+  }
+
+  async deletePhoto(id: string, userId: string) {
+    const existing = await customerRepository.findById(id);
+    if (!existing) throw new AppError('Cliente não encontrado', 404);
+    if (!(existing as any).photoMimetype) throw new AppError('Nenhuma foto anexada a este cliente', 404);
+
+    await customerRepository.clearPhoto(id);
+
+    await db.insert(auditLogs).values({
+      id: uuidv4(),
+      userId,
+      action: 'DELETE_CUSTOMER_PHOTO',
+      entityType: 'Customer',
+      entityId: id,
+      oldValue: { mimetype: (existing as any).photoMimetype },
+      newValue: null,
+    });
+  }
+
   async getMergePreview(primaryId: string, duplicateId: string) {
     if (primaryId === duplicateId) {
       throw new AppError('Não é possível mesclar um cliente com ele mesmo', 400);

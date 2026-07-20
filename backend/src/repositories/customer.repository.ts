@@ -70,10 +70,21 @@ export class CustomerRepository {
         c.email,
         c.address_street       AS addressStreet,
         c.address_number       AS addressNumber,
+        c.address_complement   AS addressComplement,
         c.address_neighborhood AS addressNeighborhood,
         c.address_city         AS addressCity,
         c.address_state        AS addressState,
         c.cep,
+        c.ref1_name            AS ref1Name,
+        c.ref1_phone           AS ref1Phone,
+        c.ref1_relationship    AS ref1Relationship,
+        c.ref2_name            AS ref2Name,
+        c.ref2_phone           AS ref2Phone,
+        c.ref2_relationship    AS ref2Relationship,
+        c.ref3_name            AS ref3Name,
+        c.ref3_phone           AS ref3Phone,
+        c.ref3_relationship    AS ref3Relationship,
+        (c.photo_file IS NOT NULL) AS hasPhoto,
         c.created_at           AS createdAt,
         c.updated_at           AS updatedAt,
         CASE
@@ -159,6 +170,37 @@ export class CustomerRepository {
       .update(customers)
       .set({ deletedAt: new Date() })
       .where(eq(customers.id, id));
+  }
+
+  async uploadPhoto(id: string, buffer: Buffer, mimetype: string, size: number) {
+    await db.execute(sql`
+      UPDATE customers
+      SET photo_file = ${buffer}, photo_mimetype = ${mimetype}, photo_size = ${size}, photo_uploaded_at = NOW()
+      WHERE id = ${id}
+    `);
+  }
+
+  async getPhoto(id: string): Promise<{ buffer: Buffer; mimetype: string; size: number } | null> {
+    const [rows] = await db.execute(sql`
+      SELECT photo_file, photo_mimetype, photo_size
+      FROM customers
+      WHERE id = ${id} AND deleted_at IS NULL AND photo_file IS NOT NULL
+    `) as any;
+    const row = (rows as any[])[0];
+    if (!row || !row.photo_file) return null;
+    return {
+      buffer: Buffer.isBuffer(row.photo_file) ? row.photo_file : Buffer.from(row.photo_file),
+      mimetype: row.photo_mimetype ?? 'image/jpeg',
+      size: Number(row.photo_size ?? 0),
+    };
+  }
+
+  async clearPhoto(id: string) {
+    await db.execute(sql`
+      UPDATE customers
+      SET photo_file = NULL, photo_mimetype = NULL, photo_size = NULL, photo_uploaded_at = NULL
+      WHERE id = ${id}
+    `);
   }
 
   async countMergeableRecords(duplicateId: string) {

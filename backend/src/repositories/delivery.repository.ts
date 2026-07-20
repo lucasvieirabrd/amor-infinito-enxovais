@@ -14,6 +14,7 @@ export interface DeliveryRow {
   customerPhone: string;
   addressStreet: string | null;
   addressNumber: string | null;
+  addressComplement: string | null;
   addressNeighborhood: string | null;
   addressCity: string | null;
   saleNumber: string;
@@ -32,6 +33,7 @@ const SELECT_COLS = sql`
   c.phone                AS customerPhone,
   c.address_street       AS addressStreet,
   c.address_number       AS addressNumber,
+  c.address_complement   AS addressComplement,
   c.address_neighborhood AS addressNeighborhood,
   c.address_city         AS addressCity,
   s.sale_number          AS saleNumber,
@@ -48,7 +50,7 @@ const BASE_JOINS = sql`
 
 const GROUP_BY = sql`
   GROUP BY d.id, d.status, d.delivery_type, d.delivered_at, d.created_at,
-           c.id, c.name, c.phone, c.address_street, c.address_number,
+           c.id, c.name, c.phone, c.address_street, c.address_number, c.address_complement,
            c.address_neighborhood, c.address_city, s.sale_number, s.sale_date
 `;
 
@@ -64,6 +66,7 @@ function parseRow(r: any): DeliveryRow {
     customerPhone: r.customerPhone,
     addressStreet: r.addressStreet ?? null,
     addressNumber: r.addressNumber ?? null,
+    addressComplement: r.addressComplement ?? null,
     addressNeighborhood: r.addressNeighborhood ?? null,
     addressCity: r.addressCity ?? null,
     saleNumber: r.saleNumber,

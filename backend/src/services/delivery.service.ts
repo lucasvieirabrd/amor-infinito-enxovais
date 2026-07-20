@@ -31,6 +31,7 @@ export class DeliveryService {
         const addressParts = [
           delivery.addressStreet,
           delivery.addressNumber,
+          delivery.addressComplement,
           delivery.addressNeighborhood,
           delivery.addressCity,
         ].filter(Boolean);

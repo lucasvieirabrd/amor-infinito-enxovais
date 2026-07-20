@@ -28,9 +28,19 @@ export class CustomerController {
       cep: z.string().regex(/^\d{8}$/, 'CEP deve ter 8 dígitos').optional().or(z.literal('')),
       addressStreet: z.string().optional().or(z.literal('')),
       addressNumber: z.string().optional().or(z.literal('')),
+      addressComplement: z.string().optional().or(z.literal('')),
       addressNeighborhood: z.string().optional().or(z.literal('')),
       addressCity: z.string().optional().or(z.literal('')),
       addressState: z.string().length(2, 'Estado inválido').optional().or(z.literal('')),
+      ref1Name: z.string().optional().or(z.literal('')),
+      ref1Phone: z.string().optional().or(z.literal('')),
+      ref1Relationship: z.string().optional().or(z.literal('')),
+      ref2Name: z.string().optional().or(z.literal('')),
+      ref2Phone: z.string().optional().or(z.literal('')),
+      ref2Relationship: z.string().optional().or(z.literal('')),
+      ref3Name: z.string().optional().or(z.literal('')),
+      ref3Phone: z.string().optional().or(z.literal('')),
+      ref3Relationship: z.string().optional().or(z.literal('')),
     });
 
     const data = registerSchema.parse(body);
@@ -77,9 +87,19 @@ export class CustomerController {
       cep: z.union([z.string().regex(/^\d{8}$/, 'CEP deve ter 8 dígitos'), z.literal(''), z.null()]).optional(),
       addressStreet: z.string().nullable().optional(),
       addressNumber: z.string().nullable().optional(),
+      addressComplement: z.string().nullable().optional(),
       addressNeighborhood: z.string().nullable().optional(),
       addressCity: z.string().nullable().optional(),
       addressState: z.union([z.string().length(2), z.literal(''), z.null()]).optional(),
+      ref1Name: z.string().nullable().optional(),
+      ref1Phone: z.string().nullable().optional(),
+      ref1Relationship: z.string().nullable().optional(),
+      ref2Name: z.string().nullable().optional(),
+      ref2Phone: z.string().nullable().optional(),
+      ref2Relationship: z.string().nullable().optional(),
+      ref3Name: z.string().nullable().optional(),
+      ref3Phone: z.string().nullable().optional(),
+      ref3Relationship: z.string().nullable().optional(),
     });
 
     const data = updateSchema.parse(body);
@@ -101,6 +121,30 @@ export class CustomerController {
 
     const result = await customerImportService.importFromCSV(req.file.buffer);
     return res.json(result);
+  }
+
+  async uploadPhoto(req: Request, res: Response) {
+    const { id } = req.params;
+    if (!req.file) {
+      res.status(400).json({ message: 'Nenhum arquivo enviado.' });
+      return;
+    }
+    await customerService.uploadPhoto(id, req.user!.id, req.file.buffer, req.file.mimetype, req.file.originalname);
+    res.json({ message: 'Foto anexada com sucesso.' });
+  }
+
+  async getPhoto(req: Request, res: Response) {
+    const { id } = req.params;
+    const photo = await customerService.getPhoto(id);
+    res.setHeader('Content-Type', photo.mimetype);
+    res.setHeader('Content-Length', String(photo.size));
+    res.send(photo.buffer);
+  }
+
+  async deletePhoto(req: Request, res: Response) {
+    const { id } = req.params;
+    await customerService.deletePhoto(id, req.user!.id);
+    res.status(204).send();
   }
 
   async getMergePreview(req: Request, res: Response) {

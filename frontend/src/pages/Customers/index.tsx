@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import { FiSearch, FiPlus, FiMapPin, FiEdit, FiTrash2, FiChevronLeft, FiChevronRight, FiGitMerge } from 'react-icons/fi';
@@ -17,10 +17,21 @@ interface Customer {
   email?: string;
   addressStreet?: string;
   addressNumber?: string;
+  addressComplement?: string;
   addressNeighborhood?: string;
   addressCity?: string;
   addressState?: string;
   cep?: string;
+  ref1Name?: string;
+  ref1Phone?: string;
+  ref1Relationship?: string;
+  ref2Name?: string;
+  ref2Phone?: string;
+  ref2Relationship?: string;
+  ref3Name?: string;
+  ref3Phone?: string;
+  ref3Relationship?: string;
+  hasPhoto?: boolean;
   paymentStatus?: PaymentStatus;
 }
 
@@ -82,6 +93,10 @@ export const Customers: React.FC = () => {
   const [importProgress, setImportProgress] = useState(0);
   const [importResult, setImportResult] = useState<any>(null);
   const queryClient = useQueryClient();
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
 
   const ITEMS_PER_PAGE = 20;
 
@@ -100,6 +115,20 @@ export const Customers: React.FC = () => {
     },
   });
 
+  const uploadPhotoMutation = useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => {
+      const fd = new FormData();
+      fd.append('photo', file);
+      return api.post(`/customers/${id}/photo`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+  });
+
+  const deletePhotoMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/customers/${id}/photo`),
+  });
+
   const registerMutation = useMutation({
     mutationFn: (newCustomer: Partial<Customer>) => {
       if (editingId) {
@@ -107,11 +136,19 @@ export const Customers: React.FC = () => {
       }
       return api.post('/customers', newCustomer);
     },
-    onSuccess: () => {
+    onSuccess: async (response) => {
+      const savedId = editingId || response.data?.id;
+      try {
+        if (pendingPhotoFile && savedId) {
+          await uploadPhotoMutation.mutateAsync({ id: savedId, file: pendingPhotoFile });
+        } else if (removePhoto && editingId) {
+          await deletePhotoMutation.mutateAsync(editingId);
+        }
+      } catch (e: any) {
+        console.error('Erro ao processar foto:', e?.message);
+      }
       queryClient.invalidateQueries({ queryKey: ['customers'] });
-      setIsModalOpen(false);
-      setFormData({});
-      setEditingId(null);
+      closeModal();
       setPage(1);
     },
     onError: (error: any) => {
@@ -193,13 +230,22 @@ export const Customers: React.FC = () => {
     registerMutation.mutate(formData);
   };
 
-  const handleEdit = (customer: Customer) => {
+  const handleEdit = async (customer: Customer) => {
     setEditingId(customer.id);
-    setFormData({
-      ...customer,
-      phone: displayPhone(customer.phone),
-    });
+    setFormData({ ...customer, phone: displayPhone(customer.phone) });
+    setPhotoPreviewUrl(null);
+    setPendingPhotoFile(null);
+    setRemovePhoto(false);
     setIsModalOpen(true);
+
+    if (customer.hasPhoto) {
+      try {
+        const res = await api.get(`/customers/${customer.id}/photo`, { responseType: 'blob' });
+        setPhotoPreviewUrl(URL.createObjectURL(res.data));
+      } catch {
+        // photo fetch failed, show nothing
+      }
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -216,6 +262,10 @@ export const Customers: React.FC = () => {
     setIsModalOpen(false);
     setEditingId(null);
     setFormData({});
+    if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+    setPhotoPreviewUrl(null);
+    setPendingPhotoFile(null);
+    setRemovePhoto(false);
   };
 
   const columns = [
@@ -482,6 +532,14 @@ export const Customers: React.FC = () => {
               />
             </div>
 
+            {/* Complemento */}
+            <Input
+              label="Complemento"
+              value={formData.addressComplement || ''}
+              onChange={(e) => setFormData({ ...formData, addressComplement: e.target.value })}
+              placeholder="Apto, bloco, casa..."
+            />
+
             {/* Bairro + Cidade */}
             <div className="grid grid-cols-2 gap-4">
               <Input
@@ -506,6 +564,94 @@ export const Customers: React.FC = () => {
                 placeholder="UF"
               />
             </div>
+
+            {/* Referências */}
+            <div className="pt-1">
+              <p className="text-sm font-semibold text-gray-700 mb-3">Referências</p>
+              {([1, 2, 3] as const).map((n) => (
+                <div key={n} className="grid grid-cols-3 gap-3 mb-3">
+                  <Input
+                    label={`Ref. ${n} — Nome`}
+                    value={(formData as any)[`ref${n}Name`] || ''}
+                    onChange={(e) => setFormData({ ...formData, [`ref${n}Name`]: e.target.value })}
+                  />
+                  <Input
+                    label="Telefone"
+                    value={(formData as any)[`ref${n}Phone`] || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, [`ref${n}Phone`]: formatPhone(e.target.value) })
+                    }
+                    placeholder="(00) 00000-0000"
+                  />
+                  <Input
+                    label="Parentesco"
+                    value={(formData as any)[`ref${n}Relationship`] || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, [`ref${n}Relationship`]: e.target.value })
+                    }
+                    placeholder="Mãe, cônjuge..."
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Foto do cliente (apenas no modo edição) */}
+            {editingId && (
+              <div className="pt-1">
+                <p className="text-sm font-semibold text-gray-700 mb-3">Foto do Cliente</p>
+                <div className="flex items-center gap-4">
+                  {photoPreviewUrl ? (
+                    <img
+                      src={photoPreviewUrl}
+                      alt="Foto do cliente"
+                      className="w-20 h-20 rounded-full object-cover border-2 border-gray-200"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs text-center px-1">
+                      Sem foto
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => photoInputRef.current?.click()}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                    >
+                      Escolher foto
+                    </button>
+                    {photoPreviewUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPendingPhotoFile(null);
+                          setRemovePhoto(true);
+                          if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+                          setPhotoPreviewUrl(null);
+                        }}
+                        className="px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition"
+                      >
+                        Remover foto
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setPendingPhotoFile(file);
+                    setRemovePhoto(false);
+                    if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+                    setPhotoPreviewUrl(URL.createObjectURL(file));
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+            )}
 
             {/* Botões */}
             <div className="flex justify-end gap-3 pt-2">
