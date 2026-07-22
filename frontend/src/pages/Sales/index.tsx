@@ -25,6 +25,7 @@ interface Product {
   id: string;
   name: string;
   sku: string;
+  description?: string | null;
   price: string | number;
   priceDisplay?: string;
   quantity: number;
@@ -73,7 +74,7 @@ export const Sales: React.FC = () => {
     queryKey: ['products-search', productSearch],
     queryFn: async () => {
       if (productSearch.length < 2) return [];
-      const response = await api.get('/products', { params: { search: productSearch } });
+      const response = await api.get('/products', { params: { search: productSearch, limit: 20 } });
       return response.data.data as Product[];
     },
     enabled: productSearch.length >= 2,
@@ -312,18 +313,21 @@ export const Sales: React.FC = () => {
               </div>
 
               {products && products.length > 0 && (
-                <div className="border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div className="border border-gray-200 rounded-lg shadow-lg max-h-72 overflow-y-auto">
                   {products.map(p => (
-                    <button 
+                    <button
                       key={p.id}
                       onClick={() => addToCart(p)}
                       className="w-full text-left px-4 py-3 hover:bg-background border-b last:border-0 transition-colors flex justify-between items-center"
                     >
                       <div>
                         <p className="font-semibold text-gray-900">{p.name}</p>
+                        {p.description && (
+                          <p className="text-xs text-gray-500">{p.description}</p>
+                        )}
                         <p className="text-xs text-gray-600">SKU: {p.sku} | Estoque: {p.quantity}</p>
                       </div>
-                      <p className="font-bold text-primary">R$ {parseFloat(p.price.toString()).toFixed(2)}</p>
+                      <p className="font-bold text-primary ml-4 shrink-0">R$ {parseFloat(p.price.toString()).toFixed(2)}</p>
                     </button>
                   ))}
                 </div>
@@ -341,6 +345,9 @@ export const Sales: React.FC = () => {
                     <div key={item.product.id} className="flex items-center justify-between p-3 bg-background rounded-lg border border-gray-200 hover:border-primary transition-colors">
                       <div className="flex-1">
                         <p className="font-semibold text-gray-900">{item.product.name}</p>
+                        {item.product.description && (
+                          <p className="text-xs text-gray-500">{item.product.description}</p>
+                        )}
                         <p className="text-xs text-gray-600">R$ {parseFloat(item.product.price.toString()).toFixed(2)} / un</p>
                       </div>
                       <div className="flex items-center gap-3">
