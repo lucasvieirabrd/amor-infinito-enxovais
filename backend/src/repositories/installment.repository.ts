@@ -98,14 +98,35 @@ export class InstallmentRepository {
         SUM(CASE
           WHEN i.status IN ('pending','partial')
             AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
-          THEN 1 ELSE 0 END) AS todayCount
+          THEN 1 ELSE 0 END) AS todayCount,
+        dca.lastDateChangeAt,
+        dca.dateChangeCount
       FROM customers c
       INNER JOIN installments i ON c.id = i.customer_id
+      LEFT JOIN (
+        SELECT
+          i2.customer_id,
+          MAX(al.timestamp) AS lastDateChangeAt,
+          COUNT(*)          AS dateChangeCount
+        FROM audit_logs al
+        JOIN installments i2 ON i2.id = al.entity_id AND i2.deleted_at IS NULL
+        WHERE al.entity_type = 'Installment'
+          AND (
+            al.action = 'UPDATE_INSTALLMENT_DATE'
+            OR (
+              al.action = 'UPDATE_INSTALLMENT'
+              AND al.old_value IS NOT NULL
+              AND al.new_value IS NOT NULL
+              AND JSON_UNQUOTE(JSON_EXTRACT(al.old_value, '$.dueDate')) != JSON_UNQUOTE(JSON_EXTRACT(al.new_value, '$.dueDate'))
+            )
+          )
+        GROUP BY i2.customer_id
+      ) dca ON dca.customer_id = c.id
       WHERE (i.status IN ('pending', 'overdue', 'partial'))
         AND i.deleted_at IS NULL
         AND c.deleted_at IS NULL
         ${searchCond}
-      GROUP BY c.id, c.name, c.phone
+      GROUP BY c.id, c.name, c.phone, dca.lastDateChangeAt, dca.dateChangeCount
       ${filterHaving}
       ORDER BY overdueCount DESC, c.name ASC
       LIMIT ${limit} OFFSET ${offset}
@@ -147,6 +168,8 @@ export class InstallmentRepository {
         totalPending: parseFloat(r.totalPending?.toString() ?? '0'),
         overdueCount: Number(r.overdueCount),
         todayCount: Number(r.todayCount),
+        lastDateChangeAt: r.lastDateChangeAt ? new Date(r.lastDateChangeAt).toISOString() : null,
+        dateChangeCount: r.dateChangeCount ? Number(r.dateChangeCount) : 0,
       })),
       total,
       page,

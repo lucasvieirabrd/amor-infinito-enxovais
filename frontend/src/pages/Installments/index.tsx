@@ -42,6 +42,8 @@ interface CustomerCrediario {
   totalPending: number;
   overdueCount: number;
   todayCount: number;
+  lastDateChangeAt: string | null;
+  dateChangeCount: number;
 }
 
 interface PaginatedResponse {
@@ -569,6 +571,25 @@ export const Installments: React.FC = () => {
                       <Badge variant={customerStatusVariant(customer)}>
                         {customerStatusLabel(customer)}
                       </Badge>
+                    </div>
+
+                    {/* Alteração de Data */}
+                    <div className="hidden lg:flex flex-col items-center w-36 text-center">
+                      {customer.lastDateChangeAt ? (
+                        <span
+                          className="flex items-center gap-1 text-amber-600 font-medium text-xs"
+                          title={`${customer.dateChangeCount} alteração(ões) de data`}
+                        >
+                          <FiCalendar size={13} />
+                          {format(new Date(customer.lastDateChangeAt), 'dd/MM/yyyy')}
+                          {customer.dateChangeCount > 1 && (
+                            <span className="text-amber-500">({customer.dateChangeCount}x)</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300 text-xs">—</span>
+                      )}
+                      <span className="text-[10px] text-gray-400 mt-0.5">alt. data</span>
                     </div>
 
                     {/* Chevron */}
