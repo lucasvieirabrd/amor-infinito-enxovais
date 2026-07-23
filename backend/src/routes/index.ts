@@ -16,6 +16,7 @@ import { renegotiationRouter } from './renegotiation.routes';
 import { sellerRouter } from './seller.routes';
 import { deliveryRouter } from './delivery.routes';
 import { payableRouter } from './payable.routes';
+import { nfImportRouter } from './nf-import.routes';
 
 const routes = Router();
 
@@ -36,5 +37,6 @@ routes.use('/renegotiations', renegotiationRouter);
 routes.use('/sellers', sellerRouter);
 routes.use('/deliveries', deliveryRouter);
 routes.use('/payables', payableRouter);
+routes.use('/nf-import', nfImportRouter);
 
 export { routes };

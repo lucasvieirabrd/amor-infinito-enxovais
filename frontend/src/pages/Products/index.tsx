@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
-import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit, FiChevronLeft, FiChevronRight, FiFileText } from 'react-icons/fi';
 import { Button, Card, Badge, Loading, Modal, Input } from '../../components/ui';
+import { useAuth } from '../../hooks/useAuth';
+import { NfImportModal } from './NfImportModal';
 
 interface Product {
   id: string;
@@ -30,7 +32,9 @@ export const Products: React.FC = () => {
   const [page, setPage] = useState(1);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editFormData, setEditFormData] = useState({ quantity: 0, price: 0, category: '' });
+  const [showNfImport, setShowNfImport] = useState(false);
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const ITEMS_PER_PAGE = 12;
 
@@ -129,6 +133,17 @@ export const Products: React.FC = () => {
               <FiRefreshCw size={20} />
               {syncMutation.isPending ? 'Sincronizando...' : 'Sincronizar Planilha'}
             </Button>
+            {user?.role === 'admin' && (
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => setShowNfImport(true)}
+                className="flex items-center gap-2"
+              >
+                <FiFileText size={20} />
+                Importar Nota
+              </Button>
+            )}
             <Button variant="primary" size="lg" className="flex items-center gap-2">
               <FiPlus size={20} />
               Novo Produto
@@ -267,6 +282,12 @@ export const Products: React.FC = () => {
           </div>
         )}
       </div>
+
+      <NfImportModal
+        isOpen={showNfImport}
+        onClose={() => setShowNfImport(false)}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['products'] })}
+      />
 
       {/* Modal de Edição */}
       <Modal

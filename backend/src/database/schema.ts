@@ -55,6 +55,7 @@ export const products = mysqlTable("products", {
   quantity: int("quantity").notNull().default(0),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   minStockLevel: int("min_stock_level").notNull().default(0),
+  cost: decimal("cost", { precision: 10, scale: 2 }),
   createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime("updated_at").notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime("deleted_at"),
@@ -230,4 +231,38 @@ export const payables = mysqlTable('payables', {
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime('deleted_at'),
+});
+
+export const nfImports = mysqlTable('nf_imports', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  filename: varchar('filename', { length: 255 }).notNull(),
+  nfNumber: varchar('nf_number', { length: 50 }),
+  supplierName: varchar('supplier_name', { length: 255 }),
+  nfDate: varchar('nf_date', { length: 10 }),
+  totalProducts: decimal('total_products', { precision: 12, scale: 2 }),
+  status: mysqlEnum('status', ['pending', 'confirmed', 'cancelled']).notNull().default('pending'),
+  importedBy: varchar('imported_by', { length: 36 }).notNull(),
+  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+});
+
+export const nfImportItems = mysqlTable('nf_import_items', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  nfImportId: varchar('nf_import_id', { length: 36 }).notNull(),
+  supplierCode: varchar('supplier_code', { length: 100 }),
+  supplierDescription: text('supplier_description'),
+  ncm: varchar('ncm', { length: 10 }),
+  quantity: decimal('quantity', { precision: 12, scale: 4 }).notNull(),
+  unitCost: decimal('unit_cost', { precision: 12, scale: 4 }).notNull(),
+  totalCost: decimal('total_cost', { precision: 12, scale: 2 }).notNull(),
+  productId: varchar('product_id', { length: 36 }),
+  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const supplierProductMap = mysqlTable('supplier_product_map', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  supplierCode: varchar('supplier_code', { length: 100 }).notNull().unique(),
+  productId: varchar('product_id', { length: 36 }).notNull(),
+  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
 });
