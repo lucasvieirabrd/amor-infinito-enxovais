@@ -14,7 +14,11 @@ export interface DanfeItem {
 
 export interface DanfeResult {
   nfNumber: string | null;
+  nfSeries: string | null;
   supplierName: string | null;
+  supplierCnpj: string | null;
+  recipientCnpj: string | null;
+  accessKey: string | null;
   nfDate: string | null;
   totalProducts: number | null;
   items: DanfeItem[];
@@ -25,86 +29,57 @@ function parseBR(s: string): number {
   return parseFloat(s.trim().replace(/\./g, '').replace(',', '.')) || 0;
 }
 
-function findItemsSection(lines: string[]): { start: number; end: number } {
-  const START_RE = /DADOS\s+DOS?\s+PRODUTOS?/i;
-  const END_RE = /C[AÁ]LCULO\s+DO\s+IMPOSTO|TRANSPORTADOR|VOLUMES?\s*:|PESO\s+L[IÍ]QUIDO/i;
+// ── Metadata extractors ──────────────────────────────────────────────────────
 
-  let start = 0;
-  let end = lines.length;
-  let found = false;
-
+function extractAccessKey(lines: string[]): string | null {
+  // "CHAVE DE ACESSO" label, then 44 digits (possibly grouped with spaces)
   for (let i = 0; i < lines.length; i++) {
-    if (!found && START_RE.test(lines[i])) {
-      start = i + 1;
-      found = true;
-    } else if (found && END_RE.test(lines[i])) {
-      end = i;
-      break;
+    if (/CHAVE\s+(?:DE\s+)?ACESSO/i.test(lines[i])) {
+      const ctx = [lines[i], lines[i + 1] ?? '', lines[i + 2] ?? ''].join(' ');
+      const digits = ctx.replace(/\D/g, '');
+      if (digits.length >= 44) return digits.substring(0, 44);
     }
   }
-
-  return { start, end };
+  // Fallback: any line whose digit-only content is exactly 44 chars
+  for (const line of lines) {
+    const digits = line.replace(/\D/g, '');
+    if (digits.length === 44) return digits;
+  }
+  return null;
 }
 
-// Lines that are repeating column headers on multi-page DANFEs
-const HEADER_SKIP_RE = /CÓDIGO|DESCRI[ÇC][ÃA]O\s+DO\s+PRODUTO|NCM.SH|C[SO]T|CFOP|QTDE?\.?\s*COM|VL\.?\s*UNIT|VALOR\s*TOTAL|UN\.\s*COM|TRIB\.\s*COM/i;
-
-function parseItemLines(lines: string[]): DanfeItem[] {
-  // Anchor pattern: NCM(8 digits) [space] CST/CSOSN(any non-space) [space]
-  //                 CFOP(4 digits starting 1-7) [space] UNIT(2-4 letters) [space]
-  //                 QTY VUNIT VTOTAL at end-of-line
-  const DATA_RE = /(\d{8})\s+\S+\s+([1-7]\d{3})\s+([A-Za-zÇç]{2,4})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/;
-
-  // Product code: leading alphanumeric token (4-20 chars, allows hyphens/underscores)
-  const CODE_RE = /^([A-Z0-9][A-Z0-9\-_.]{3,19})\s+(.*)/is;
-
-  const items: DanfeItem[] = [];
-  let pendingLine = '';
+/** Returns [supplierCnpj, recipientCnpj] based on document order (emitente first). */
+function extractCnpjs(lines: string[]): { supplierCnpj: string | null; recipientCnpj: string | null } {
+  // CNPJ: 14 digits, may be formatted XX.XXX.XXX/XXXX-XX
+  const CNPJ_RE = /\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g;
+  const seen: string[] = [];
 
   for (const line of lines) {
-    if (HEADER_SKIP_RE.test(line)) {
-      pendingLine = '';
-      continue;
-    }
-
-    const m = DATA_RE.exec(line);
-    if (!m) {
-      // Potential code/description line — keep if non-trivial
-      if (line.length > 3) pendingLine = line;
-      continue;
-    }
-
-    const ncm = m[1];
-    const unit = m[3];
-    const qty = parseBR(m[4]);
-    const vunit = parseBR(m[5]);
-    const vtotal = parseBR(m[6]);
-
-    // Combine prefix from this line with any pending line to get code+description.
-    // This handles all layouts:
-    //   A) all-on-one-line: prefixOnLine has code+desc, pendingLine is ''
-    //   B) code+desc on prev line, data on this line: prefixOnLine is '', pendingLine has code+desc
-    //   C) code on prev line, desc+data on this line: both have content → combine
-    const prefixOnLine = line.substring(0, m.index).trim();
-    const codeDesc = [pendingLine, prefixOnLine].filter(s => s.length > 0).join(' ').trim();
-    pendingLine = '';
-
-    const cm = CODE_RE.exec(codeDesc);
-    const code = cm ? cm[1].trim() : (codeDesc.split(/\s+/)[0] || 'SEM_CODIGO');
-    const description = cm ? cm[2].trim() : codeDesc.substring(code.length).trim();
-
-    if (qty > 0 && vtotal > 0) {
-      items.push({ code, description, ncm, unit, quantity: qty, unitCost: vunit, totalCost: vtotal });
+    const matches = [...line.matchAll(CNPJ_RE)];
+    for (const m of matches) {
+      const digits = m[0].replace(/\D/g, '');
+      if (digits.length === 14 && !seen.includes(digits)) seen.push(digits);
     }
   }
 
-  return items;
+  return {
+    supplierCnpj: seen[0] ?? null,
+    recipientCnpj: seen[1] ?? null,
+  };
 }
 
 function extractNfNumber(lines: string[]): string | null {
   for (const line of lines) {
     const m = line.match(/N[°º]\s*:?\s*(\d[\d.]+)|N[ÚU]MERO\s*:?\s*(\d[\d.]+)/i);
     if (m) return (m[1] || m[2]).replace(/\./g, '');
+  }
+  return null;
+}
+
+function extractNfSeries(lines: string[]): string | null {
+  for (const line of lines) {
+    const m = line.match(/S[ÉE]RIE\s*:?\s*(\d+)/i);
+    if (m) return m[1];
   }
   return null;
 }
@@ -121,15 +96,13 @@ function extractSupplierName(lines: string[]): string | null {
 }
 
 function extractNfDate(lines: string[]): string | null {
-  // Prefer the emission date label
   for (let i = 0; i < lines.length; i++) {
     if (/DATA\s*(?:DE\s*)?EMISS[ÃA]O/i.test(lines[i])) {
       const ctx = [lines[i], lines[i + 1] ?? ''].join(' ');
-      const m = ctx.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      const m = ctx.match(/(\d{2})\/(\d{2})\/(20\d{2})/);
       if (m) return `${m[3]}-${m[2]}-${m[1]}`;
     }
   }
-  // Fall back to first DD/MM/YYYY date found in recent years
   for (const line of lines) {
     const m = line.match(/(\d{2})\/(\d{2})\/(20\d{2})/);
     if (m) return `${m[3]}-${m[2]}-${m[1]}`;
@@ -148,10 +121,69 @@ function extractTotalProducts(lines: string[]): number | null {
   return null;
 }
 
+// ── Items section parser ─────────────────────────────────────────────────────
+
+function findItemsSection(lines: string[]): { start: number; end: number } {
+  const START_RE = /DADOS\s+DOS?\s+PRODUTOS?/i;
+  const END_RE = /C[AÁ]LCULO\s+DO\s+IMPOSTO|TRANSPORTADOR|VOLUMES?\s*:|PESO\s+L[IÍ]QUIDO/i;
+  let start = 0;
+  let end = lines.length;
+  let found = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (!found && START_RE.test(lines[i])) { start = i + 1; found = true; }
+    else if (found && END_RE.test(lines[i])) { end = i; break; }
+  }
+  return { start, end };
+}
+
+const HEADER_SKIP_RE = /CÓDIGO|DESCRI[ÇC][ÃA]O\s+DO\s+PRODUTO|NCM.SH|C[SO]T|CFOP|QTDE?\.?\s*COM|VL\.?\s*UNIT|VALOR\s*TOTAL|UN\.\s*COM|TRIB\.\s*COM/i;
+
+function parseItemLines(lines: string[]): DanfeItem[] {
+  // Anchor: NCM(8d) [space] CST/CSOSN [space] CFOP(4d starting 1-7) [space] UNIT(2-4 letters) [space] QTY VUNIT VTOTAL
+  const DATA_RE = /(\d{8})\s+\S+\s+([1-7]\d{3})\s+([A-Za-zÇç]{2,4})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/;
+  const CODE_RE = /^([A-Z0-9][A-Z0-9\-_.]{3,19})\s+(.*)/is;
+
+  const items: DanfeItem[] = [];
+  let pendingLine = '';
+
+  for (const line of lines) {
+    if (HEADER_SKIP_RE.test(line)) { pendingLine = ''; continue; }
+
+    const m = DATA_RE.exec(line);
+    if (!m) {
+      if (line.length > 3) pendingLine = line;
+      continue;
+    }
+
+    const ncm = m[1];
+    const unit = m[3];
+    const qty = parseBR(m[4]);
+    const vunit = parseBR(m[5]);
+    const vtotal = parseBR(m[6]);
+
+    // Combine pending line with in-line prefix — handles all split layouts
+    const prefixOnLine = line.substring(0, m.index).trim();
+    const codeDesc = [pendingLine, prefixOnLine].filter(s => s.length > 0).join(' ').trim();
+    pendingLine = '';
+
+    const cm = CODE_RE.exec(codeDesc);
+    const code = cm ? cm[1].trim() : (codeDesc.split(/\s+/)[0] || 'SEM_CODIGO');
+    const description = cm ? cm[2].trim() : codeDesc.substring(code.length).trim();
+
+    if (qty > 0 && vtotal > 0) {
+      items.push({ code, description, ncm, unit, quantity: qty, unitCost: vunit, totalCost: vtotal });
+    }
+  }
+
+  return items;
+}
+
+// ── Main exports ─────────────────────────────────────────────────────────────
+
 export async function parseDanfePDF(buffer: Buffer): Promise<DanfeResult> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pdfParse = require('pdf-parse');
-  const data = await pdfParse(buffer); // errors propagate — never swallow
+  const data = await pdfParse(buffer); // never swallow errors
   return parseDanfeText(data.text ?? '');
 }
 
@@ -159,14 +191,17 @@ export function parseDanfeText(text: string): DanfeResult {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
   const nfNumber = extractNfNumber(lines);
+  const nfSeries = extractNfSeries(lines);
   const supplierName = extractSupplierName(lines);
+  const { supplierCnpj, recipientCnpj } = extractCnpjs(lines);
+  const accessKey = extractAccessKey(lines);
   const nfDate = extractNfDate(lines);
   const totalProducts = extractTotalProducts(lines);
 
   const { start, end } = findItemsSection(lines);
   const rawItems = parseItemLines(lines.slice(start, end));
 
-  // Aggregate by supplier code (each physical unit may be a separate line with qty=1)
+  // Aggregate by supplier code — each physical unit may be a separate line with qty=1
   const itemMap = new Map<string, DanfeItem>();
   for (const item of rawItems) {
     const existing = itemMap.get(item.code);
@@ -190,5 +225,5 @@ export function parseDanfeText(text: string): DanfeResult {
     }
   }
 
-  return { nfNumber, supplierName, nfDate, totalProducts, items, validationError };
+  return { nfNumber, nfSeries, supplierName, supplierCnpj, recipientCnpj, accessKey, nfDate, totalProducts, items, validationError };
 }

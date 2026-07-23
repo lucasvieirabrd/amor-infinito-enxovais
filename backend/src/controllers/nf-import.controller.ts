@@ -21,15 +21,21 @@ export class NfImportController {
       quantity: z.number().positive(),
       unitCost: z.number().nonnegative(),
       totalCost: z.number().nonnegative(),
+      action: z.enum(['link', 'new', 'ignore']),
       productId: z.string().nullable(),
+      newProductName: z.string().nullable(),
     });
 
     const bodySchema = z.object({
       filename: z.string(),
+      accessKey: z.string().nullable(),
       nfNumber: z.string().nullable(),
+      nfSeries: z.string().nullable(),
+      supplierCnpj: z.string().nullable(),
       supplierName: z.string().nullable(),
       nfDate: z.string().nullable(),
       totalProducts: z.number().nullable(),
+      reimport: z.boolean().default(false),
       items: z.array(itemSchema).min(1),
     });
 

@@ -236,7 +236,10 @@ export const payables = mysqlTable('payables', {
 export const nfImports = mysqlTable('nf_imports', {
   id: varchar('id', { length: 36 }).primaryKey(),
   filename: varchar('filename', { length: 255 }).notNull(),
+  accessKey: varchar('access_key', { length: 44 }),        // chave de acesso NF-e (44 dígitos) — deduplicação
   nfNumber: varchar('nf_number', { length: 50 }),
+  nfSeries: varchar('nf_series', { length: 5 }),
+  supplierCnpj: varchar('supplier_cnpj', { length: 20 }),
   supplierName: varchar('supplier_name', { length: 255 }),
   nfDate: varchar('nf_date', { length: 10 }),
   totalProducts: decimal('total_products', { precision: 12, scale: 2 }),
@@ -244,6 +247,7 @@ export const nfImports = mysqlTable('nf_imports', {
   importedBy: varchar('imported_by', { length: 36 }).notNull(),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  deletedAt: datetime('deleted_at'),
 });
 
 export const nfImportItems = mysqlTable('nf_import_items', {
@@ -256,12 +260,16 @@ export const nfImportItems = mysqlTable('nf_import_items', {
   unitCost: decimal('unit_cost', { precision: 12, scale: 4 }).notNull(),
   totalCost: decimal('total_cost', { precision: 12, scale: 2 }).notNull(),
   productId: varchar('product_id', { length: 36 }),
+  wasNew: int('was_new').notNull().default(0),               // 1 se o produto foi criado nesta importação
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  deletedAt: datetime('deleted_at'),
 });
 
 export const supplierProductMap = mysqlTable('supplier_product_map', {
   id: varchar('id', { length: 36 }).primaryKey(),
-  supplierCode: varchar('supplier_code', { length: 100 }).notNull().unique(),
+  supplierCnpj: varchar('supplier_cnpj', { length: 20 }).notNull(),   // UNIQUE KEY composta com supplierCode
+  supplierCode: varchar('supplier_code', { length: 100 }).notNull(),
+  supplierDescription: varchar('supplier_description', { length: 500 }),
   productId: varchar('product_id', { length: 36 }).notNull(),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
