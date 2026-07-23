@@ -90,13 +90,17 @@ export const Sales: React.FC = () => {
   });
 
   const addToCart = (product: Product) => {
+    if (parseFloat(product.price.toString()) === 0) {
+      alert('Este produto não tem preço cadastrado e não pode ser vendido. Complete o cadastro antes de vender.');
+      return;
+    }
     const existing = cart.find(item => item.product.id === product.id);
     if (existing) {
       if (existing.quantity >= product.quantity) {
         alert('Estoque insuficiente!');
         return;
       }
-      setCart(cart.map(item => 
+      setCart(cart.map(item =>
         item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
       ));
     } else {
@@ -314,22 +318,29 @@ export const Sales: React.FC = () => {
 
               {products && products.length > 0 && (
                 <div className="border border-gray-200 rounded-lg shadow-lg max-h-72 overflow-y-auto">
-                  {products.map(p => (
-                    <button
-                      key={p.id}
-                      onClick={() => addToCart(p)}
-                      className="w-full text-left px-4 py-3 hover:bg-background border-b last:border-0 transition-colors flex justify-between items-center"
-                    >
-                      <div>
-                        <p className="font-semibold text-gray-900">{p.name}</p>
-                        {p.description && (
-                          <p className="text-xs text-gray-500">{p.description}</p>
+                  {products.map(p => {
+                    const semPreco = parseFloat(p.price.toString()) === 0;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => addToCart(p)}
+                        className={`w-full text-left px-4 py-3 border-b last:border-0 transition-colors flex justify-between items-center ${semPreco ? 'bg-red-50 hover:bg-red-100 cursor-not-allowed' : 'hover:bg-background'}`}
+                      >
+                        <div>
+                          <p className="font-semibold text-gray-900">{p.name}</p>
+                          {p.description && (
+                            <p className="text-xs text-gray-500">{p.description}</p>
+                          )}
+                          <p className="text-xs text-gray-600">SKU: {p.sku} | Estoque: {p.quantity}</p>
+                        </div>
+                        {semPreco ? (
+                          <span className="ml-4 shrink-0 text-xs font-bold text-red-600 bg-red-100 border border-red-300 rounded px-2 py-0.5">⚠ sem preço</span>
+                        ) : (
+                          <p className="font-bold text-primary ml-4 shrink-0">R$ {parseFloat(p.price.toString()).toFixed(2)}</p>
                         )}
-                        <p className="text-xs text-gray-600">SKU: {p.sku} | Estoque: {p.quantity}</p>
-                      </div>
-                      <p className="font-bold text-primary ml-4 shrink-0">R$ {parseFloat(p.price.toString()).toFixed(2)}</p>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 

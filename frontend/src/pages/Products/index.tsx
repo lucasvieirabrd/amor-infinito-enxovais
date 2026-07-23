@@ -194,12 +194,17 @@ export const Products: React.FC = () => {
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                       <FiBox className="text-primary" size={20} />
                     </div>
-                    <button
-                      onClick={() => handleEditClick(product)}
-                      className="p-1.5 hover:bg-blue-50 rounded text-blue-600 transition"
-                    >
-                      <FiEdit size={16} />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {parseFloat(product.price.toString()) === 0 && (
+                        <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">⚠ sem preço</span>
+                      )}
+                      <button
+                        onClick={() => handleEditClick(product)}
+                        className="p-1.5 hover:bg-blue-50 rounded text-blue-600 transition"
+                      >
+                        <FiEdit size={16} />
+                      </button>
+                    </div>
                   </div>
 
                   <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{product.name}</h3>
