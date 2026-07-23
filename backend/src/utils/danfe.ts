@@ -136,39 +136,75 @@ function findItemsSection(lines: string[]): { start: number; end: number } {
   return { start, end };
 }
 
-const HEADER_SKIP_RE = /CÓDIGO|DESCRI[ÇC][ÃA]O\s+DO\s+PRODUTO|NCM.SH|C[SO]T|CFOP|QTDE?\.?\s*COM|VL\.?\s*UNIT|VALOR\s*TOTAL|UN\.\s*COM|TRIB\.\s*COM/i;
+const HEADER_SKIP_RE = /CÓDIGO|DESCRI[ÇC][ÃA]O|NCM|CST|CFOP|QTDE?|VALOR|TRIB\.|UN\.\s*COM/i;
 
 function parseItemLines(lines: string[]): DanfeItem[] {
-  // Anchor: NCM(8d) [space] CST/CSOSN [space] CFOP(4d starting 1-7) [space] UNIT(2-4 letters) [space] QTY VUNIT VTOTAL
-  const DATA_RE = /(\d{8})\s+\S+\s+([1-7]\d{3})\s+([A-Za-zÇç]{2,4})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/;
-  const CODE_RE = /^([A-Z0-9][A-Z0-9\-_.]{3,19})\s+(.*)/is;
+  // Real DANFE format (tokens run together without spaces):
+  //   {NCM:8d}{ORIG:1d} {CST:2d}{CFOP:4d}{UNIT:2-3 letters}{QTY}{VUNIT}{VTOTAL}...
+  // Example: "841810000 006102UN1,00002.490,00000000002.490,002.490,000,000,00..."
+  const ANCHOR_RE = /(\d{8})(\d)\s+(\d{2})([1-7]\d{3})([A-Za-z]{2,3})/;
+
+  // QUANT always has exactly 4 decimal places in DANFE
+  const QUANT_RE = /(\d+,\d{4})/;
+
+  // VTOTAL == B.CALC.ICMS, so the same value appears twice consecutively.
+  // Match the first occurrence of (d,dd) immediately followed by itself.
+  const VTOTAL_RE = /([\d.]+,\d{2})(?=\1)/;
 
   const items: DanfeItem[] = [];
-  let pendingLine = '';
+  let lineBuffer: string[] = [];
 
   for (const line of lines) {
-    if (HEADER_SKIP_RE.test(line)) { pendingLine = ''; continue; }
+    if (HEADER_SKIP_RE.test(line)) { lineBuffer = []; continue; }
 
-    const m = DATA_RE.exec(line);
-    if (!m) {
-      if (line.length > 3) pendingLine = line;
+    const anchorMatch = ANCHOR_RE.exec(line);
+    if (!anchorMatch) {
+      if (line.length > 2) {
+        lineBuffer.push(line);
+        if (lineBuffer.length > 8) lineBuffer.shift();
+      }
       continue;
     }
 
-    const ncm = m[1];
-    const unit = m[3];
-    const qty = parseBR(m[4]);
-    const vunit = parseBR(m[5]);
-    const vtotal = parseBR(m[6]);
+    const ncm = anchorMatch[1];
+    const unit = anchorMatch[5];
+    const suffix = line.substring(anchorMatch.index + anchorMatch[0].length);
 
-    // Combine pending line with in-line prefix — handles all split layouts
-    const prefixOnLine = line.substring(0, m.index).trim();
-    const codeDesc = [pendingLine, prefixOnLine].filter(s => s.length > 0).join(' ').trim();
-    pendingLine = '';
+    const quantMatch = QUANT_RE.exec(suffix);
+    if (!quantMatch) { lineBuffer = []; continue; }
+    const qty = parseBR(quantMatch[1]);
 
-    const cm = CODE_RE.exec(codeDesc);
-    const code = cm ? cm[1].trim() : (codeDesc.split(/\s+/)[0] || 'SEM_CODIGO');
-    const description = cm ? cm[2].trim() : codeDesc.substring(code.length).trim();
+    const afterQuant = suffix.substring(quantMatch.index + quantMatch[0].length);
+    const vtotalMatch = VTOTAL_RE.exec(afterQuant);
+    if (!vtotalMatch) { lineBuffer = []; continue; }
+    const vtotal = parseBR(vtotalMatch[1]);
+    const vunit = qty > 0 ? parseFloat((vtotal / qty).toFixed(4)) : 0;
+
+    // Reconstruct product code using reverse scan: lines closest to the data
+    // line are description then code parts; junk appears earliest in buffer.
+    const prefixOnLine = line.substring(0, anchorMatch.index).trim();
+    const allContext = [...lineBuffer, prefixOnLine].filter(s => s.length > 0);
+    lineBuffer = [];
+
+    const reversed = [...allContext].reverse();
+    const codePartsRev: string[] = [];
+    const descLinesRev: string[] = [];
+    let foundNumeric = false;
+
+    for (const part of reversed) {
+      const isNumeric = /^\d+$/.test(part);
+      if (!foundNumeric && !isNumeric) {
+        descLinesRev.push(part);
+      } else if (isNumeric && codePartsRev.join('').length + part.length <= 20) {
+        codePartsRev.push(part);
+        foundNumeric = true;
+      } else {
+        break;
+      }
+    }
+
+    const code = codePartsRev.reverse().join('') || 'SEM_CODIGO';
+    const description = descLinesRev.reverse().join(' ').trim();
 
     if (qty > 0 && vtotal > 0) {
       items.push({ code, description, ncm, unit, quantity: qty, unitCost: vunit, totalCost: vtotal });

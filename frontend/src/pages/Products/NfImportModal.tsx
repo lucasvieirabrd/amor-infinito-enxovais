@@ -139,7 +139,9 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
     mutationFn: async (f: File) => {
       const form = new FormData();
       form.append('nf', f);
-      const res = await api.post<ParsedNf>('/nf-import/parse', form);
+      const res = await api.post<ParsedNf>('/nf-import/parse', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       return res.data;
     },
     onSuccess: (data) => {
