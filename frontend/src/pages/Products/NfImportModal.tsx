@@ -51,10 +51,12 @@ interface ConfirmResult {
   skippedCount: number;
 }
 
+// 'pending' is frontend-only; sent to backend as 'ignore'.
+// 'link' | 'new' | 'ignore' must match backend ConfirmItem.action (nf-import.service.ts).
 type ItemAction =
   | { action: 'pending' }
   | { action: 'ignore' }
-  | { action: 'existing'; productId: string }
+  | { action: 'link'; productId: string }
   | { action: 'new'; newProductName: string };
 
 // CNPJs aceitos como destinatário
@@ -86,7 +88,7 @@ const ProductCombobox: React.FC<ComboboxProps> = ({ action, onAction, nfDescript
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState(nfDescription);
   const [selectedProduct, setSelectedProduct] = useState<ProductOption | null>(
-    action.action === 'existing' ? (suggestedProduct ?? null) : null,
+    action.action === 'link' ? (suggestedProduct ?? null) : null,
   );
   const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 240 });
   const inputRef = useRef<HTMLInputElement>(null);
@@ -94,7 +96,7 @@ const ProductCombobox: React.FC<ComboboxProps> = ({ action, onAction, nfDescript
 
   // Sync when allProducts resolves the suggestion after initial render
   useEffect(() => {
-    if (action.action === 'existing' && suggestedProduct && !selectedProduct) {
+    if (action.action === 'link' && suggestedProduct && !selectedProduct) {
       setSelectedProduct(suggestedProduct);
     }
   }, [suggestedProduct]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -119,7 +121,7 @@ const ProductCombobox: React.FC<ComboboxProps> = ({ action, onAction, nfDescript
 
   const handleSelectProduct = (p: ProductOption) => {
     setSelectedProduct(p);
-    onAction({ action: 'existing', productId: p.id });
+    onAction({ action: 'link', productId: p.id });
     setSearchText('');
     setOpen(false);
   };
@@ -132,7 +134,7 @@ const ProductCombobox: React.FC<ComboboxProps> = ({ action, onAction, nfDescript
   };
 
   // ── Showing a linked product ─────────────────────────────────────────────────
-  if (action.action === 'existing') {
+  if (action.action === 'link') {
     if (!selectedProduct) {
       return (
         <div className="text-xs text-gray-400 italic px-2 py-1.5 border border-gray-200 rounded-md bg-gray-50">
@@ -306,7 +308,7 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
       const initial: Record<string, ItemAction> = {};
       for (const item of data.itemsWithSuggestions) {
         if (item.suggestedProductId) {
-          initial[item.code] = { action: 'existing', productId: item.suggestedProductId };
+          initial[item.code] = { action: 'link', productId: item.suggestedProductId };
         }
       }
       setDecisions(initial);
@@ -338,7 +340,7 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
             unitCost: item.unitCost,
             totalCost: item.totalCost,
             action: d.action === 'pending' ? 'ignore' : d.action,
-            productId: d.action === 'existing' ? d.productId : null,
+            productId: d.action === 'link' ? d.productId : null,
             newProductName: d.action === 'new' ? d.newProductName : null,
           };
         }),
