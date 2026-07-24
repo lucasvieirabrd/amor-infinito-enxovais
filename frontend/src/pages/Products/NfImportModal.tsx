@@ -54,8 +54,8 @@ type ItemAction =
   | { action: 'existing'; productId: string }
   | { action: 'new'; newProductName: string };
 
-// CNPJ da loja: 47.401.804/0001-66
-const OUR_CNPJ = '47401804000166';
+// CNPJs aceitos como destinatário
+const OUR_CNPJS = ['47401804000166', '38143602000170'];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -200,7 +200,7 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
 
   // ── Warnings ────────────────────────────────────────────────────────────────
 
-  const cnpjMismatch = parsedNf?.recipientCnpj && parsedNf.recipientCnpj !== OUR_CNPJ;
+  const cnpjMismatch = parsedNf?.recipientCnpj && !OUR_CNPJS.includes(parsedNf.recipientCnpj);
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -210,12 +210,17 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
       {/* ── Passo 1: Upload ── */}
       {step === 1 && (
         <div className="space-y-5">
+          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 text-sm text-green-800 flex items-center gap-2">
+            <FiCheck size={15} className="flex-shrink-0" />
+            <span><strong>Prefira o XML</strong> quando disponível — é padronizado pela Receita Federal e mais confiável que o PDF.</span>
+          </div>
           <label className="flex flex-col items-center gap-3 border-2 border-dashed border-gray-300 rounded-xl p-10 cursor-pointer hover:border-primary transition-colors">
             <FiUpload className="text-gray-400" size={40} />
-            <span className="text-gray-600 text-sm">Clique para selecionar o PDF da DANFE (NF-e)</span>
+            <span className="text-gray-600 text-sm">Clique para selecionar o XML ou PDF da NF-e</span>
+            <span className="text-xs text-gray-400">.xml (recomendado) · .pdf</span>
             <input
               type="file"
-              accept=".pdf,application/pdf"
+              accept=".xml,.pdf,text/xml,application/xml,application/pdf"
               className="sr-only"
               onChange={e => setFile(e.target.files?.[0] ?? null)}
             />

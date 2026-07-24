@@ -7,14 +7,19 @@ import { ensureAuthorized } from '../middlewares/ensureAuthorized';
 const nfImportRouter = Router();
 const nfImportController = new NfImportController();
 
-const pdfUpload = multer({
+const ALLOWED_MIMES = ['application/pdf', 'text/xml', 'application/xml'];
+
+const nfUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
+    const ok =
+      ALLOWED_MIMES.includes(file.mimetype) ||
+      file.originalname?.toLowerCase().endsWith('.xml');
+    if (ok) {
       cb(null, true);
     } else {
-      cb(new Error('Apenas arquivos PDF são aceitos') as any, false);
+      cb(new Error('Apenas arquivos PDF ou XML (NF-e) são aceitos') as any, false);
     }
   },
 });
@@ -22,7 +27,7 @@ const pdfUpload = multer({
 nfImportRouter.use(ensureAuthenticated);
 nfImportRouter.use(ensureAuthorized(['admin']));
 
-nfImportRouter.post('/parse', pdfUpload.single('nf'), nfImportController.parse);
+nfImportRouter.post('/parse', nfUpload.single('nf'), nfImportController.parse);
 nfImportRouter.post('/confirm', nfImportController.confirm);
 nfImportRouter.get('/', nfImportController.list);
 

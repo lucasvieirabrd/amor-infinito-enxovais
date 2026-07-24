@@ -1,4 +1,5 @@
 import { parseDanfePDF } from '../utils/danfe';
+import { parseNFeXML } from '../utils/danfe-xml';
 import { NfImportRepository } from '../repositories/nf-import.repository';
 import { ProductRepository } from '../repositories/product.repository';
 import { GoogleSheetsService } from '../integrations/googleSheets.service';
@@ -25,12 +26,21 @@ export interface ConfirmItem {
 }
 
 export class NfImportService {
-  async parse(buffer: Buffer) {
-    const result = await parseDanfePDF(buffer);
+  async parse(buffer: Buffer, mimetype?: string, originalname?: string) {
+    const isXml =
+      mimetype === 'text/xml' ||
+      mimetype === 'application/xml' ||
+      originalname?.toLowerCase().endsWith('.xml') ||
+      buffer.slice(0, 5).toString('ascii').startsWith('<?xml');
+
+    const result = isXml
+      ? parseNFeXML(buffer.toString('utf-8'))
+      : await parseDanfePDF(buffer);
 
     if (result.items.length === 0) {
+      const fileType = isXml ? 'XML' : 'PDF';
       throw new AppError(
-        'Nenhum item encontrado no PDF. Verifique se é um DANFE válido e se o arquivo não está protegido.',
+        `Nenhum item encontrado no ${fileType}. Verifique se é uma NF-e válida.`,
         422,
       );
     }
@@ -185,7 +195,7 @@ export class NfImportService {
       ORDER BY CAST(SUBSTRING(sku, 4) AS UNSIGNED) DESC
       LIMIT 1
     `);
-    const rows = result[0] as any[];
+    const rows = result[0] as unknown as any[];
     if (rows.length === 0) return 'MOV0001';
     const lastNum = parseInt((rows[0].sku as string).replace(/^MOV/, ''), 10);
     return `MOV${String(lastNum + 1).padStart(4, '0')}`;
