@@ -7,7 +7,7 @@ interface ModalProps {
   title?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
 }
 
 const Modal: React.FC<ModalProps> = ({
@@ -26,6 +26,7 @@ const Modal: React.FC<ModalProps> = ({
     lg: 'max-w-lg',
     xl: 'max-w-2xl',
     '2xl': 'max-w-3xl',
+    '3xl': 'max-w-5xl',
   };
 
   return (

@@ -361,7 +361,7 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Importar Nota Fiscal — Passo ${step}/3`} size="xl">
+    <Modal isOpen={isOpen} onClose={onClose} title={`Importar Nota Fiscal — Passo ${step}/3`} size="3xl">
 
       {/* ── Passo 1: Upload ── */}
       {step === 1 && (
@@ -467,15 +467,22 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
           </p>
 
           {/* Tabela */}
-          <div className="overflow-auto max-h-[420px] border border-gray-200 rounded-lg">
-            <table className="w-full text-sm">
+          <div className="overflow-auto max-h-[55vh] border border-gray-200 rounded-lg">
+            <table className="w-full text-sm table-fixed">
+              <colgroup>
+                <col style={{ width: '36%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '33%' }} />
+              </colgroup>
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
-                  <th className="text-left p-2 font-medium text-gray-700 w-2/5">Código / Descrição NF</th>
-                  <th className="text-right p-2 font-medium text-gray-700">Qtd</th>
-                  <th className="text-right p-2 font-medium text-gray-700">Custo Unit.</th>
-                  <th className="text-right p-2 font-medium text-gray-700">Total</th>
-                  <th className="text-left p-2 font-medium text-gray-700 w-2/5">Vincular ao catálogo</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-700">Descrição NF</th>
+                  <th className="text-right px-2 py-2 font-medium text-gray-700">Qtd</th>
+                  <th className="text-right px-2 py-2 font-medium text-gray-700">Custo Un.</th>
+                  <th className="text-right px-2 py-2 font-medium text-gray-700">Total</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-700">Vincular ao catálogo</th>
                 </tr>
               </thead>
               <tbody>
@@ -486,16 +493,15 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
                     ? (suggestedProductsMap.get(item.suggestedProductId) ?? null)
                     : null;
                   return (
-                    <tr key={item.code} className={`border-t border-gray-100 ${isPending ? 'bg-amber-50' : 'hover:bg-gray-50'}`}>
-                      <td className="p-2">
-                        <div className="font-mono text-xs text-gray-400">{item.code}</div>
-                        <div className="text-gray-900 text-xs leading-tight line-clamp-2">{item.description}</div>
-                        <div className="text-xs text-gray-400 mt-0.5">NCM {item.ncm} · {item.unit}</div>
+                    <tr key={item.code} className={`border-t border-gray-100 align-top ${isPending ? 'bg-amber-50' : 'hover:bg-gray-50'}`}>
+                      <td className="px-3 py-2">
+                        <div className="text-gray-900 text-xs leading-snug">{item.description}</div>
+                        <div className="text-[10px] text-gray-300 mt-1 font-mono leading-none">{item.code} · {item.ncm} · {item.unit}</div>
                       </td>
-                      <td className="p-2 text-right font-medium">{item.quantity}</td>
-                      <td className="p-2 text-right text-gray-700">{fmt(item.unitCost)}</td>
-                      <td className="p-2 text-right font-semibold">{fmt(item.totalCost)}</td>
-                      <td className="p-2">
+                      <td className="px-2 py-2 text-right font-medium text-xs">{item.quantity}</td>
+                      <td className="px-2 py-2 text-right text-gray-700 text-xs">{fmt(item.unitCost)}</td>
+                      <td className="px-2 py-2 text-right font-semibold text-xs">{fmt(item.totalCost)}</td>
+                      <td className="px-3 py-2">
                         <ProductCombobox
                           action={d}
                           onAction={a => setDecision(item.code, a)}
