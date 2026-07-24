@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
 import { Modal, Button } from '../../components/ui';
 import { FiUpload, FiAlertTriangle, FiCheck } from 'react-icons/fi';
+import { useDebounce } from '../../hooks/useDebounce';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +37,7 @@ interface ProductOption {
   id: string;
   name: string;
   sku: string | null;
+  description?: string | null;
 }
 
 interface PaginatedProducts {
@@ -65,7 +68,177 @@ function formatCnpj(digits: string): string {
   return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+function productLabel(p: ProductOption): string {
+  return p.description ? `${p.name} — ${p.description}` : p.name;
+}
+
+// ── ProductCombobox ──────────────────────────────────────────────────────────
+
+interface ComboboxProps {
+  action: ItemAction;
+  onAction: (a: ItemAction) => void;
+  nfDescription: string;
+  suggestedProduct: ProductOption | null;
+}
+
+const ProductCombobox: React.FC<ComboboxProps> = ({ action, onAction, nfDescription, suggestedProduct }) => {
+  const [searchText, setSearchText] = useState('');
+  const [open, setOpen] = useState(false);
+  const [newName, setNewName] = useState(nfDescription);
+  const [selectedProduct, setSelectedProduct] = useState<ProductOption | null>(
+    action.action === 'existing' ? (suggestedProduct ?? null) : null,
+  );
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 240 });
+  const inputRef = useRef<HTMLInputElement>(null);
+  const debouncedSearch = useDebounce(searchText, 300);
+
+  // Sync when allProducts resolves the suggestion after initial render
+  useEffect(() => {
+    if (action.action === 'existing' && suggestedProduct && !selectedProduct) {
+      setSelectedProduct(suggestedProduct);
+    }
+  }, [suggestedProduct]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { data: results = [] } = useQuery<ProductOption[]>({
+    queryKey: ['products-nf-search', debouncedSearch],
+    queryFn: async () => {
+      const res = await api.get<PaginatedProducts>('/products', { params: { search: debouncedSearch, limit: 20 } });
+      return res.data.data ?? [];
+    },
+    enabled: debouncedSearch.length >= 2,
+    staleTime: 30_000,
+  });
+
+  const openDropdown = () => {
+    if (inputRef.current) {
+      const r = inputRef.current.getBoundingClientRect();
+      setDropPos({ top: r.bottom + 2, left: r.left, width: Math.max(300, r.width) });
+    }
+    setOpen(true);
+  };
+
+  const handleSelectProduct = (p: ProductOption) => {
+    setSelectedProduct(p);
+    onAction({ action: 'existing', productId: p.id });
+    setSearchText('');
+    setOpen(false);
+  };
+
+  const handleClear = () => {
+    setSelectedProduct(null);
+    onAction({ action: 'pending' });
+    setSearchText('');
+    setOpen(false);
+  };
+
+  // ── Showing a linked product ─────────────────────────────────────────────────
+  if (action.action === 'existing') {
+    if (!selectedProduct) {
+      return (
+        <div className="text-xs text-gray-400 italic px-2 py-1.5 border border-gray-200 rounded-md bg-gray-50">
+          Carregando…
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-1.5 border border-green-300 rounded-md px-2 py-1.5 bg-green-50">
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-medium text-gray-900 truncate">{productLabel(selectedProduct)}</div>
+          <div className="text-[10px] text-gray-400">SKU: {selectedProduct.sku || '—'}</div>
+        </div>
+        <button type="button" onClick={handleClear} className="text-gray-400 hover:text-red-500 flex-shrink-0" title="Trocar produto">✕</button>
+      </div>
+    );
+  }
+
+  // ── Ignore chip ──────────────────────────────────────────────────────────────
+  if (action.action === 'ignore') {
+    return (
+      <div className="flex items-center justify-between border border-gray-200 rounded-md px-2 py-1.5 bg-gray-50 text-xs text-gray-500">
+        <span className="italic">Ignorado</span>
+        <button type="button" onClick={handleClear} className="text-gray-400 hover:text-gray-600">✕</button>
+      </div>
+    );
+  }
+
+  // ── New product ──────────────────────────────────────────────────────────────
+  if (action.action === 'new') {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between border border-blue-200 rounded-md px-2 py-1 bg-blue-50 text-xs font-medium text-blue-700">
+          <span>⊕ Novo produto</span>
+          <button type="button" onClick={handleClear} className="text-blue-400 hover:text-blue-600">✕</button>
+        </div>
+        <input
+          type="text"
+          value={newName}
+          onChange={e => { setNewName(e.target.value); onAction({ action: 'new', newProductName: e.target.value }); }}
+          placeholder="Nome do produto"
+          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+      </div>
+    );
+  }
+
+  // ── Search / Pending ─────────────────────────────────────────────────────────
+  return (
+    <>
+      <input
+        ref={inputRef}
+        value={searchText}
+        onChange={e => { setSearchText(e.target.value); openDropdown(); }}
+        onFocus={() => {
+          if (!searchText && nfDescription) setSearchText(nfDescription);
+          openDropdown();
+        }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Buscar produto…"
+        className="w-full border border-amber-400 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+      />
+      {open && createPortal(
+        <div
+          style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
+          className="bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto"
+        >
+          <button
+            type="button"
+            onMouseDown={() => { onAction({ action: 'ignore' }); setOpen(false); }}
+            className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b text-xs text-gray-600"
+          >
+            ✕ Ignorar este item
+          </button>
+          <button
+            type="button"
+            onMouseDown={() => { setNewName(nfDescription); onAction({ action: 'new', newProductName: nfDescription }); setOpen(false); }}
+            className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b text-xs text-blue-700 font-medium"
+          >
+            ⊕ Cadastrar como novo produto
+          </button>
+          {debouncedSearch.length >= 2 && results.length === 0 && (
+            <div className="px-3 py-2 text-xs text-gray-400 text-center">Nenhum produto encontrado</div>
+          )}
+          {debouncedSearch.length < 2 && (
+            <div className="px-3 py-2 text-xs text-gray-400 text-center italic">Digite para buscar no catálogo…</div>
+          )}
+          {results.map(p => (
+            <button
+              key={p.id}
+              type="button"
+              onMouseDown={() => handleSelectProduct(p)}
+              className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b last:border-0"
+            >
+              <div className="text-xs font-medium text-gray-900">{productLabel(p)}</div>
+              <div className="text-[10px] text-gray-400">SKU: {p.sku || '—'}</div>
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+};
+
+// ── NfImportModal ────────────────────────────────────────────────────────────
 
 interface Props {
   isOpen: boolean;
@@ -88,7 +261,7 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
     }
   }, [isOpen]);
 
-  // Load catalog products only when needed in step 2
+  // Load catalog products to resolve suggestion names
   const { data: allProducts = [] } = useQuery<ProductOption[]>({
     queryKey: ['products-nf-options'],
     queryFn: async () => {
@@ -99,33 +272,17 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
     staleTime: 5 * 60 * 1000,
   });
 
+  const suggestedProductsMap = useMemo(
+    () => new Map(allProducts.map(p => [p.id, p])),
+    [allProducts],
+  );
+
   // ── Decision helpers ────────────────────────────────────────────────────────
 
   const getDecision = (code: string): ItemAction => decisions[code] ?? { action: 'pending' };
 
-  const getSelectValue = (code: string): string => {
-    const d = getDecision(code);
-    if (d.action === 'ignore') return '__IGNORE__';
-    if (d.action === 'new') return '__NEW__';
-    if (d.action === 'existing') return d.productId;
-    return '';
-  };
-
-  const handleSelect = (code: string, defaultName: string, value: string) => {
-    if (value === '') {
-      setDecisions(p => ({ ...p, [code]: { action: 'pending' } }));
-    } else if (value === '__IGNORE__') {
-      setDecisions(p => ({ ...p, [code]: { action: 'ignore' } }));
-    } else if (value === '__NEW__') {
-      setDecisions(p => ({ ...p, [code]: { action: 'new', newProductName: defaultName } }));
-    } else {
-      setDecisions(p => ({ ...p, [code]: { action: 'existing', productId: value } }));
-    }
-  };
-
-  const setNewProductName = (code: string, name: string) => {
-    setDecisions(p => ({ ...p, [code]: { action: 'new', newProductName: name } }));
-  };
+  const setDecision = (code: string, a: ItemAction) =>
+    setDecisions(p => ({ ...p, [code]: a }));
 
   // ── Stats ───────────────────────────────────────────────────────────────────
 
@@ -146,7 +303,6 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
     },
     onSuccess: (data) => {
       setParsedNf(data);
-      // Pre-fill decisions from suggestions
       const initial: Record<string, ItemAction> = {};
       for (const item of data.itemsWithSuggestions) {
         if (item.suggestedProductId) {
@@ -156,14 +312,14 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
       setDecisions(initial);
       setStep(2);
     },
-    onError: (err: any) => alert(err?.response?.data?.message || 'Erro ao processar o PDF da nota fiscal.'),
+    onError: (err: any) => alert(err?.response?.data?.message || 'Erro ao processar o arquivo da nota fiscal.'),
   });
 
   const confirmMutation = useMutation({
     mutationFn: async () => {
       if (!parsedNf) throw new Error('Sem dados de NF');
       const payload = {
-        filename: file?.name ?? 'nota.pdf',
+        filename: file?.name ?? 'nota.xml',
         accessKey: parsedNf.accessKey,
         nfNumber: parsedNf.nfNumber,
         nfSeries: parsedNf.nfSeries,
@@ -311,21 +467,24 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
           </p>
 
           {/* Tabela */}
-          <div className="overflow-auto max-h-[400px] border border-gray-200 rounded-lg">
+          <div className="overflow-auto max-h-[420px] border border-gray-200 rounded-lg">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
-                  <th className="text-left p-2 font-medium text-gray-700 w-2/5">Código / Descrição</th>
+                  <th className="text-left p-2 font-medium text-gray-700 w-2/5">Código / Descrição NF</th>
                   <th className="text-right p-2 font-medium text-gray-700">Qtd</th>
                   <th className="text-right p-2 font-medium text-gray-700">Custo Unit.</th>
                   <th className="text-right p-2 font-medium text-gray-700">Total</th>
-                  <th className="text-left p-2 font-medium text-gray-700 w-2/5">Decisão</th>
+                  <th className="text-left p-2 font-medium text-gray-700 w-2/5">Vincular ao catálogo</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map(item => {
                   const d = getDecision(item.code);
                   const isPending = d.action === 'pending';
+                  const suggestedProduct = item.suggestedProductId
+                    ? (suggestedProductsMap.get(item.suggestedProductId) ?? null)
+                    : null;
                   return (
                     <tr key={item.code} className={`border-t border-gray-100 ${isPending ? 'bg-amber-50' : 'hover:bg-gray-50'}`}>
                       <td className="p-2">
@@ -337,30 +496,12 @@ export const NfImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
                       <td className="p-2 text-right text-gray-700">{fmt(item.unitCost)}</td>
                       <td className="p-2 text-right font-semibold">{fmt(item.totalCost)}</td>
                       <td className="p-2">
-                        <select
-                          value={getSelectValue(item.code)}
-                          onChange={e => handleSelect(item.code, item.description, e.target.value)}
-                          className={`w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary bg-white ${isPending ? 'border-amber-400' : 'border-gray-300'}`}
-                        >
-                          <option value="">— Pendente —</option>
-                          <option value="__IGNORE__">Ignorar este item</option>
-                          <option value="__NEW__">⊕ Cadastrar como novo produto</option>
-                          <option disabled>──────────</option>
-                          {allProducts.map(p => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}{p.sku ? ` (${p.sku})` : ''}
-                            </option>
-                          ))}
-                        </select>
-                        {d.action === 'new' && (
-                          <input
-                            type="text"
-                            value={d.newProductName}
-                            onChange={e => setNewProductName(item.code, e.target.value)}
-                            placeholder="Nome do produto"
-                            className="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
-                          />
-                        )}
+                        <ProductCombobox
+                          action={d}
+                          onAction={a => setDecision(item.code, a)}
+                          nfDescription={item.description}
+                          suggestedProduct={suggestedProduct}
+                        />
                       </td>
                     </tr>
                   );
