@@ -1,4 +1,5 @@
 import { db } from '../database';
+import { auditLogs } from '../database/schema';
 import { SaleRepository } from '../repositories/sale.repository';
 import { ProductRepository } from '../repositories/product.repository';
 import { DeliveryRepository } from '../repositories/delivery.repository';
@@ -25,6 +26,8 @@ export class SaleService {
 
     const result = await db.transaction(async (tx) => {
       let totalAmount = 0;
+      // Map productId → catalog price for audit logging
+      const catalogPrices: Record<string, number> = {};
 
       // 1. Validar e reservar estoque (Lock Pessimista)
       for (const item of items) {
@@ -39,16 +42,19 @@ export class SaleService {
 
         if (product.category === 'Móveis') hasFurniture = true;
 
+        catalogPrices[item.productId] = parseFloat(product.price.toString());
+
         // Decrementar estoque local
         const newQuantity = product.quantity - item.quantity;
         await productRepository.updateStock(tx, product.id, newQuantity);
 
-        // Atualizar estoque no Google Sheets (Sincronização)
+        // Atualizar estoque no Google Sheets — apenas quantidade, nunca o preço
         if (product.sku) {
           await googleSheetsService.updateStockInSheet(product.sku, newQuantity);
         }
 
-        totalAmount += parseFloat(product.price.toString()) * item.quantity;
+        // Usar o preço editado pelo operador (não o preço do catálogo)
+        totalAmount += item.unitPrice * item.quantity;
       }
 
       // 2. Criar a venda
@@ -64,20 +70,33 @@ export class SaleService {
 
       const { id: saleId, saleNumber } = await saleRepository.createSale(tx, saleData);
 
-      // 3. Criar os itens da venda
-      const saleItemsData = items.map((item: any) => {
-        // Recalcula o preço total do item para garantir integridade
-        // (idealmente buscaríamos o preço do produto novamente aqui)
-        return {
-          saleId,
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice.toFixed(2),
-          totalPrice: (item.unitPrice * item.quantity).toFixed(2),
-        };
-      });
+      // 3. Criar os itens da venda com o preço editado e o preço original do catálogo
+      const saleItemsData = items.map((item: any) => ({
+        saleId,
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice.toFixed(2),
+        originalUnitPrice: catalogPrices[item.productId].toFixed(2),
+        totalPrice: (item.unitPrice * item.quantity).toFixed(2),
+      }));
 
       await saleRepository.createSaleItems(tx, saleItemsData);
+
+      // 4. Registrar audit log para cada item com preço alterado
+      for (const item of items) {
+        const catalogPrice = catalogPrices[item.productId];
+        if (Math.abs(item.unitPrice - catalogPrice) > 0.001) {
+          await tx.insert(auditLogs).values({
+            id: uuidv4(),
+            userId,
+            action: 'PRICE_OVERRIDE_SALE',
+            entityType: 'SaleItem',
+            entityId: saleId,
+            oldValue: { productId: item.productId, catalogPrice },
+            newValue: { unitPrice: item.unitPrice, saleNumber },
+          });
+        }
+      }
 
       // 4. Se for crediário, gerar as parcelas
       if (paymentMethod === 'installment') {

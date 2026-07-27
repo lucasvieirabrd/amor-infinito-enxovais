@@ -92,6 +92,7 @@ export class SaleRepository {
         productName: products.name,
         quantity: saleItems.quantity,
         unitPrice: saleItems.unitPrice,
+        originalUnitPrice: saleItems.originalUnitPrice,
         totalPrice: saleItems.totalPrice,
       })
       .from(saleItems)

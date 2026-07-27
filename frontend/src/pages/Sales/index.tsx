@@ -34,6 +34,7 @@ interface Product {
 interface CartItem {
   product: Product;
   quantity: number;
+  editedPrice: number;
 }
 
 export const Sales: React.FC = () => {
@@ -90,10 +91,6 @@ export const Sales: React.FC = () => {
   });
 
   const addToCart = (product: Product) => {
-    if (parseFloat(product.price.toString()) === 0) {
-      alert('Este produto não tem preço cadastrado e não pode ser vendido. Complete o cadastro antes de vender.');
-      return;
-    }
     const existing = cart.find(item => item.product.id === product.id);
     if (existing) {
       if (existing.quantity >= product.quantity) {
@@ -108,9 +105,15 @@ export const Sales: React.FC = () => {
         alert('Produto sem estoque!');
         return;
       }
-      setCart([...cart, { product, quantity: 1 }]);
+      setCart([...cart, { product, quantity: 1, editedPrice: parseFloat(product.price.toString()) }]);
     }
     setProductSearch('');
+  };
+
+  const updatePrice = (productId: string, price: number) => {
+    setCart(prev => prev.map(item =>
+      item.product.id === productId ? { ...item, editedPrice: price } : item
+    ));
   };
 
   const updateQuantity = (productId: string, delta: number) => {
@@ -132,9 +135,8 @@ export const Sales: React.FC = () => {
     setCart(cart.filter(item => item.product.id !== productId));
   };
 
-  const total = cart.reduce((acc, item) => 
-    acc + (parseFloat(item.product.price.toString()) * item.quantity), 0
-  );
+  const total = cart.reduce((acc, item) => acc + (item.editedPrice * item.quantity), 0);
+  const hasInvalidPrice = cart.some(item => !item.editedPrice || item.editedPrice <= 0);
 
   const registerSaleMutation = useMutation({
     mutationFn: (saleData: any) => api.post('/sales', saleData),
@@ -170,7 +172,7 @@ export const Sales: React.FC = () => {
       items: cart.map(item => ({
         productId: item.product.id,
         quantity: item.quantity,
-        unitPrice: parseFloat(item.product.price.toString()),
+        unitPrice: item.editedPrice,
       })),
       installmentsCount: paymentMethod === 'installment' ? installmentsCount : undefined,
       saleDate: new Date().toISOString(),
@@ -352,43 +354,69 @@ export const Sales: React.FC = () => {
                     <p>Carrinho vazio</p>
                   </div>
                 ) : (
-                  cart.map(item => (
-                    <div key={item.product.id} className="flex items-center justify-between p-3 bg-background rounded-lg border border-gray-200 hover:border-primary transition-colors">
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-900">{item.product.name}</p>
-                        {item.product.description && (
-                          <p className="text-xs text-gray-500">{item.product.description}</p>
-                        )}
-                        <p className="text-xs text-gray-600">R$ {parseFloat(item.product.price.toString()).toFixed(2)} / un</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center bg-gray-100 rounded-lg px-2">
-                          <button 
-                            onClick={() => updateQuantity(item.product.id, -1)} 
-                            className="p-1 text-gray-600 hover:text-primary transition-colors"
+                  cart.map(item => {
+                    const catalogPrice = parseFloat(item.product.price.toString());
+                    const priceChanged = item.editedPrice > 0 && Math.abs(item.editedPrice - catalogPrice) > 0.001;
+                    const priceInvalid = !item.editedPrice || item.editedPrice <= 0;
+                    return (
+                      <div key={item.product.id} className="flex items-center justify-between p-3 bg-background rounded-lg border border-gray-200 hover:border-primary transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900">{item.product.name}</p>
+                          {item.product.description && (
+                            <p className="text-xs text-gray-500">{item.product.description}</p>
+                          )}
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-xs text-gray-400">R$</span>
+                            <input
+                              type="number"
+                              value={item.editedPrice || ''}
+                              onChange={e => updatePrice(item.product.id, parseFloat(e.target.value) || 0)}
+                              min="0.01"
+                              step="0.01"
+                              className={`w-24 text-sm text-right border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary ${
+                                priceInvalid
+                                  ? 'border-red-400 bg-red-50 text-red-700'
+                                  : priceChanged
+                                    ? 'border-orange-400 bg-orange-50 text-orange-800 font-semibold'
+                                    : 'border-gray-200 bg-white'
+                              }`}
+                            />
+                            <span className="text-xs text-gray-400">/ un</span>
+                            {priceInvalid && <span className="text-xs text-red-600 font-medium">obrigatório</span>}
+                            {priceChanged && !priceInvalid && (
+                              <span className="text-[10px] bg-orange-100 text-orange-700 rounded px-1 py-0.5 font-medium">promo</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 ml-3">
+                          <div className="flex items-center bg-gray-100 rounded-lg px-2">
+                            <button
+                              onClick={() => updateQuantity(item.product.id, -1)}
+                              className="p-1 text-gray-600 hover:text-primary transition-colors"
+                            >
+                              <FiMinus size={14} />
+                            </button>
+                            <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
+                            <button
+                              onClick={() => updateQuantity(item.product.id, 1)}
+                              className="p-1 text-gray-600 hover:text-primary transition-colors"
+                            >
+                              <FiPlus size={14} />
+                            </button>
+                          </div>
+                          <p className="w-20 text-right font-bold text-gray-900">
+                            R$ {(item.editedPrice * item.quantity).toFixed(2)}
+                          </p>
+                          <button
+                            onClick={() => removeFromCart(item.product.id)}
+                            className="text-error hover:bg-error hover:bg-opacity-10 p-2 rounded-lg transition-colors"
                           >
-                            <FiMinus size={14} />
-                          </button>
-                          <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
-                          <button 
-                            onClick={() => updateQuantity(item.product.id, 1)} 
-                            className="p-1 text-gray-600 hover:text-primary transition-colors"
-                          >
-                            <FiPlus size={14} />
+                            <FiTrash2 size={18} />
                           </button>
                         </div>
-                        <p className="w-20 text-right font-bold text-gray-900">
-                          R$ {(parseFloat(item.product.price.toString()) * item.quantity).toFixed(2)}
-                        </p>
-                        <button 
-                          onClick={() => removeFromCart(item.product.id)} 
-                          className="text-error hover:bg-error hover:bg-opacity-10 p-2 rounded-lg transition-colors"
-                        >
-                          <FiTrash2 size={18} />
-                        </button>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -522,7 +550,7 @@ export const Sales: React.FC = () => {
                 size="lg"
                 onClick={handleFinishSale}
                 loading={registerSaleMutation.isPending}
-                disabled={cart.length === 0 || !selectedCustomer}
+                disabled={cart.length === 0 || !selectedCustomer || hasInvalidPrice}
                 className="w-full"
               >
                 {registerSaleMutation.isPending ? 'Processando...' : 'Finalizar Venda'}

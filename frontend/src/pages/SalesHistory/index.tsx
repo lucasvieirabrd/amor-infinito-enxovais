@@ -15,6 +15,7 @@ interface SaleItem {
   productName?: string;
   quantity: number;
   unitPrice: number | string;
+  originalUnitPrice?: number | string | null;
   totalPrice: number | string;
 }
 
@@ -790,20 +791,41 @@ export const SalesHistory: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {selectedSale.items.map((item, idx) => (
-                            <tr key={idx}>
-                              <td className="py-2 pr-4 font-medium text-gray-900">
-                                {item.productName || `Produto ${idx + 1}`}
-                              </td>
-                              <td className="py-2 text-center text-gray-600">{item.quantity}</td>
-                              <td className="py-2 text-right text-gray-600">
-                                R$ {parseFloat(item.unitPrice.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </td>
-                              <td className="py-2 text-right font-semibold text-gray-900">
-                                R$ {parseFloat(item.totalPrice.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </td>
-                            </tr>
-                          ))}
+                          {selectedSale.items.map((item, idx) => {
+                            const unitPrice = parseFloat(item.unitPrice.toString());
+                            const origPrice = item.originalUnitPrice ? parseFloat(item.originalUnitPrice.toString()) : null;
+                            const isPriceOverride = origPrice !== null && Math.abs(unitPrice - origPrice) > 0.001;
+                            return (
+                              <tr key={idx}>
+                                <td className="py-2 pr-4 font-medium text-gray-900">
+                                  {item.productName || `Produto ${idx + 1}`}
+                                </td>
+                                <td className="py-2 text-center text-gray-600">{item.quantity}</td>
+                                <td className="py-2 text-right">
+                                  {isPriceOverride ? (
+                                    <div className="flex flex-col items-end gap-0.5">
+                                      <span className="text-xs line-through text-gray-400">
+                                        R$ {origPrice!.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-[10px] bg-orange-100 text-orange-700 rounded px-1 py-0.5 font-medium">promo</span>
+                                        <span className="font-semibold text-orange-700">
+                                          R$ {unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-600">
+                                      R$ {unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2 text-right font-semibold text-gray-900">
+                                  R$ {parseFloat(item.totalPrice.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

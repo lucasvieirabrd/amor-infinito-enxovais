@@ -83,6 +83,7 @@ export const saleItems = mysqlTable('sale_items', {
   productId: varchar('product_id', { length: 36 }).notNull(),
   quantity: int('quantity').notNull(),
   unitPrice: decimal('unit_price', { precision: 10, scale: 2 }).notNull(),
+  originalUnitPrice: decimal('original_unit_price', { precision: 10, scale: 2 }),
   totalPrice: decimal('total_price', { precision: 10, scale: 2 }).notNull(),
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
