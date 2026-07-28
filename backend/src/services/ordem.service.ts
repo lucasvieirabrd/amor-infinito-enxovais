@@ -103,6 +103,7 @@ async function getOrdemData(saleId: string) {
     .select({
       sku: products.sku,
       productName: products.name,
+      productDescription: products.description,
       quantity: saleItems.quantity,
       unitPrice: saleItems.unitPrice,
       totalPrice: saleItems.totalPrice,
@@ -161,10 +162,15 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
   // Products table rows
   const productRows = itemRows.map((item, i) => {
     const rowBg = i % 2 === 0 ? '#fff' : '#f9fafb';
+    const name = esc(item.productName || 'Produto');
+    const desc = item.productDescription?.trim() ? esc(item.productDescription.trim()) : '';
+    const nameCell = desc
+      ? `${name}<span class="prod-desc"> — ${desc}</span>`
+      : name;
     return `
       <tr style="background:${rowBg}">
         <td class="td-center">${esc(item.sku || '—')}</td>
-        <td>${esc(item.productName || 'Produto')}</td>
+        <td>${nameCell}</td>
         <td class="td-center">${item.quantity}</td>
         <td class="td-right">${brl(item.unitPrice)}</td>
         <td class="td-right">${brl(item.totalPrice)}</td>
@@ -295,6 +301,7 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
     td { padding: 4px 7px; border-bottom: 1px solid #f1f5f9; }
     .td-center { text-align: center; }
     .td-right { text-align: right; }
+    .prod-desc { color: #6b7280; font-size: 9.5px; }
 
     /* ── Total ── */
     .total-row {
