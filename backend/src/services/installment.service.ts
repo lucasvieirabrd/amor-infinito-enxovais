@@ -77,8 +77,39 @@ export class InstallmentService {
     if (!installment) {
       throw new AppError('Parcela não encontrada', 404);
     }
+
     if (installment.status === 'paid') {
-      throw new AppError('Não é possível editar uma parcela já paga', 400);
+      if (data.dueDate) {
+        throw new AppError('Não é possível alterar a data de vencimento de uma parcela já paga', 400);
+      }
+      if (data.originalAmount === undefined) return installment;
+
+      const paidAmount = parseFloat(installment.paidAmount.toString());
+      const newAmount = data.originalAmount;
+      if (Math.abs(newAmount - paidAmount) > 0.01) {
+        throw new AppError(
+          `Para alterar o valor de uma parcela paga para R$ ${newAmount.toFixed(2)} (diferente do pago: R$ ${paidAmount.toFixed(2)}), reverta o pagamento primeiro.`,
+          400
+        );
+      }
+
+      const result = await installmentRepository.update(id, {
+        originalAmount: newAmount.toFixed(2),
+        paidAmount: newAmount.toFixed(2),
+      });
+
+      if (userId) {
+        await db.insert(auditLogs).values({
+          id: uuidv4(),
+          userId,
+          action: 'UPDATE_INSTALLMENT',
+          entityType: 'Installment',
+          entityId: id,
+          oldValue: { originalAmount: installment.originalAmount, paidAmount: installment.paidAmount },
+          newValue: { originalAmount: newAmount, paidAmount: newAmount },
+        });
+      }
+      return result;
     }
 
     const updateData: any = {};

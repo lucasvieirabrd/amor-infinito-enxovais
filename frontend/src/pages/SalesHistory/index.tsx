@@ -381,14 +381,30 @@ export const SalesHistory: React.FC = () => {
       for (const id of markedForDelete) {
         await api.delete(`/installments/${id}`);
       }
+      // Upfront validation: paid installments can only be set to their paidAmount
       for (const inst of selectedSale.installments ?? []) {
-        if (markedForDelete.has(inst.id) || inst.status === 'paid') continue;
+        if (markedForDelete.has(inst.id) || inst.status !== 'paid') continue;
+        const ev = editValues[inst.id];
+        if (!ev) continue;
+        const origAmount = parseFloat(inst.originalAmount.toString());
+        const newAmount = parseFloat(ev.amount) || 0;
+        if (Math.abs(newAmount - origAmount) <= 0.001) continue;
+        const paidAmount = parseFloat(inst.paidAmount.toString());
+        if (Math.abs(newAmount - paidAmount) > 0.01) {
+          const label = inst.installmentNumber === 0 ? 'Entrada' : `Parcela ${inst.installmentNumber}`;
+          alert(`${label}: o novo valor (R$ ${newAmount.toFixed(2)}) não corresponde ao que foi pago (R$ ${paidAmount.toFixed(2)}). Para usar outro valor, reverta o pagamento primeiro.`);
+          setEditSaving(false);
+          return;
+        }
+      }
+      for (const inst of selectedSale.installments ?? []) {
+        if (markedForDelete.has(inst.id)) continue;
         const ev = editValues[inst.id];
         if (!ev) continue;
         const origAmount = parseFloat(inst.originalAmount.toString());
         const origDate = toDateInput(inst.dueDate);
         const amountChanged = Math.abs(parseFloat(ev.amount) - origAmount) > 0.001;
-        const dateChanged = ev.dueDate !== origDate;
+        const dateChanged = inst.status !== 'paid' && ev.dueDate !== origDate;
         if (amountChanged || dateChanged) {
           await api.put(`/installments/${inst.id}`, {
             ...(amountChanged && { originalAmount: parseFloat(ev.amount) }),
@@ -947,42 +963,76 @@ export const SalesHistory: React.FC = () => {
 
                             if (isEntry) {
                               return (
-                                <div key={inst.id} className={`flex justify-between items-center p-3 rounded-lg border ${isDeleted ? 'opacity-40 bg-gray-50 border-gray-200' : 'bg-amber-50 border-amber-200'}`}>
-                                  <div>
-                                    <p className="font-semibold text-amber-800 text-sm">Entrada</p>
-                                    {inst.paymentDate && (
-                                      <p className="text-xs text-amber-600">Paga em {format(new Date(inst.paymentDate), 'dd/MM/yyyy')}</p>
-                                    )}
-                                    {isEditMode && isDeleted && <p className="text-xs text-red-500 font-semibold">Marcada para remoção</p>}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <div className="text-right space-y-1">
-                                      <p className="font-bold text-amber-900 text-sm">R$ {parseFloat(inst.originalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                      <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Paga</span>
+                                <div key={inst.id} className={`p-3 rounded-lg border ${isDeleted ? 'opacity-40 bg-gray-50 border-gray-200' : isEditMode ? 'bg-amber-50 border-primary border-opacity-30' : 'bg-amber-50 border-amber-200'}`}>
+                                  {isEditMode && !isDeleted ? (
+                                    <div>
+                                      <div className="flex items-center justify-between mb-2">
+                                        <p className="font-semibold text-amber-800 text-sm">Entrada</p>
+                                        <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Paga</span>
+                                      </div>
+                                      {inst.paymentDate && <p className="text-xs text-amber-600 mb-2">Paga em {format(new Date(inst.paymentDate), 'dd/MM/yyyy')}</p>}
+                                      <div>
+                                        <label className="text-xs text-gray-500 block mb-0.5">Valor (R$)</label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          min="0.01"
+                                          value={ev.amount}
+                                          onChange={e => setEditValues(prev => ({ ...prev, [inst.id]: { ...ev, amount: e.target.value } }))}
+                                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-primary"
+                                        />
+                                        <p className="text-xs text-amber-600 mt-1">O valor deve coincidir com o que foi efetivamente pago.</p>
+                                      </div>
                                     </div>
-                                    {isEditMode && !isDeleted && (
-                                      deleteConfirmId === inst.id ? (
-                                        <div className="flex gap-1 items-center">
-                                          <span className="text-xs text-red-600 font-semibold">Confirmar?</span>
-                                          <button onClick={() => { setMarkedForDelete(prev => new Set([...prev, inst.id])); setDeleteConfirmId(null); }} className="text-xs bg-red-500 text-white px-2 py-0.5 rounded">Sim</button>
-                                          <button onClick={() => setDeleteConfirmId(null)} className="text-xs border border-gray-300 px-2 py-0.5 rounded">Não</button>
+                                  ) : (
+                                    <div className="flex justify-between items-center">
+                                      <div>
+                                        <p className={`font-semibold text-sm ${isDeleted ? 'text-gray-400' : 'text-amber-800'}`}>Entrada</p>
+                                        {inst.paymentDate && !isDeleted && (
+                                          <p className="text-xs text-amber-600">Paga em {format(new Date(inst.paymentDate), 'dd/MM/yyyy')}</p>
+                                        )}
+                                        {isDeleted && <p className="text-xs text-red-500 font-semibold">Marcada para remoção</p>}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <div className="text-right space-y-1">
+                                          <p className="font-bold text-amber-900 text-sm">R$ {parseFloat(inst.originalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                          <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Paga</span>
                                         </div>
-                                      ) : (
-                                        <button onClick={() => setDeleteConfirmId(inst.id)} className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Remover entrada">🗑</button>
-                                      )
-                                    )}
-                                    {isEditMode && isDeleted && (
-                                      <button onClick={() => setMarkedForDelete(prev => { const s = new Set(prev); s.delete(inst.id); return s; })} className="p-1 text-gray-500 hover:text-gray-700 rounded" title="Desfazer">↩</button>
-                                    )}
-                                  </div>
+                                        {isEditMode && isDeleted && (
+                                          <button onClick={() => setMarkedForDelete(prev => { const s = new Set(prev); s.delete(inst.id); return s; })} className="p-1 text-gray-500 hover:text-gray-700 rounded" title="Desfazer">↩</button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             }
 
                             const { label, bgClass, textClass } = getInstallmentStatusStyle(inst);
                             return (
-                              <div key={inst.id} className={`p-3 rounded-lg border transition-colors ${isDeleted ? 'opacity-40 bg-gray-50 border-gray-200' : isEditMode && !isPaid ? 'bg-background border-primary border-opacity-30' : 'bg-background border-gray-100'}`}>
-                                {isEditMode && !isPaid && !isDeleted ? (
+                              <div key={inst.id} className={`p-3 rounded-lg border transition-colors ${isDeleted ? 'opacity-40 bg-gray-50 border-gray-200' : isEditMode && !isDeleted ? 'bg-background border-primary border-opacity-30' : 'bg-background border-gray-100'}`}>
+                                {isEditMode && !isDeleted ? (
+                                  isPaid ? (
+                                    <div>
+                                      <div className="flex items-center justify-between mb-2">
+                                        <p className="font-semibold text-gray-900 text-sm">Parcela {inst.installmentNumber}/{regularCount}</p>
+                                        <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Paga</span>
+                                      </div>
+                                      {inst.paymentDate && <p className="text-xs text-green-600 mb-2">Paga em {format(new Date(inst.paymentDate), 'dd/MM/yyyy')}</p>}
+                                      <div>
+                                        <label className="text-xs text-gray-500 block mb-0.5">Valor (R$)</label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          min="0.01"
+                                          value={ev.amount}
+                                          onChange={e => setEditValues(prev => ({ ...prev, [inst.id]: { ...ev, amount: e.target.value } }))}
+                                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-primary"
+                                        />
+                                        <p className="text-xs text-gray-400 mt-1">O valor deve coincidir com o que foi efetivamente pago.</p>
+                                      </div>
+                                    </div>
+                                  ) : (
                                   <div>
                                     <div className="flex items-center justify-between mb-2">
                                       <p className="font-semibold text-gray-900 text-sm">Parcela {inst.installmentNumber}/{regularCount}</p>
@@ -1019,6 +1069,7 @@ export const SalesHistory: React.FC = () => {
                                       </div>
                                     </div>
                                   </div>
+                                  )
                                 ) : (
                                   <div className="flex justify-between items-center">
                                     <div>
