@@ -2,10 +2,11 @@ import { InstallmentRepository } from '../repositories/installment.repository';
 import { BillingService } from './billing.service';
 import { AppError } from '../utils/AppError';
 import { isBefore, startOfDay, isToday, getDaysInMonth } from 'date-fns';
-import { customers, installments, auditLogs } from '../database/schema';
+import { customers, installments, auditLogs, renegotiations } from '../database/schema';
 import { db } from '../database';
 import { v4 as uuidv4 } from 'uuid';
 import { SaleRepository } from '../repositories/sale.repository';
+import { eq } from 'drizzle-orm';
 
 const installmentRepository = new InstallmentRepository();
 const billingService = new BillingService();
@@ -283,6 +284,38 @@ export class InstallmentService {
       entityId: newInstallment!.id,
       oldValue: null,
       newValue: { saleId, installmentNumber: data.installmentNumber, amount: data.amount, dueDate: data.dueDate },
+    });
+
+    return newInstallment;
+  }
+
+  async addInstallmentToRenegotiation(renId: string, data: { installmentNumber: number; amount: number; dueDate: string }, userId: string) {
+    const [ren] = await db.select().from(renegotiations).where(eq(renegotiations.id, renId)).limit(1);
+    if (!ren) {
+      throw new AppError('Renegociação não encontrada', 404);
+    }
+
+    const isEntry = data.installmentNumber === 0;
+    const date = new Date(data.dueDate + 'T12:00:00');
+
+    const newInstallment = await installmentRepository.createOne({
+      saleId: renId,
+      customerId: ren.customerId,
+      installmentNumber: data.installmentNumber,
+      dueDate: date,
+      originalAmount: data.amount.toFixed(2),
+      ...(isEntry && { paidAmount: data.amount.toFixed(2), paymentDate: date }),
+      status: isEntry ? 'paid' : 'pending',
+    });
+
+    await db.insert(auditLogs).values({
+      id: uuidv4(),
+      userId,
+      action: 'ADD_INSTALLMENT',
+      entityType: 'Installment',
+      entityId: newInstallment!.id,
+      oldValue: null,
+      newValue: { renegotiationId: renId, installmentNumber: data.installmentNumber, amount: data.amount, dueDate: data.dueDate },
     });
 
     return newInstallment;

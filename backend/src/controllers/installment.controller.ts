@@ -64,6 +64,19 @@ export class InstallmentController {
     return res.status(201).json(result);
   }
 
+  async addToRenegotiation(req: Request, res: Response) {
+    const { renId } = req.params;
+    const schema = z.object({
+      installmentNumber: z.number().int().min(0),
+      amount: z.number().positive(),
+      dueDate: z.string().min(1),
+    });
+    const data = schema.parse(req.body);
+    const userId = (req as any).user!.id;
+    const result = await installmentService.addInstallmentToRenegotiation(renId, data, userId);
+    return res.status(201).json(result);
+  }
+
   async updateDueDate(req: Request, res: Response) {
     const { id } = req.params;
     const updateDueDateSchema = z.object({

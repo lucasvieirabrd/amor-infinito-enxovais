@@ -104,6 +104,13 @@ export const SalesHistory: React.FC = () => {
   const [selectedRen, setSelectedRen] = useState<RenegotiationDetail | null>(null);
   const [showRenDetails, setShowRenDetails] = useState(false);
   const [renDetailsLoading, setRenDetailsLoading] = useState(false);
+  const [isRenEditMode, setIsRenEditMode] = useState(false);
+  const [renEditValues, setRenEditValues] = useState<Record<string, { amount: string; dueDate: string }>>({});
+  const [renMarkedForDelete, setRenMarkedForDelete] = useState<Set<string>>(new Set());
+  const [renDeleteConfirmId, setRenDeleteConfirmId] = useState<string | null>(null);
+  const [renAddForm, setRenAddForm] = useState<{ type: 'installment' | 'entry'; number: string; amount: string; dueDate: string } | null>(null);
+  const [renPendingAdds, setRenPendingAdds] = useState<{ installmentNumber: number; amount: string; dueDate: string }[]>([]);
+  const [renEditSaving, setRenEditSaving] = useState(false);
   const [sellerFilter, setSellerFilter] = useState('');
 
   const [showSellerReport, setShowSellerReport] = useState(false);
@@ -409,6 +416,83 @@ export const SalesHistory: React.FC = () => {
   const handleCloseDetails = () => {
     setShowDetails(false);
     exitEditMode();
+  };
+
+  const exitRenEditMode = () => {
+    setIsRenEditMode(false);
+    setRenEditValues({});
+    setRenMarkedForDelete(new Set());
+    setRenDeleteConfirmId(null);
+    setRenAddForm(null);
+    setRenPendingAdds([]);
+  };
+
+  const enterRenEditMode = () => {
+    if (!selectedRen?.installments) return;
+    const init: Record<string, { amount: string; dueDate: string }> = {};
+    selectedRen.installments.forEach(inst => {
+      init[inst.id] = {
+        amount: parseFloat(inst.originalAmount.toString()).toFixed(2),
+        dueDate: toDateInput(inst.dueDate),
+      };
+    });
+    setRenEditValues(init);
+    setRenMarkedForDelete(new Set());
+    setRenDeleteConfirmId(null);
+    setRenAddForm(null);
+    setRenPendingAdds([]);
+    setIsRenEditMode(true);
+  };
+
+  const computeRenEditedTotal = () => {
+    if (!selectedRen?.installments) return 0;
+    let total = 0;
+    selectedRen.installments.forEach(inst => {
+      if (renMarkedForDelete.has(inst.id)) return;
+      const ev = renEditValues[inst.id];
+      total += ev ? (parseFloat(ev.amount) || 0) : parseFloat(inst.originalAmount.toString());
+    });
+    renPendingAdds.forEach(a => { total += parseFloat(a.amount) || 0; });
+    return total;
+  };
+
+  const handleRenSaveAll = async () => {
+    if (!selectedRen) return;
+    setRenEditSaving(true);
+    try {
+      for (const id of renMarkedForDelete) {
+        await api.delete(`/installments/${id}`);
+      }
+      for (const inst of selectedRen.installments ?? []) {
+        if (renMarkedForDelete.has(inst.id) || inst.status === 'paid') continue;
+        const ev = renEditValues[inst.id];
+        if (!ev) continue;
+        const origAmount = parseFloat(inst.originalAmount.toString());
+        const origDate = toDateInput(inst.dueDate);
+        const amountChanged = Math.abs(parseFloat(ev.amount) - origAmount) > 0.001;
+        const dateChanged = ev.dueDate !== origDate;
+        if (amountChanged || dateChanged) {
+          await api.put(`/installments/${inst.id}`, {
+            ...(amountChanged && { originalAmount: parseFloat(ev.amount) }),
+            ...(dateChanged && { dueDate: ev.dueDate }),
+          });
+        }
+      }
+      for (const add of renPendingAdds) {
+        await api.post(`/renegotiations/${selectedRen.id}/installments`, {
+          installmentNumber: add.installmentNumber,
+          amount: parseFloat(add.amount),
+          dueDate: add.dueDate,
+        });
+      }
+      const { data } = await api.get(`/renegotiations/${selectedRen.id}`);
+      setSelectedRen(data);
+      exitRenEditMode();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Erro ao salvar alterações');
+    } finally {
+      setRenEditSaving(false);
+    }
   };
 
   return (
@@ -1119,7 +1203,7 @@ export const SalesHistory: React.FC = () => {
       <Modal
         isOpen={showRenDetails}
         title={selectedRen ? `Renegociação ${selectedRen.renNumber}` : 'Detalhes da Renegociação'}
-        onClose={() => { setShowRenDetails(false); setSelectedRen(null); }}
+        onClose={() => { setShowRenDetails(false); setSelectedRen(null); exitRenEditMode(); }}
         size="2xl"
       >
         {renDetailsLoading ? (
@@ -1172,52 +1256,238 @@ export const SalesHistory: React.FC = () => {
               )}
             </div>
 
-            {selectedRen.installments && selectedRen.installments.length > 0 && (
+            {selectedRen.installments && (
               <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Parcelas do Novo Acordo</h4>
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {[...selectedRen.installments]
-                    .sort((a, b) => a.installmentNumber - b.installmentNumber)
-                    .map((inst) => {
-                      const isEntry = inst.installmentNumber === 0;
-                      const regularCount = selectedRen.installments.filter(i => i.installmentNumber > 0).length;
-                      const statusStyle = (() => {
-                        switch (inst.status) {
-                          case 'paid': return { label: 'Paga', bg: 'bg-green-50', text: 'text-green-700' };
-                          case 'canceled': return { label: 'Cancelada', bg: 'bg-gray-100', text: 'text-gray-400' };
-                          default: return { label: 'Pendente', bg: 'bg-gray-50', text: 'text-gray-500' };
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-gray-900">Parcelas do Novo Acordo</h4>
+                  {isAdmin && !isRenEditMode && (
+                    <button
+                      onClick={enterRenEditMode}
+                      className="text-xs font-semibold text-primary border border-primary border-opacity-30 px-3 py-1 rounded-lg hover:bg-primary hover:bg-opacity-5 transition-colors"
+                    >
+                      ✏️ Editar Parcelas
+                    </button>
+                  )}
+                </div>
+
+                {selectedRen.installments.length > 0 && (
+                  <div className={`space-y-2 overflow-y-auto pr-1 ${isRenEditMode ? 'max-h-96' : 'max-h-72'}`}>
+                    {(() => {
+                      const sorted = [...selectedRen.installments].sort((a, b) => a.installmentNumber - b.installmentNumber);
+                      const regularCount = sorted.filter(i => i.installmentNumber > 0).length;
+                      return sorted.map((inst) => {
+                        const isEntry = inst.installmentNumber === 0;
+                        const isDeleted = renMarkedForDelete.has(inst.id);
+                        const isPaid = inst.status === 'paid';
+                        const ev = renEditValues[inst.id] ?? {
+                          amount: parseFloat(inst.originalAmount.toString()).toFixed(2),
+                          dueDate: toDateInput(inst.dueDate),
+                        };
+                        const statusStyle = getInstallmentStatusStyle(inst as any);
+
+                        if (isEntry) {
+                          return (
+                            <div key={inst.id} className={`flex justify-between items-center p-3 rounded-lg border ${isDeleted ? 'opacity-40 bg-gray-50 border-gray-200' : 'bg-amber-50 border-amber-200'}`}>
+                              <div>
+                                <p className="font-semibold text-amber-800 text-sm">Entrada</p>
+                                {inst.paymentDate && (
+                                  <p className="text-xs text-amber-600">Paga em {format(new Date(inst.paymentDate), 'dd/MM/yyyy')}</p>
+                                )}
+                                {isRenEditMode && isDeleted && <p className="text-xs text-red-500 font-semibold">Marcada para remoção</p>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="text-right space-y-1">
+                                  <p className="font-bold text-amber-900 text-sm">R$ {parseFloat(inst.originalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                  <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Paga</span>
+                                </div>
+                                {isRenEditMode && !isDeleted && (
+                                  renDeleteConfirmId === inst.id ? (
+                                    <div className="flex gap-1 items-center">
+                                      <span className="text-xs text-red-600 font-semibold">Confirmar?</span>
+                                      <button onClick={() => { setRenMarkedForDelete(prev => new Set([...prev, inst.id])); setRenDeleteConfirmId(null); }} className="text-xs bg-red-500 text-white px-2 py-0.5 rounded">Sim</button>
+                                      <button onClick={() => setRenDeleteConfirmId(null)} className="text-xs border border-gray-300 px-2 py-0.5 rounded">Não</button>
+                                    </div>
+                                  ) : (
+                                    <button onClick={() => setRenDeleteConfirmId(inst.id)} className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Remover entrada">🗑</button>
+                                  )
+                                )}
+                                {isRenEditMode && isDeleted && (
+                                  <button onClick={() => setRenMarkedForDelete(prev => { const s = new Set(prev); s.delete(inst.id); return s; })} className="p-1 text-gray-500 hover:text-gray-700 rounded" title="Desfazer">↩</button>
+                                )}
+                              </div>
+                            </div>
+                          );
                         }
-                      })();
-                      return (
-                        <div key={inst.id} className={`flex justify-between items-center p-3 rounded-lg border ${isEntry ? 'bg-amber-50 border-amber-200' : 'bg-background border-gray-100'}`}>
-                          <div>
-                            <p className={`font-semibold text-sm ${isEntry ? 'text-amber-800' : 'text-gray-900'}`}>
-                              {isEntry ? 'Entrada' : `Parcela ${inst.installmentNumber}/${regularCount}`}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Venc.: {format(new Date(inst.dueDate), 'dd/MM/yyyy')}
-                            </p>
-                            {inst.status === 'paid' && inst.paymentDate && (
-                              <p className="text-xs text-green-600">Paga em {format(new Date(inst.paymentDate), 'dd/MM/yyyy')}</p>
+
+                        return (
+                          <div key={inst.id} className={`p-3 rounded-lg border transition-colors ${isDeleted ? 'opacity-40 bg-gray-50 border-gray-200' : isRenEditMode && !isPaid ? 'bg-background border-primary border-opacity-30' : 'bg-background border-gray-100'}`}>
+                            {isRenEditMode && !isPaid && !isDeleted ? (
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="font-semibold text-gray-900 text-sm">Parcela {inst.installmentNumber}/{regularCount}</p>
+                                  {renDeleteConfirmId === inst.id ? (
+                                    <div className="flex gap-1 items-center">
+                                      <span className="text-xs text-red-600 font-semibold">Confirmar?</span>
+                                      <button onClick={() => { setRenMarkedForDelete(prev => new Set([...prev, inst.id])); setRenDeleteConfirmId(null); }} className="text-xs bg-red-500 text-white px-2 py-0.5 rounded">Sim</button>
+                                      <button onClick={() => setRenDeleteConfirmId(null)} className="text-xs border border-gray-300 px-2 py-0.5 rounded">Não</button>
+                                    </div>
+                                  ) : (
+                                    <button onClick={() => setRenDeleteConfirmId(inst.id)} className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Remover parcela">🗑</button>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-xs text-gray-500 block mb-0.5">Valor (R$)</label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0.01"
+                                      value={ev.amount}
+                                      onChange={e => setRenEditValues(prev => ({ ...prev, [inst.id]: { ...ev, amount: e.target.value } }))}
+                                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-primary"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-gray-500 block mb-0.5">Vencimento</label>
+                                    <input
+                                      type="date"
+                                      value={ev.dueDate}
+                                      onChange={e => setRenEditValues(prev => ({ ...prev, [inst.id]: { ...ev, dueDate: e.target.value } }))}
+                                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-primary"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <p className={`font-semibold text-sm ${isDeleted ? 'text-gray-400' : 'text-gray-900'}`}>
+                                    Parcela {inst.installmentNumber}/{regularCount}
+                                    {isDeleted && <span className="ml-1 text-xs text-red-400">(removida)</span>}
+                                  </p>
+                                  <p className="text-xs text-gray-500">Venc.: {format(new Date(inst.dueDate), 'dd/MM/yyyy')}</p>
+                                  {inst.status === 'paid' && inst.paymentDate && (
+                                    <p className="text-xs text-green-600">Paga em {format(new Date(inst.paymentDate), 'dd/MM/yyyy')}</p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="text-right space-y-1">
+                                    <p className={`font-bold text-sm ${isDeleted ? 'text-gray-400' : 'text-gray-900'}`}>
+                                      R$ {parseFloat(inst.originalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${isDeleted ? 'bg-gray-100 text-gray-400' : `${statusStyle.bgClass} ${statusStyle.textClass}`}`}>
+                                      {isDeleted ? 'Removida' : statusStyle.label}
+                                    </span>
+                                  </div>
+                                  {isRenEditMode && isDeleted && (
+                                    <button onClick={() => setRenMarkedForDelete(prev => { const s = new Set(prev); s.delete(inst.id); return s; })} className="p-1 text-gray-500 hover:text-gray-700 rounded" title="Desfazer remoção">↩</button>
+                                  )}
+                                </div>
+                              </div>
                             )}
                           </div>
-                          <div className="text-right space-y-1">
-                            <p className="font-bold text-sm text-gray-900">
-                              R$ {parseFloat(inst.originalAmount.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </p>
-                            <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
-                              {statusStyle.label}
-                            </span>
+                        );
+                      });
+                    })()}
+
+                    {isRenEditMode && renPendingAdds.map((add, idx) => (
+                      <div key={`new-${idx}`} className="p-3 rounded-lg border border-blue-200 bg-blue-50">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-semibold text-blue-800 text-sm">
+                            {add.installmentNumber === 0 ? '↳ Entrada (nova)' : `↳ Parcela ${add.installmentNumber} (nova)`}
+                          </p>
+                          <button onClick={() => setRenPendingAdds(prev => prev.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600 text-sm">✕</button>
+                        </div>
+                        <p className="text-xs text-blue-600">
+                          R$ {(parseFloat(add.amount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} — {add.dueDate ? format(new Date(add.dueDate + 'T12:00:00'), 'dd/MM/yyyy') : '—'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {isRenEditMode && (
+                  <div className="mt-3 space-y-3">
+                    {renAddForm ? (
+                      <div className="p-3 border border-blue-200 rounded-lg bg-blue-50 space-y-2">
+                        <p className="text-sm font-semibold text-blue-800">{renAddForm.type === 'entry' ? 'Nova Entrada' : 'Nova Parcela'}</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {renAddForm.type === 'installment' && (
+                            <div>
+                              <label className="text-xs text-gray-500 block mb-0.5">Número</label>
+                              <input type="number" min="1" value={renAddForm.number} onChange={e => setRenAddForm(prev => prev ? { ...prev, number: e.target.value } : null)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-primary" />
+                            </div>
+                          )}
+                          <div>
+                            <label className="text-xs text-gray-500 block mb-0.5">Valor (R$)</label>
+                            <input type="number" step="0.01" min="0.01" value={renAddForm.amount} onChange={e => setRenAddForm(prev => prev ? { ...prev, amount: e.target.value } : null)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-primary" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500 block mb-0.5">{renAddForm.type === 'entry' ? 'Data Pgto.' : 'Vencimento'}</label>
+                            <input type="date" value={renAddForm.dueDate} onChange={e => setRenAddForm(prev => prev ? { ...prev, dueDate: e.target.value } : null)} className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-primary" />
                           </div>
                         </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              if (!renAddForm.amount || !renAddForm.dueDate) return;
+                              if (renAddForm.type === 'installment' && !renAddForm.number) return;
+                              setRenPendingAdds(prev => [...prev, {
+                                installmentNumber: renAddForm.type === 'entry' ? 0 : parseInt(renAddForm.number),
+                                amount: renAddForm.amount,
+                                dueDate: renAddForm.dueDate,
+                              }]);
+                              setRenAddForm(null);
+                            }}
+                            className="text-xs bg-primary text-white px-3 py-1.5 rounded font-semibold hover:opacity-90 transition-opacity"
+                          >
+                            Adicionar
+                          </button>
+                          <button onClick={() => setRenAddForm(null)} className="text-xs border border-gray-300 px-3 py-1.5 rounded hover:bg-gray-50">Cancelar</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button onClick={() => setRenAddForm({ type: 'entry', number: '0', amount: '', dueDate: '' })} className="text-xs border border-amber-300 text-amber-700 px-3 py-1.5 rounded hover:bg-amber-50 transition-colors font-semibold">+ Adicionar Entrada</button>
+                        <button onClick={() => setRenAddForm({ type: 'installment', number: '', amount: '', dueDate: '' })} className="text-xs border border-blue-300 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-50 transition-colors font-semibold">+ Adicionar Parcela</button>
+                      </div>
+                    )}
+
+                    {(() => {
+                      const editedTotal = computeRenEditedTotal();
+                      const renTotal = parseFloat(selectedRen.newAmount.toString());
+                      const diff = Math.abs(editedTotal - renTotal);
+                      const matches = diff < 0.02;
+                      return (
+                        <div className={`p-3 rounded-lg border text-sm ${matches ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                          <div className="flex justify-between items-center">
+                            <span className={`font-semibold ${matches ? 'text-green-700' : 'text-amber-700'}`}>Total das parcelas:</span>
+                            <span className={`font-bold ${matches ? 'text-green-800' : 'text-amber-800'}`}>R$ {editedTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div className="flex justify-between items-center mt-0.5">
+                            <span className="text-gray-500 text-xs">Valor do acordo:</span>
+                            <span className="text-gray-700 text-xs font-semibold">R$ {renTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          {!matches && <p className="text-xs text-amber-600 mt-1 font-semibold">⚠️ Diferença de R$ {diff.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} — valores não batem com o total do acordo.</p>}
+                        </div>
                       );
-                    })}
-                </div>
+                    })()}
+
+                    <div className="flex gap-2">
+                      <button onClick={handleRenSaveAll} disabled={renEditSaving} className="flex-1 py-2 bg-primary text-white rounded-lg font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity">
+                        {renEditSaving ? 'Salvando...' : 'Salvar Alterações'}
+                      </button>
+                      <button onClick={exitRenEditMode} disabled={renEditSaving} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-50 disabled:opacity-50">
+                        Cancelar Edição
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             <div className="flex gap-3">
-              <Button variant="secondary" onClick={() => { setShowRenDetails(false); setSelectedRen(null); }} className="flex-1">
+              <Button variant="secondary" onClick={() => { setShowRenDetails(false); setSelectedRen(null); exitRenEditMode(); }} className="flex-1">
                 Fechar
               </Button>
             </div>
