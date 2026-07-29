@@ -84,15 +84,9 @@ export class InstallmentService {
       }
       if (data.originalAmount === undefined) return installment;
 
-      const paidAmount = parseFloat(installment.paidAmount.toString());
       const newAmount = data.originalAmount;
-      if (Math.abs(newAmount - paidAmount) > 0.01) {
-        throw new AppError(
-          `Para alterar o valor de uma parcela paga para R$ ${newAmount.toFixed(2)} (diferente do pago: R$ ${paidAmount.toFixed(2)}), reverta o pagamento primeiro.`,
-          400
-        );
-      }
 
+      // Update both originalAmount and paidAmount — admin-only, no billing triggered
       const result = await installmentRepository.update(id, {
         originalAmount: newAmount.toFixed(2),
         paidAmount: newAmount.toFixed(2),

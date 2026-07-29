@@ -381,22 +381,6 @@ export const SalesHistory: React.FC = () => {
       for (const id of markedForDelete) {
         await api.delete(`/installments/${id}`);
       }
-      // Upfront validation: paid installments can only be set to their paidAmount
-      for (const inst of selectedSale.installments ?? []) {
-        if (markedForDelete.has(inst.id) || inst.status !== 'paid') continue;
-        const ev = editValues[inst.id];
-        if (!ev) continue;
-        const origAmount = parseFloat(inst.originalAmount.toString());
-        const newAmount = parseFloat(ev.amount) || 0;
-        if (Math.abs(newAmount - origAmount) <= 0.001) continue;
-        const paidAmount = parseFloat(inst.paidAmount.toString());
-        if (Math.abs(newAmount - paidAmount) > 0.01) {
-          const label = inst.installmentNumber === 0 ? 'Entrada' : `Parcela ${inst.installmentNumber}`;
-          alert(`${label}: o novo valor (R$ ${newAmount.toFixed(2)}) não corresponde ao que foi pago (R$ ${paidAmount.toFixed(2)}). Para usar outro valor, reverta o pagamento primeiro.`);
-          setEditSaving(false);
-          return;
-        }
-      }
       for (const inst of selectedSale.installments ?? []) {
         if (markedForDelete.has(inst.id)) continue;
         const ev = editValues[inst.id];
@@ -981,7 +965,7 @@ export const SalesHistory: React.FC = () => {
                                           onChange={e => setEditValues(prev => ({ ...prev, [inst.id]: { ...ev, amount: e.target.value } }))}
                                           className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-primary"
                                         />
-                                        <p className="text-xs text-amber-600 mt-1">O valor deve coincidir com o que foi efetivamente pago.</p>
+                                        <p className="text-xs text-amber-600 mt-1">Correção de valor — atualiza originalAmount e paidAmount sem disparar mensagem ao cliente.</p>
                                       </div>
                                     </div>
                                   ) : (
@@ -1029,7 +1013,7 @@ export const SalesHistory: React.FC = () => {
                                           onChange={e => setEditValues(prev => ({ ...prev, [inst.id]: { ...ev, amount: e.target.value } }))}
                                           className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-primary"
                                         />
-                                        <p className="text-xs text-gray-400 mt-1">O valor deve coincidir com o que foi efetivamente pago.</p>
+                                        <p className="text-xs text-gray-400 mt-1">Correção de valor — atualiza originalAmount e paidAmount sem disparar mensagem ao cliente.</p>
                                       </div>
                                     </div>
                                   ) : (
