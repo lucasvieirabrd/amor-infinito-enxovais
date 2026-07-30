@@ -7,7 +7,7 @@ import axios from 'axios';
 import { useAuth } from '../../hooks/useAuth';
 import { MergeCustomersModal } from './MergeCustomersModal';
 
-type PaymentStatus = 'devendo' | 'quitado' | 'sem_crediario' | 'sem_compras';
+type PaymentStatus = 'devendo' | 'quitado' | 'sem_crediario' | 'sem_compras' | 'em_processo';
 
 interface Customer {
   id: string;
@@ -33,6 +33,7 @@ interface Customer {
   ref3Relationship?: string;
   hasPhoto?: boolean;
   paymentStatus?: PaymentStatus;
+  inLegalProcess?: boolean;
 }
 
 interface PaginatedResponse {
@@ -161,6 +162,17 @@ export const Customers: React.FC = () => {
     },
   });
 
+  const toggleLegalProcessMutation = useMutation({
+    mutationFn: ({ id, inLegalProcess }: { id: string; inLegalProcess: boolean }) =>
+      api.patch(`/customers/${id}/legal-process`, { inLegalProcess }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+    },
+    onError: (error: any) => {
+      alert(error.response?.data?.message || 'Erro ao atualizar status jurídico');
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/customers/${id}`),
     onSuccess: () => {
@@ -274,11 +286,18 @@ export const Customers: React.FC = () => {
       label: 'Cliente',
       render: (value: string, item: Customer) => (
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-semibold text-sm">
+          <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-semibold text-sm flex-shrink-0">
             {item.name.charAt(0)}
           </div>
           <div>
-            <p className="font-medium text-gray-900">{value}</p>
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-gray-900">{value}</p>
+              {item.inLegalProcess && (
+                <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title="Cliente em processo jurídico">
+                  ⚖️ Processo
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-500">{item.email}</p>
           </div>
         </div>
@@ -305,6 +324,7 @@ export const Customers: React.FC = () => {
           quitado:       { label: 'Quitado',       cls: 'bg-green-100 text-green-700' },
           sem_crediario: { label: 'Sem crediário', cls: 'bg-gray-100 text-gray-600' },
           sem_compras:   { label: 'Sem compras',   cls: 'bg-gray-100 text-gray-500' },
+          em_processo:   { label: 'Em processo',   cls: 'bg-orange-100 text-orange-700' },
         };
         const s = map[value] ?? map.sem_compras;
         return (
@@ -318,7 +338,7 @@ export const Customers: React.FC = () => {
       key: 'actions' as const,
       label: 'Ações',
       render: (_: any, item: Customer) => (
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => handleEdit(item)}
             className="p-1.5 hover:bg-blue-50 rounded text-blue-600 transition"
@@ -332,6 +352,27 @@ export const Customers: React.FC = () => {
           >
             Vender
           </button>
+          {isAdmin && (
+            <button
+              onClick={() => {
+                const next = !item.inLegalProcess;
+                const msg = next
+                  ? `Marcar ${item.name} como em processo jurídico? Esta ação irá removê-lo de toda cobrança automática.`
+                  : `Retirar ${item.name} do processo jurídico?`;
+                if (window.confirm(msg)) {
+                  toggleLegalProcessMutation.mutate({ id: item.id, inLegalProcess: next });
+                }
+              }}
+              className={`p-1.5 rounded transition text-xs font-medium ${
+                item.inLegalProcess
+                  ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                  : 'hover:bg-orange-50 text-orange-500'
+              }`}
+              title={item.inLegalProcess ? 'Retirar do processo jurídico' : 'Marcar como em processo jurídico'}
+            >
+              ⚖️
+            </button>
+          )}
           <button
             onClick={() => handleDelete(item.id)}
             className="p-1.5 hover:bg-red-50 rounded text-red-600 transition"
@@ -409,6 +450,7 @@ export const Customers: React.FC = () => {
               <option value="quitado">🟢 Quitados</option>
               <option value="sem_crediario">⚪ Sem crediário</option>
               <option value="sem_compras">⚪ Sem compras</option>
+              <option value="em_processo">⚖️ Em processo</option>
             </select>
           </div>
         </Card>

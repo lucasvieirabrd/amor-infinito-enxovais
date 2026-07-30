@@ -180,6 +180,29 @@ export class CustomerService {
     return customerRepository.countMergeableRecords(duplicateId);
   }
 
+  async toggleLegalProcess(id: string, inLegalProcess: boolean, userId: string) {
+    const customer = await customerRepository.findById(id);
+    if (!customer) throw new AppError('Cliente não encontrado', 404);
+
+    const result = await customerRepository.update(id, {
+      inLegalProcess,
+      legalProcessAt: inLegalProcess ? new Date() : null,
+      legalProcessBy: inLegalProcess ? userId : null,
+    });
+
+    await db.insert(auditLogs).values({
+      id: uuidv4(),
+      userId,
+      action: inLegalProcess ? 'MARK_LEGAL_PROCESS' : 'UNMARK_LEGAL_PROCESS',
+      entityType: 'Customer',
+      entityId: id,
+      oldValue: { inLegalProcess: !inLegalProcess },
+      newValue: { inLegalProcess },
+    });
+
+    return result;
+  }
+
   async mergeCustomers(primaryId: string, duplicateId: string, mergedData: any, userId: string) {
     if (primaryId === duplicateId) {
       throw new AppError('Não é possível mesclar um cliente com ele mesmo', 400);

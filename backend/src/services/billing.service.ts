@@ -73,7 +73,8 @@ export class BillingService {
           sql`${installments.status} IN ('pending', 'overdue', 'partial')`,
           sql`DATE(CONVERT_TZ(${installments.dueDate}, '+00:00', '-03:00')) <= DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
           isNull(installments.deletedAt),
-          isNull(customers.deletedAt)
+          isNull(customers.deletedAt),
+          sql`${customers.inLegalProcess} = 0`
         )
       );
 
@@ -296,7 +297,8 @@ export class BillingService {
           sql`${installments.status} IN ('pending', 'overdue', 'partial')`,
           sql`DATE(${installments.dueDate}) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
           isNull(installments.deletedAt),
-          isNull(customers.deletedAt)
+          isNull(customers.deletedAt),
+          sql`${customers.inLegalProcess} = 0`
         )
       );
 
@@ -352,10 +354,11 @@ export class BillingService {
   async getChargesPreview() {
     const result = await db.execute(sql`
       SELECT
-        SUM(CASE WHEN DATE(due_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) AND status IN ('pending','partial') THEN 1 ELSE 0 END) as todayCount,
-        SUM(CASE WHEN DATE(due_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) AND status IN ('pending','overdue','partial') THEN 1 ELSE 0 END) as overdueCount
-      FROM installments
-      WHERE deleted_at IS NULL
+        SUM(CASE WHEN DATE(i.due_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) AND i.status IN ('pending','partial') THEN 1 ELSE 0 END) as todayCount,
+        SUM(CASE WHEN DATE(i.due_date) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) AND i.status IN ('pending','overdue','partial') THEN 1 ELSE 0 END) as overdueCount
+      FROM installments i
+      JOIN customers c ON c.id = i.customer_id AND c.in_legal_process = 0 AND c.deleted_at IS NULL
+      WHERE i.deleted_at IS NULL
     `);
     const row = ((result as any)[0]?.[0]) ?? {};
     return {
@@ -523,6 +526,10 @@ export class BillingService {
 
     const customer = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
     if (!customer[0]) throw new AppError('Cliente não encontrado', 404);
+
+    if (customer[0].inLegalProcess) {
+      throw new AppError('Cliente em processo jurídico não pode receber cobrança automática', 400);
+    }
 
     const dateFmt = format(new Date(installment.dueDate), 'dd/MM/yyyy');
     const amountNum = formatAmount(installment.originalAmount); // "150,00"

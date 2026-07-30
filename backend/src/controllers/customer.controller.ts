@@ -54,7 +54,7 @@ export class CustomerController {
       page: z.string().optional().transform(v => Number(v) || 1),
       limit: z.string().optional().transform(v => Number(v) || 10),
       search: z.string().optional(),
-      statusFilter: z.enum(['devendo', 'quitado', 'sem_crediario', 'sem_compras']).optional(),
+      statusFilter: z.enum(['devendo', 'quitado', 'sem_crediario', 'sem_compras', 'em_processo']).optional(),
     });
 
     const { page, limit, search, statusFilter } = listSchema.parse(req.query);
@@ -150,6 +150,15 @@ export class CustomerController {
   async getMergePreview(req: Request, res: Response) {
     const { primaryId, duplicateId } = req.params;
     const result = await customerService.getMergePreview(primaryId, duplicateId);
+    return res.json(result);
+  }
+
+  async setLegalProcess(req: Request, res: Response) {
+    const { id } = req.params;
+    const schema = z.object({ inLegalProcess: z.boolean() });
+    const { inLegalProcess } = schema.parse(req.body);
+    const userId = (req as any).user!.id;
+    const result = await customerService.toggleLegalProcess(id, inLegalProcess, userId);
     return res.json(result);
   }
 

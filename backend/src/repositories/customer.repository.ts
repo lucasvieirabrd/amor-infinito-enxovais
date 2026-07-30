@@ -59,6 +59,8 @@ export class CustomerRepository {
         ? sql`AND COALESCE(inst_agg.total_installments, 0) = 0 AND COALESCE(sale_agg.total_sales, 0) > 0`
         : statusFilter === 'sem_compras'
         ? sql`AND COALESCE(sale_agg.total_sales, 0) = 0`
+        : statusFilter === 'em_processo'
+        ? sql`AND c.in_legal_process = 1`
         : sql``;
 
     const [dataRows] = await db.execute(sql`
@@ -85,6 +87,8 @@ export class CustomerRepository {
         c.ref3_phone           AS ref3Phone,
         c.ref3_relationship    AS ref3Relationship,
         (c.photo_file IS NOT NULL) AS hasPhoto,
+        c.in_legal_process     AS inLegalProcess,
+        c.legal_process_at     AS legalProcessAt,
         c.created_at           AS createdAt,
         c.updated_at           AS updatedAt,
         CASE

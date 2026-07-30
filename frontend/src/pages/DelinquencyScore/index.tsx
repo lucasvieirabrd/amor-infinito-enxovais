@@ -12,6 +12,7 @@ interface ScoreRow {
   name: string;
   cpf: string;
   phone: string;
+  in_legal_process?: boolean;
   renegotiations_count: number;
   has_renegotiation: boolean;
   late_payments: number;
@@ -219,18 +220,25 @@ export const DelinquencyScore: React.FC = () => {
               rows.map((row, idx) => {
                 const rank = (page - 1) * limit + idx + 1;
                 return (
-                  <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${row.in_legal_process ? 'bg-orange-50' : ''}`}>
                     <td className="px-4 py-3 text-gray-400 font-mono text-xs">{rank}</td>
                     <td className="px-4 py-3">
-                      <span className="font-medium text-gray-800">{row.name}</span>
-                      {row.has_renegotiation && (
-                        <span
-                          className="ml-2 text-xs text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded"
-                          title="Métricas calculadas sobre o acordo de renegociação"
-                        >
-                          ren.
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-gray-800">{row.name}</span>
+                        {row.in_legal_process && (
+                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title="Cliente em processo jurídico — excluído de toda cobrança automática">
+                            ⚖️ Processo
+                          </span>
+                        )}
+                        {row.has_renegotiation && (
+                          <span
+                            className="text-xs text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded"
+                            title="Métricas calculadas sobre o acordo de renegociação"
+                          >
+                            ren.
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{row.cpf || '—'}</td>
                     <td className="px-4 py-3 text-gray-600">{row.phone || '—'}</td>

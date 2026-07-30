@@ -22,6 +22,7 @@ import {
 } from 'react-icons/fi';
 import { Button, Card, Badge, Modal, Input, Loading } from '../../components/ui';
 import { format, isBefore, startOfDay } from 'date-fns';
+import { useAuth } from '../../hooks/useAuth';
 
 interface Installment {
   id: string;
@@ -38,6 +39,7 @@ interface CustomerCrediario {
   id: string;
   name: string;
   phone: string;
+  inLegalProcess?: boolean;
   installmentCount: number;
   totalPending: number;
   overdueCount: number;
@@ -109,6 +111,8 @@ export const Installments: React.FC = () => {
   const [isRenegotiating, setIsRenegotiating] = useState(false);
 
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const ITEMS_PER_PAGE = 15;
 
   // ── Queries ────────────────────────────────────────────────────────────────
@@ -208,6 +212,17 @@ export const Installments: React.FC = () => {
     },
     onError: (err: any) => {
       alert(err.response?.data?.message || 'Erro ao alterar dia de vencimento');
+    },
+  });
+
+  const toggleLegalProcessMutation = useMutation({
+    mutationFn: ({ id, inLegalProcess }: { id: string; inLegalProcess: boolean }) =>
+      api.patch(`/customers/${id}/legal-process`, { inLegalProcess }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['active-crediarios'] });
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Erro ao atualizar status jurídico');
     },
   });
 
@@ -545,7 +560,14 @@ export const Installments: React.FC = () => {
                   >
                     {/* Nome + telefone */}
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">{customer.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-gray-900 truncate">{customer.name}</p>
+                        {customer.inLegalProcess && (
+                          <span className="flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200">
+                            ⚖️ Processo
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5">
                         <FiMessageCircle size={12} />
                         {customer.phone}
@@ -591,6 +613,30 @@ export const Installments: React.FC = () => {
                       )}
                       <span className="text-[10px] text-gray-400 mt-0.5">alt. data</span>
                     </div>
+
+                    {/* Botão marcar/desmarcar processo jurídico (admin only) */}
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = !customer.inLegalProcess;
+                          const msg = next
+                            ? `Marcar ${customer.name} como em processo jurídico?\nEsta ação irá removê-lo de toda cobrança automática.`
+                            : `Retirar ${customer.name} do processo jurídico?`;
+                          if (window.confirm(msg)) {
+                            toggleLegalProcessMutation.mutate({ id: customer.id, inLegalProcess: next });
+                          }
+                        }}
+                        className={`flex-shrink-0 p-1.5 rounded transition text-sm ${
+                          customer.inLegalProcess
+                            ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                            : 'text-gray-400 hover:bg-orange-50 hover:text-orange-600'
+                        }`}
+                        title={customer.inLegalProcess ? 'Retirar do processo jurídico' : 'Marcar como em processo jurídico'}
+                      >
+                        ⚖️
+                      </button>
+                    )}
 
                     {/* Chevron */}
                     <div className="text-gray-400 ml-2">

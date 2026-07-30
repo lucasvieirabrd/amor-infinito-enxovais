@@ -12,6 +12,7 @@ export interface DelinquencyScoreRow {
   name: string;
   phone: string;
   cpf: string;
+  in_legal_process: boolean;
   renegotiations_count: number;
   has_renegotiation: boolean;
   late_payments: number;
@@ -86,6 +87,7 @@ async function fetchAllScores(search?: string): Promise<DelinquencyScoreRow[]> {
       c.name,
       c.phone,
       c.cpf,
+      c.in_legal_process,
       COALESCE(ren.ren_count, 0)  AS renegotiations_count,
       ren.latest_ren_id,
 
@@ -184,7 +186,7 @@ async function fetchAllScores(search?: string): Promise<DelinquencyScoreRow[]> {
       AND EXISTS (SELECT 1 FROM installments WHERE customer_id = c.id AND deleted_at IS NULL)
       ${searchCond}
     GROUP BY
-      c.id, c.name, c.phone, c.cpf,
+      c.id, c.name, c.phone, c.cpf, c.in_legal_process,
       ren.ren_count, ren.latest_ren_id,
       norendc.dc_count, rendc.dc_count
   `) as any;
@@ -210,6 +212,7 @@ async function fetchAllScores(search?: string): Promise<DelinquencyScoreRow[]> {
       name: row.name,
       phone: row.phone,
       cpf: row.cpf,
+      in_legal_process: Boolean(row.in_legal_process),
       renegotiations_count: Number(row.renegotiations_count),
       has_renegotiation: hasRen,
       // Expose the metrics that actually drove the score

@@ -26,6 +26,7 @@ interface BillingRecord {
   customerId: string;
   customerName: string;
   customerPhone: string;
+  inLegalProcess?: boolean;
   installmentNumber: number;
   dueDate: string;
   originalAmount: number;
@@ -39,6 +40,7 @@ interface CustomerGroup {
   customerId: string;
   customerName: string;
   customerPhone: string;
+  inLegalProcess?: boolean;
   installments: BillingRecord[];
   overdueCount: number;
   totalOverdue: number;
@@ -220,6 +222,7 @@ export const Billing: React.FC = () => {
           customerId: rec.customerId,
           customerName: rec.customerName,
           customerPhone: rec.customerPhone,
+          inLegalProcess: rec.inLegalProcess,
           installments: [],
           overdueCount: 0,
           totalOverdue: 0,
@@ -432,7 +435,14 @@ export const Billing: React.FC = () => {
                       >
                         <div className="flex items-center gap-4">
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900">{group.customerName}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-lg font-semibold text-gray-900">{group.customerName}</h3>
+                              {group.inLegalProcess && (
+                                <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title="Cliente em processo jurídico — cobrança automática bloqueada">
+                                  ⚖️ Processo
+                                </span>
+                              )}
+                            </div>
                             <p className="text-gray-600 flex items-center gap-2 mt-1 text-sm">
                               <FiMessageCircle size={14} />
                               {group.customerPhone}

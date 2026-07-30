@@ -89,6 +89,7 @@ export class InstallmentRepository {
         c.id,
         c.name,
         c.phone,
+        c.in_legal_process AS inLegalProcess,
         COUNT(i.id) AS installmentCount,
         COALESCE(SUM(i.original_amount - COALESCE(i.paid_amount, 0)), 0) AS totalPending,
         SUM(CASE
@@ -126,7 +127,7 @@ export class InstallmentRepository {
         AND i.deleted_at IS NULL
         AND c.deleted_at IS NULL
         ${searchCond}
-      GROUP BY c.id, c.name, c.phone, dca.lastDateChangeAt, dca.dateChangeCount
+      GROUP BY c.id, c.name, c.phone, c.in_legal_process, dca.lastDateChangeAt, dca.dateChangeCount
       ${filterHaving}
       ORDER BY overdueCount DESC, c.name ASC
       LIMIT ${limit} OFFSET ${offset}
@@ -164,6 +165,7 @@ export class InstallmentRepository {
         id: String(r.id),
         name: String(r.name),
         phone: String(r.phone),
+        inLegalProcess: Boolean(r.inLegalProcess),
         installmentCount: Number(r.installmentCount),
         totalPending: parseFloat(r.totalPending?.toString() ?? '0'),
         overdueCount: Number(r.overdueCount),

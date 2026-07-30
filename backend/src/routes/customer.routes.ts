@@ -37,6 +37,7 @@ customerRouter.delete('/:id/photo', ensureAuthorized(['admin']), customerControl
 
 customerRouter.get('/:id', customerController.getById);
 customerRouter.put('/:id', customerController.update);
+customerRouter.patch('/:id/legal-process', ensureAuthorized(['admin']), customerController.setLegalProcess);
 
 // Apenas admin pode realizar o soft delete de um cliente
 customerRouter.delete('/:id', ensureAuthorized(['admin']), customerController.delete);
