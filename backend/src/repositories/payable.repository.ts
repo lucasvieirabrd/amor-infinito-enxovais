@@ -13,7 +13,7 @@ export class PayableRepository {
     // NOTE: boleto_file (LONGBLOB) is intentionally excluded — only metadata columns included
     const rows = await db.execute(sql`
       SELECT
-        p.id, p.recurrence_id, p.description, p.category,
+        p.id, p.recurrence_id, p.installment_group_id, p.description, p.category,
         p.amount, p.due_date, p.status, p.paid_at, p.paid_amount, p.notes, p.created_by,
         p.created_at, p.updated_at,
         p.boleto_filename, p.boleto_mimetype, p.boleto_size, p.boleto_uploaded_at,
@@ -47,6 +47,7 @@ export class PayableRepository {
 
   async createPayable(data: {
     recurrenceId?: string | null;
+    installmentGroupId?: string | null;
     description: string;
     category: 'fixas' | 'fornecedores' | 'salarios' | 'impostos' | 'outras';
     amount?: number;
@@ -58,6 +59,7 @@ export class PayableRepository {
     await db.insert(payables).values({
       id,
       recurrenceId: data.recurrenceId ?? null,
+      installmentGroupId: data.installmentGroupId ?? null,
       description: data.description,
       category: data.category,
       amount: data.amount != null ? String(data.amount.toFixed(2)) : null,
@@ -321,6 +323,7 @@ export class PayableRepository {
     return {
       id: String(r.id),
       recurrenceId: r.recurrence_id ? String(r.recurrence_id) : null,
+      installmentGroupId: r.installment_group_id ? String(r.installment_group_id) : null,
       description: String(r.description),
       category: String(r.category),
       amount: r.amount != null ? parseFloat(r.amount) : null,

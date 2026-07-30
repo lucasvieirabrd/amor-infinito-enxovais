@@ -50,6 +50,7 @@ payableRouter.delete('/:id/boleto', controller.removeBoleto);
 
 // Payables CRUD
 payableRouter.get('/', controller.list);
+payableRouter.post('/installments', controller.createInstallments);
 payableRouter.post('/', controller.create);
 payableRouter.patch('/:id/pay', controller.pay);
 payableRouter.patch('/:id/revert', controller.revert);

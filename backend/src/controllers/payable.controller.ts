@@ -38,6 +38,22 @@ export class PayableController {
     res.status(201).json(created);
   };
 
+  createInstallments = async (req: Request, res: Response) => {
+    const { description, category, notes, installments } = req.body;
+    if (!Array.isArray(installments) || installments.length === 0) {
+      res.status(400).json({ message: 'Lista de parcelas inválida' });
+      return;
+    }
+    const result = await payableService.createInstallmentGroup({
+      description,
+      category,
+      notes,
+      createdBy: req.user?.id,
+      installments,
+    });
+    res.status(201).json(result);
+  };
+
   update = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { description, category, amount, dueDate, notes } = req.body;

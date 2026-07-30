@@ -1,9 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FiPlus, FiChevronLeft, FiChevronRight, FiEdit2, FiTrash2,
   FiCheckCircle, FiRotateCcw, FiAlertTriangle, FiClock,
-  FiDollarSign, FiRepeat, FiPaperclip, FiX, FiFileText, FiLoader,
+  FiDollarSign, FiRepeat, FiPaperclip, FiX, FiFileText, FiLoader, FiLayers,
 } from 'react-icons/fi';
 import api from '../../services/api';
 import { Navigate } from 'react-router-dom';
@@ -15,6 +15,7 @@ type PayableStatus = 'pending' | 'overdue' | 'paid';
 interface Payable {
   id: string;
   recurrenceId: string | null;
+  installmentGroupId: string | null;
   description: string;
   category: Category;
   amount: number | null;
@@ -328,6 +329,207 @@ const RecurrenceModal: React.FC<RecurrenceModalProps> = ({ initial, onClose, onS
   );
 };
 
+// ─── Modal: Create Installment Group ─────────────────────────────────────────
+
+interface InstallmentGroupModalProps {
+  onClose: () => void;
+  onSave: (data: any) => void;
+  saving: boolean;
+}
+
+const InstallmentGroupModal: React.FC<InstallmentGroupModalProps> = ({ onClose, onSave, saving }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState<Category>('fornecedores');
+  const [notes, setNotes] = useState('');
+  const [count, setCount] = useState('3');
+  const [firstDueDate, setFirstDueDate] = useState(today);
+  const [valueMode, setValueMode] = useState<'equal' | 'custom'>('equal');
+  const [equalAmount, setEqualAmount] = useState('');
+  const [customAmounts, setCustomAmounts] = useState<string[]>([]);
+
+  const n = Math.min(60, Math.max(2, Number(count) || 2));
+
+  const dueDates = useMemo(() => {
+    if (!firstDueDate) return [];
+    const [y, m, d] = firstDueDate.split('-').map(Number);
+    const dates: string[] = [];
+    for (let i = 0; i < n; i++) {
+      let mm = m + i;
+      let yy = y + Math.floor((mm - 1) / 12);
+      mm = ((mm - 1) % 12) + 1;
+      const daysInMonth = new Date(yy, mm, 0).getDate();
+      const dd = Math.min(d, daysInMonth);
+      dates.push(`${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`);
+    }
+    return dates;
+  }, [firstDueDate, n]);
+
+  useEffect(() => {
+    setCustomAmounts(prev => {
+      const arr = [...prev];
+      while (arr.length < n) arr.push('');
+      return arr.slice(0, n);
+    });
+  }, [n]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!description.trim() || dueDates.length === 0) return;
+    const installments = dueDates.map((dueDate, i) => ({
+      amount: valueMode === 'equal' ? Number(equalAmount) : Number(customAmounts[i] || '0'),
+      dueDate,
+    }));
+    if (installments.some(inst => inst.amount <= 0)) {
+      alert('Todos os valores devem ser positivos.');
+      return;
+    }
+    onSave({ description: description.trim(), category, notes: notes || null, installments });
+  };
+
+  const total = valueMode === 'equal' && equalAmount
+    ? Number(equalAmount) * n
+    : valueMode === 'custom'
+      ? customAmounts.reduce((s, v) => s + (Number(v) || 0), 0)
+      : null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="p-6 pb-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-800">Nova Conta Parcelada</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Gera N parcelas automaticamente a partir da data informada</p>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-6">
+          <form id="installment-form" onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Descrição *</label>
+              <input required type="text" value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Ex: Parcelamento Fornecedor X"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Categoria *</label>
+                <select value={category} onChange={e => setCategory(e.target.value as Category)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                  {(Object.keys(CATEGORY_LABELS) as Category[]).map(k => (
+                    <option key={k} value={k}>{CATEGORY_LABELS[k]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nº de parcelas *</label>
+                <input required type="number" min={2} max={60} value={count}
+                  onChange={e => setCount(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">1º vencimento *</label>
+                <input required type="date" value={firstDueDate}
+                  onChange={e => setFirstDueDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Valores</label>
+                <div className="flex rounded-lg border border-gray-300 overflow-hidden text-sm">
+                  <button type="button" onClick={() => setValueMode('equal')}
+                    className={`flex-1 px-3 py-2 ${valueMode === 'equal' ? 'bg-primary text-white' : 'hover:bg-gray-50 text-gray-700'}`}>
+                    Iguais
+                  </button>
+                  <button type="button" onClick={() => setValueMode('custom')}
+                    className={`flex-1 px-3 py-2 ${valueMode === 'custom' ? 'bg-primary text-white' : 'hover:bg-gray-50 text-gray-700'}`}>
+                    Individuais
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {valueMode === 'equal' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Valor por parcela *</label>
+                <input required type="number" min="0.01" step="0.01" value={equalAmount}
+                  onChange={e => setEqualAmount(e.target.value)} placeholder="R$ 0,00"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            </div>
+
+            {dueDates.length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2 flex items-center justify-between">
+                  <span>Parcelas geradas</span>
+                  {total ? <span className="text-xs text-gray-500 font-normal">Total: {fmtBRL(total)}</span> : null}
+                </p>
+                <div className="border border-gray-200 rounded-lg overflow-hidden max-h-52 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="text-left px-3 py-2 text-gray-500 font-medium">#</th>
+                        <th className="text-left px-3 py-2 text-gray-500 font-medium">Vencimento</th>
+                        <th className="text-right px-3 py-2 text-gray-500 font-medium">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dueDates.map((date, i) => (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td className="px-3 py-1.5 text-gray-500">{i + 1}/{n}</td>
+                          <td className="px-3 py-1.5 text-gray-700">{fmtDate(date + 'T12:00:00')}</td>
+                          <td className="px-3 py-1.5 text-right">
+                            {valueMode === 'equal' ? (
+                              <span className={equalAmount ? 'text-gray-800 font-medium' : 'text-gray-400 italic'}>
+                                {equalAmount ? fmtBRL(Number(equalAmount)) : '—'}
+                              </span>
+                            ) : (
+                              <input
+                                type="number" min="0.01" step="0.01"
+                                value={customAmounts[i] ?? ''}
+                                onChange={e => {
+                                  const arr = [...customAmounts];
+                                  arr[i] = e.target.value;
+                                  setCustomAmounts(arr);
+                                }}
+                                placeholder="0,00"
+                                className="w-24 text-right border border-gray-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </form>
+        </div>
+
+        <div className="p-6 pt-4 border-t border-gray-100 flex justify-end gap-2">
+          <button type="button" onClick={onClose}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button type="submit" form="installment-form" disabled={saving}
+            className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 disabled:opacity-50">
+            {saving ? 'Gerando...' : `Gerar ${n} Parcelas`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export const Payables: React.FC = () => {
@@ -346,6 +548,7 @@ export const Payables: React.FC = () => {
   const [payingPayable, setPayingPayable] = useState<Payable | null>(null);
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
   const [editingRecurrence, setEditingRecurrence] = useState<Recurrence | null>(null);
+  const [showInstallmentModal, setShowInstallmentModal] = useState(false);
 
   // Hidden file input for boleto upload; uploadTargetId tracks which payable
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -463,6 +666,12 @@ export const Payables: React.FC = () => {
   const removeBoleto = useMutation({
     mutationFn: (id: string) => api.delete(`/payables/${id}/boleto`),
     onSuccess: () => invalidate(),
+  });
+
+  const createInstallments = useMutation({
+    mutationFn: (d: any) => api.post('/payables/installments', d),
+    onSuccess: () => { invalidate(); setShowInstallmentModal(false); },
+    onError: (err: any) => alert(err?.response?.data?.message ?? err?.message ?? 'Erro ao criar parcelas.'),
   });
 
   const createRecurrence = useMutation({
@@ -584,6 +793,12 @@ export const Payables: React.FC = () => {
             <FiRepeat size={16} /> Nova Recorrência
           </button>
           <button
+            onClick={() => setShowInstallmentModal(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 text-sm"
+          >
+            <FiLayers size={16} /> Parcelado
+          </button>
+          <button
             onClick={() => boletoScanInputRef.current?.click()}
             disabled={parsingBoleto}
             title="Ler dados de um boleto PDF automaticamente"
@@ -700,6 +915,12 @@ export const Payables: React.FC = () => {
                           <span className="ml-2 text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded"
                             title="Gerada por recorrência">
                             <FiRepeat size={10} className="inline" />
+                          </span>
+                        )}
+                        {p.installmentGroupId && (
+                          <span className="ml-2 text-xs text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded"
+                            title="Parcela de compra parcelada">
+                            <FiLayers size={10} className="inline" />
                           </span>
                         )}
                         {p.notes && <p className="text-xs text-gray-400 mt-0.5">{p.notes}</p>}
@@ -925,6 +1146,13 @@ export const Payables: React.FC = () => {
         <RecurrenceModal initial={editingRecurrence} onClose={() => setEditingRecurrence(null)}
           onSave={d => updateRecurrence.mutate({ id: editingRecurrence.id, ...d })}
           saving={updateRecurrence.isPending} />
+      )}
+      {showInstallmentModal && (
+        <InstallmentGroupModal
+          onClose={() => setShowInstallmentModal(false)}
+          onSave={d => createInstallments.mutate(d)}
+          saving={createInstallments.isPending}
+        />
       )}
     </div>
   );

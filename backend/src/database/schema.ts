@@ -218,6 +218,7 @@ export const payableRecurrences = mysqlTable('payable_recurrences', {
 export const payables = mysqlTable('payables', {
   id: varchar('id', { length: 36 }).primaryKey(),
   recurrenceId: varchar('recurrence_id', { length: 36 }),
+  installmentGroupId: varchar('installment_group_id', { length: 36 }),
   description: varchar('description', { length: 255 }).notNull(),
   category: mysqlEnum('category', ['fixas', 'fornecedores', 'salarios', 'impostos', 'outras']).notNull(),
   amount: decimal('amount', { precision: 10, scale: 2 }),

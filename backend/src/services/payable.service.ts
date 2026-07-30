@@ -38,6 +38,42 @@ export class PayableService {
     });
   }
 
+  async createInstallmentGroup(data: {
+    description: string;
+    category: 'fixas' | 'fornecedores' | 'salarios' | 'impostos' | 'outras';
+    notes?: string;
+    createdBy?: string;
+    installments: Array<{ amount: number; dueDate: string }>;
+  }) {
+    const { installments, ...base } = data;
+    if (installments.length < 2 || installments.length > 60) {
+      throw new AppError('Número de parcelas deve ser entre 2 e 60', 400);
+    }
+    if (installments.some(i => i.amount <= 0)) {
+      throw new AppError('Valor de cada parcela deve ser positivo', 400);
+    }
+
+    const groupId = uuidv4();
+    const count = installments.length;
+    const created = [];
+
+    for (let i = 0; i < count; i++) {
+      const inst = installments[i];
+      const payable = await payableRepository.createPayable({
+        installmentGroupId: groupId,
+        description: `${base.description} (${i + 1}/${count})`,
+        category: base.category,
+        amount: inst.amount,
+        dueDate: new Date(inst.dueDate + 'T12:00:00'),
+        notes: base.notes,
+        createdBy: base.createdBy,
+      });
+      created.push(payable);
+    }
+
+    return { groupId, count, installments: created };
+  }
+
   async updatePayable(id: string, data: {
     description?: string;
     category?: 'fixas' | 'fornecedores' | 'salarios' | 'impostos' | 'outras';
