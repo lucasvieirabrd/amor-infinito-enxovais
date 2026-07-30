@@ -1,6 +1,6 @@
 // Extração determinística de boleto brasileiro — sem IA
 // Suporta: bancário (47 dígitos) e arrecadação/convênio (48 dígitos)
-// Inclui validação de DV (módulo 10) e 4 estratégias de busca em cascata
+// Inclui validação de DV (módulo 10) e 5 estratégias de busca em cascata
 
 // ── Fator de vencimento ────────────────────────────────────────────────────────
 //
@@ -129,16 +129,19 @@ function tryUtility(digits: string, strategy: string): BoletoParseResult | null 
  *
  * Formatos reconhecidos (exemplos):
  *   "BBBBB.BBBBB DDDDD.DDDDDD EEEEE.EEEEEE K FFFFFFFFFFFFFFFF"   (Bradesco, Itaú…)
- *   "BBBBB BBBBB DDDDD DDDDDD EEEEE EEEEEE K FFFFFFFFFFFFFFFF"   (sem pontos)
+ *   "BBBBB. BBBBB DDDDD. DDDDDD …"   (SICOOB e outros com espaço após ponto)
+ *   "BBBBB BBBBB DDDDD DDDDDD …"     (sem pontos)
  *   grupos separados por newlines ou múltiplos espaços
  *
- * Usa `\s*` entre grupos para tolerar newlines e espaços variados.
+ * Usa `[.\s]{0,3}` entre sub-grupos (até 3 chars não-dígito) para absorver
+ * layouts como "75691. 31258" (ponto + espaço) sem quebrar o matching.
  * DV validation filtra falsos positivos.
  */
 function strategy1_flexibleRegex(text: string): BoletoParseResult | null {
-  // Banco: 5+5 · 5+6 · 5+6 · 1 · 14  (separadores opcionais entre sub-grupos)
+  // Banco: 5+5 · 5+6 · 5+6 · 1 · 14
+  // [.\s]{0,3} tolera ". " (ponto-espaço) e variantes comuns do SICOOB/outros
   const bankRe =
-    /(\d{5})[.\s]?(\d{5})\s*(\d{5})[.\s]?(\d{6})\s*(\d{5})[.\s]?(\d{6})\s*(\d)\s*(\d{14})/g;
+    /(\d{5})[.\s]{0,3}(\d{5})\s*(\d{5})[.\s]{0,3}(\d{6})\s*(\d{5})[.\s]{0,3}(\d{6})\s*(\d)\s*(\d{14})/g;
   let m: RegExpExecArray | null;
   while ((m = bankRe.exec(text)) !== null) {
     const d = onlyDigits(m[1]+m[2]+m[3]+m[4]+m[5]+m[6]+m[7]+m[8]);
@@ -200,15 +203,47 @@ function strategy3_slidingWindow(text: string): BoletoParseResult | null {
  * Estratégia 4 – regex mais permissivo (4+5, 4+5 dígitos por grupo).
  *
  * Cobre bancos que usam grupos ligeiramente diferentes (ex: 4+5 em vez de 5+5).
+ * Também usa [.\s]{0,3} para ser consistente com strategy1.
  */
 function strategy4_looseBankRegex(text: string): BoletoParseResult | null {
-  const re = /(\d{4,5})[.\s]?(\d{4,6})\s*(\d{4,5})[.\s]?(\d{5,6})\s*(\d{4,5})[.\s]?(\d{5,6})\s*(\d)\s*(\d{14})/g;
+  const re = /(\d{4,5})[.\s]{0,3}(\d{4,6})\s*(\d{4,5})[.\s]{0,3}(\d{5,6})\s*(\d{4,5})[.\s]{0,3}(\d{5,6})\s*(\d)\s*(\d{14})/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     const d = onlyDigits(m[1]+m[2]+m[3]+m[4]+m[5]+m[6]+m[7]+m[8]);
     const r = tryBank(d, 'strategy4_looseRegex');
     if (r) return r;
   }
+  return null;
+}
+
+/**
+ * Estratégia 5 – janela deslizante sobre TODOS os dígitos do documento.
+ *
+ * Remove todos os caracteres não-numéricos do texto completo e desliza uma
+ * janela de 47 (bancário) ou 48 (arrecadação) dígitos validando o DV a cada
+ * posição. Funciona independente de como o pdf-parse extraiu o texto:
+ * pontos, espaços duplos, tabulações, quebras de linha, caracteres Unicode
+ * especiais — tudo é ignorado. A validação de DV (módulo 10 nos 3 campos)
+ * elimina falsos positivos.
+ *
+ * Cobre layouts do SICOOB e outros bancos onde as estratégias anteriores
+ * falham devido a separadores inesperados entre os blocos da linha digitável.
+ */
+function strategy5_allDigitsSlide(text: string): BoletoParseResult | null {
+  const all = text.replace(/\D/g, '');
+
+  // Bancário (47 dígitos): DV validation forte → baixíssimo risco de falso positivo
+  for (let i = 0; i <= all.length - 47; i++) {
+    const r = tryBank(all.slice(i, i + 47), `strategy5_bank_pos${i}`);
+    if (r) return r;
+  }
+
+  // Arrecadação (48 dígitos): sem DV obrigatório, mas indica pelo tipo
+  for (let i = 0; i <= all.length - 48; i++) {
+    const r = tryUtility(all.slice(i, i + 48), `strategy5_utility_pos${i}`);
+    if (r) return r;
+  }
+
   return null;
 }
 
@@ -220,6 +255,7 @@ export function parseLinhaDigitavel(text: string): BoletoParseResult {
     strategy2_lineByLine(text)    ??
     strategy3_slidingWindow(text) ??
     strategy4_looseBankRegex(text) ??
+    strategy5_allDigitsSlide(text) ??
     { linhaDigitavel: null, amount: null, dueDate: null, type: null }
   );
 }
