@@ -198,23 +198,30 @@ export class DashboardService {
     const toN = (v: any) => parseInt(v?.toString()   ?? '0') || 0;
 
     const [salesResult, receivedResult, receivableResult, overdueResult] = await Promise.all([
-      // Bloco A: vendas por forma de pagamento no período (mesma query do dashboard)
+      // Bloco A: vendas por forma de pagamento no período + contagem para ticket médio
       db.execute(sql`
         SELECT
           COALESCE(SUM(CASE WHEN payment_method = 'cash'        THEN total_amount ELSE 0 END), 0) AS cash_total,
           COALESCE(SUM(CASE WHEN payment_method = 'credit_card' THEN total_amount ELSE 0 END), 0) AS card_total,
           COALESCE(SUM(CASE WHEN payment_method = 'installment' THEN total_amount ELSE 0 END), 0) AS inst_total,
-          COALESCE(SUM(total_amount), 0) AS total
+          COALESCE(SUM(total_amount), 0) AS total,
+          COUNT(*) AS sale_count
         FROM sales
         WHERE deleted_at IS NULL
           AND is_imported = 0
           AND DATE(CONVERT_TZ(sale_date, '+00:00', '-03:00')) >= ${startDate}
           AND DATE(CONVERT_TZ(sale_date, '+00:00', '-03:00')) <= ${endDate}
       `),
-      // Bloco B: parcelas pagas no período
+      // Bloco B: parcelas pagas no período — mesma lógica do queryBillingData
+      // installment_number = 0 → entrada; >= 1 → parcela de crediário
       db.execute(sql`
-        SELECT COUNT(*) AS count,
-               COALESCE(SUM(paid_amount), 0) AS total
+        SELECT
+          COUNT(*)                                                                               AS count,
+          COALESCE(SUM(paid_amount), 0)                                                         AS total,
+          COALESCE(SUM(CASE WHEN installment_number >= 1 THEN paid_amount ELSE 0 END), 0)       AS installments_total,
+          COUNT(CASE WHEN installment_number >= 1 THEN 1 END)                                   AS installments_count,
+          COALESCE(SUM(CASE WHEN installment_number = 0 THEN paid_amount ELSE 0 END), 0)        AS entries_total,
+          COUNT(CASE WHEN installment_number = 0 THEN 1 END)                                    AS entries_count
         FROM installments
         WHERE status = 'paid'
           AND deleted_at IS NULL
@@ -248,10 +255,37 @@ export class DashboardService {
     const rec = (receivableResult[0] as any[])[0];
     const ovd = (overdueResult[0]    as any[])[0];
 
+    const saleCount  = toN(s?.sale_count);
+    const saleTotal  = toF(s?.total);
+    const avgTicket  = saleCount > 0 ? saleTotal / saleCount : 0;
+
+    const receivedTotal        = toF(rcv?.total);
+    const installmentsTotal    = toF(rcv?.installments_total);
+    const entriesTotal         = toF(rcv?.entries_total);
+    const partialSum           = Math.round((installmentsTotal + entriesTotal) * 100);
+    const expectedTotal        = Math.round(receivedTotal * 100);
+    if (partialSum !== expectedTotal) {
+      console.warn(
+        `[report] received breakdown mismatch: installments(${installmentsTotal}) + entries(${entriesTotal}) = ${(partialSum / 100).toFixed(2)} ≠ total(${receivedTotal})`,
+      );
+    }
+
     return {
       period:     { start: startDate, end: endDate },
-      sales:      { cash: toF(s?.cash_total), creditCard: toF(s?.card_total), installment: toF(s?.inst_total), total: toF(s?.total) },
-      received:   { total: toF(rcv?.total), count: toN(rcv?.count) },
+      sales: {
+        cash:        toF(s?.cash_total),
+        creditCard:  toF(s?.card_total),
+        installment: toF(s?.inst_total),
+        total:       saleTotal,
+        count:       saleCount,
+        avgTicket,
+      },
+      received: {
+        total: receivedTotal,
+        count: toN(rcv?.count),
+        installments: { total: installmentsTotal, count: toN(rcv?.installments_count) },
+        entries:      { total: entriesTotal,      count: toN(rcv?.entries_count) },
+      },
       receivable: { total: toF(rec?.total), count: toN(rec?.count) },
       overdue:    { total: toF(ovd?.total), count: toN(ovd?.count) },
     };
@@ -345,6 +379,8 @@ export async function generateDashboardReportPdf(data: ReportData): Promise<Buff
         <tr><td>Cartão de Crédito</td><td class="r">${brl(data.sales.creditCard)}</td></tr>
         <tr><td>Crediário</td><td class="r">${brl(data.sales.installment)}</td></tr>
         <tr class="total-row"><td>Total Geral</td><td class="r">${brl(data.sales.total)}</td></tr>
+        <tr><td style="color:#555;">Quantidade de vendas</td><td class="r" style="color:#555;">${data.sales.count} venda${data.sales.count !== 1 ? 's' : ''}</td></tr>
+        <tr><td style="color:#555;">Ticket médio</td><td class="r" style="color:#555;">${brl(data.sales.avgTicket)}</td></tr>
       </tbody>
     </table>
   </div>
@@ -352,14 +388,40 @@ export async function generateDashboardReportPdf(data: ReportData): Promise<Buff
   <!-- Bloco B: Recebimentos no período -->
   <div class="section">
     <div class="section-title">Recebimentos no Período</div>
-    <div class="section-sub">Parcelas de crediário pagas entre ${sd} e ${ed}.</div>
-    <div class="cards">
+    <div class="section-sub">Parcelas e entradas pagas entre ${sd} e ${ed} — a soma das origens abaixo iguala o total recebido.</div>
+    <div class="cards" style="margin-bottom:12px;">
       <div class="card info">
         <div class="card-label">Total Recebido</div>
         <div class="card-value">${brl(data.received.total)}</div>
-        <div class="card-sub">${data.received.count} parcela${data.received.count !== 1 ? 's' : ''} recebida${data.received.count !== 1 ? 's' : ''} no período</div>
+        <div class="card-sub">${data.received.count} lançamento${data.received.count !== 1 ? 's' : ''} recebido${data.received.count !== 1 ? 's' : ''} no período</div>
       </div>
     </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Origem</th>
+          <th class="r">Valor</th>
+          <th class="r">Qtd</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Parcelas de crediário</td>
+          <td class="r">${brl(data.received.installments.total)}</td>
+          <td class="r">${data.received.installments.count}</td>
+        </tr>
+        <tr>
+          <td>Entradas (pagamento à vista)</td>
+          <td class="r">${brl(data.received.entries.total)}</td>
+          <td class="r">${data.received.entries.count}</td>
+        </tr>
+        <tr class="total-row">
+          <td>Total</td>
+          <td class="r">${brl(data.received.total)}</td>
+          <td class="r">${data.received.count}</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
   <!-- Bloco C + D: Situação atual -->
