@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   FiTrendingUp, FiAlertTriangle, FiCheckCircle,
-  FiDollarSign, FiUsers, FiCreditCard, FiShoppingCart,
+  FiDollarSign, FiUsers, FiCreditCard, FiShoppingCart, FiDownload,
 } from 'react-icons/fi';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -15,6 +15,8 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import api from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
+import { toast } from 'react-toastify';
 
 // ── Types ─────────────────────────────────────────────────
 type Preset    = 'today' | 'yesterday' | 'week' | 'month' | 'year' | 'custom';
@@ -86,9 +88,40 @@ const VarBadge: React.FC<{ current: number; previous?: number }> = ({ current, p
 
 // ── Component ─────────────────────────────────────────────
 export const Dashboard: React.FC = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
   const [preset, setPreset]     = useState<Preset>('month');
   const [period, setPeriod]     = useState(() => getPresetDates('month'));
   const [compareTo, setCompareTo] = useState<CompareTo>('none');
+
+  // ── Relatório PDF ──────────────────────────────────────
+  const nowForReport = new Date();
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportStart, setReportStart]         = useState(format(startOfMonth(nowForReport), 'yyyy-MM-dd'));
+  const [reportEnd, setReportEnd]             = useState(format(endOfMonth(nowForReport),   'yyyy-MM-dd'));
+  const [reportLoading, setReportLoading]     = useState(false);
+
+  const handleDownloadReport = async () => {
+    setReportLoading(true);
+    try {
+      const res = await api.get('/dashboard/report/pdf', {
+        params: { startDate: reportStart, endDate: reportEnd },
+        responseType: 'blob',
+      });
+      const url  = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href  = url;
+      link.download = `relatorio-dashboard-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setShowReportModal(false);
+    } catch {
+      toast.error('Erro ao gerar o relatório. Tente novamente.');
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
   const applyPreset = (p: Preset) => {
     setPreset(p);
@@ -135,10 +168,70 @@ export const Dashboard: React.FC = () => {
     <div className="space-y-6">
 
       {/* ── Banner ── */}
-      <div className="bg-gradient-to-r from-primary to-secondary rounded-card shadow-card p-8 text-white">
-        <h1 className="text-3xl font-bold mb-2">Bem-vindo ao Amor Infinito!</h1>
-        <p className="text-white text-opacity-90">Hoje é {today}. Aqui está um resumo do seu negócio.</p>
+      <div className="bg-gradient-to-r from-primary to-secondary rounded-card shadow-card p-8 text-white flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Bem-vindo ao Amor Infinito!</h1>
+          <p className="text-white text-opacity-90">Hoje é {today}. Aqui está um resumo do seu negócio.</p>
+        </div>
+        {isAdmin && (
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="flex items-center gap-2 bg-white bg-opacity-20 hover:bg-opacity-30 transition-colors text-white text-sm font-medium px-4 py-2 rounded-lg shrink-0"
+          >
+            <FiDownload size={16} />
+            Exportar Relatório
+          </button>
+        )}
       </div>
+
+      {/* ── Modal Exportar Relatório ── */}
+      {showReportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-1">Exportar Relatório Financeiro</h2>
+            <p className="text-sm text-gray-500 mb-5">Selecione o período para o relatório em PDF.</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data inicial</label>
+                <input
+                  type="date"
+                  value={reportStart}
+                  onChange={e => setReportStart(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data final</label>
+                <input
+                  type="date"
+                  value={reportEnd}
+                  onChange={e => setReportEnd(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowReportModal(false)}
+                disabled={reportLoading}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDownloadReport}
+                disabled={reportLoading || !reportStart || !reportEnd}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-dark rounded-lg transition-colors disabled:opacity-50"
+              >
+                <FiDownload size={15} />
+                {reportLoading ? 'Gerando…' : 'Baixar PDF'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Filtro de Período ── */}
       <Card>

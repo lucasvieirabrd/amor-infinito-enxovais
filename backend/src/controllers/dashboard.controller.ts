@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { DashboardService } from '../services/dashboard.service';
+import { DashboardService, generateDashboardReportPdf } from '../services/dashboard.service';
 import { z } from 'zod';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 
@@ -27,5 +27,28 @@ export class DashboardController {
     });
 
     return res.json(metrics);
+  }
+
+  async getReportPdf(req: Request, res: Response) {
+    const schema = z.object({
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      endDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    });
+
+    const { startDate, endDate } = schema.parse(req.query);
+    const now = new Date();
+    const sd = startDate ?? format(startOfMonth(now), 'yyyy-MM-dd');
+    const ed = endDate   ?? format(endOfMonth(now),   'yyyy-MM-dd');
+
+    const data = await dashboardService.getReportData(sd, ed);
+    const pdf  = await generateDashboardReportPdf(data);
+
+    const today = format(new Date(), 'yyyy-MM-dd');
+    res.set({
+      'Content-Type':        'application/pdf',
+      'Content-Disposition': `attachment; filename="relatorio-dashboard-${today}.pdf"`,
+      'Content-Length':      String(pdf.length),
+    });
+    res.end(pdf);
   }
 }
