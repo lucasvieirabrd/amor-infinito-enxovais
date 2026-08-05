@@ -1,15 +1,18 @@
 import { db } from '../database';
-import { auditLogs } from '../database/schema';
+import { auditLogs, products as productsTable } from '../database/schema';
 import { SaleRepository } from '../repositories/sale.repository';
 import { ProductRepository } from '../repositories/product.repository';
+import { KitRepository } from '../repositories/kit.repository';
 import { DeliveryRepository } from '../repositories/delivery.repository';
 import { GoogleSheetsService } from '../integrations/googleSheets.service';
 import { AppError } from '../utils/AppError';
 import { v4 as uuidv4 } from 'uuid';
 import { addMonths } from 'date-fns';
+import { and, inArray, isNull } from 'drizzle-orm';
 
 const saleRepository = new SaleRepository();
 const productRepository = new ProductRepository();
+const kitRepository = new KitRepository();
 const deliveryRepository = new DeliveryRepository();
 const googleSheetsService = new GoogleSheetsService();
 
@@ -21,7 +24,39 @@ export class SaleService {
     console.log('[sale.register] downPayment recebido:', downPayment);
     console.log('[sale.register] downPaymentDate recebido:', downPaymentDate);
 
-    // Inicia transação de banco de dados
+    // Pre-load all products to detect kits before entering the transaction
+    const allProductIds = [...new Set(items.map((i: any) => i.productId as string))];
+    const productInfos = await db
+      .select()
+      .from(productsTable)
+      .where(and(inArray(productsTable.id, allProductIds), isNull(productsTable.deletedAt)));
+    const productMap = new Map(productInfos.map(p => [p.id, p]));
+
+    // Batch-load kit components for kit products
+    const kitProductIds = productInfos.filter(p => p.isKit).map(p => p.id);
+    const allComponents = kitProductIds.length > 0
+      ? await kitRepository.findComponentsByKitIds(kitProductIds)
+      : [];
+    const compsByKitId = new Map<string, typeof allComponents>();
+    for (const c of allComponents) {
+      if (!compsByKitId.has(c.kitProductId)) compsByKitId.set(c.kitProductId, []);
+      compsByKitId.get(c.kitProductId)!.push(c);
+    }
+
+    // Aggregate component needs: Map<componentProductId, totalQtyNeeded>
+    const componentNeeds = new Map<string, number>();
+    for (const item of items) {
+      const productInfo = productMap.get(item.productId);
+      if (!productInfo?.isKit) continue;
+      const comps = compsByKitId.get(item.productId) ?? [];
+      for (const comp of comps) {
+        componentNeeds.set(
+          comp.componentProductId,
+          (componentNeeds.get(comp.componentProductId) ?? 0) + comp.quantity * item.quantity,
+        );
+      }
+    }
+
     let hasFurniture = false;
 
     const result = await db.transaction(async (tx) => {
@@ -29,8 +64,11 @@ export class SaleService {
       // Map productId → catalog price for audit logging
       const catalogPrices: Record<string, number> = {};
 
-      // 1. Validar e reservar estoque (Lock Pessimista)
+      // 1. Não-kits — lock pessimista + decremento de estoque próprio
       for (const item of items) {
+        const productInfo = productMap.get(item.productId);
+        if (productInfo?.isKit) continue;
+
         const product = await productRepository.findByIdForUpdate(tx, item.productId);
         if (!product) {
           throw new AppError(`Produto com ID ${item.productId} não encontrado`, 404);
@@ -44,17 +82,49 @@ export class SaleService {
 
         catalogPrices[item.productId] = parseFloat(product.price.toString());
 
-        // Decrementar estoque local
         const newQuantity = product.quantity - item.quantity;
         await productRepository.updateStock(tx, product.id, newQuantity);
 
-        // Atualizar estoque no Google Sheets — apenas quantidade, nunca o preço
         if (product.sku) {
           await googleSheetsService.updateStockInSheet(product.sku, newQuantity);
         }
 
-        // Usar o preço editado pelo operador (não o preço do catálogo)
         totalAmount += item.unitPrice * item.quantity;
+      }
+
+      // 2. Kits — preço de catálogo computado a partir dos componentes, sem estoque próprio
+      for (const item of items) {
+        const productInfo = productMap.get(item.productId);
+        if (!productInfo?.isKit) continue;
+
+        if (productInfo.category === 'Móveis') hasFurniture = true;
+
+        const comps = compsByKitId.get(item.productId) ?? [];
+        const computedPrice = comps.reduce((sum, c) => {
+          const p = typeof c.componentPrice === 'string' ? parseFloat(c.componentPrice) : (c.componentPrice as number);
+          return sum + p * c.quantity;
+        }, 0);
+        catalogPrices[item.productId] = computedPrice;
+        totalAmount += item.unitPrice * item.quantity;
+      }
+
+      // 3. Decremento dos componentes — FOR UPDATE por componente único
+      for (const [componentId, totalQty] of componentNeeds) {
+        const component = await productRepository.findByIdForUpdate(tx, componentId);
+        if (!component) {
+          throw new AppError(`Componente do kit não encontrado (ID: ${componentId})`, 404);
+        }
+        if (component.quantity < totalQty) {
+          throw new AppError(
+            `Estoque insuficiente do componente "${component.name}" para atender aos kits (disponível: ${component.quantity}, necessário: ${totalQty})`,
+            400,
+          );
+        }
+        const newQuantity = component.quantity - totalQty;
+        await productRepository.updateStock(tx, component.id, newQuantity);
+        if (component.sku) {
+          await googleSheetsService.updateStockInSheet(component.sku, newQuantity);
+        }
       }
 
       // 2. Criar a venda
@@ -214,17 +284,63 @@ export class SaleService {
         throw new AppError('Esta venda já foi cancelada', 400);
       }
 
-      // 2. Reverter estoque dos produtos
+      // 2. Reverter estoque dos produtos (incluindo componentes de kits)
       const saleItems = sale.items || [];
+
+      // Pre-load product infos to detect kits
+      const cancelProductIds = [...new Set(saleItems.map((i: any) => i.productId as string))];
+      const cancelProductInfos = cancelProductIds.length > 0
+        ? await db.select().from(productsTable).where(inArray(productsTable.id, cancelProductIds))
+        : [];
+      const cancelProductMap = new Map(cancelProductInfos.map(p => [p.id, p]));
+
+      const cancelKitProductIds = cancelProductInfos.filter(p => p.isKit).map(p => p.id);
+      const cancelAllComponents = cancelKitProductIds.length > 0
+        ? await kitRepository.findComponentsByKitIds(cancelKitProductIds)
+        : [];
+      const cancelCompsByKitId = new Map<string, typeof cancelAllComponents>();
+      for (const c of cancelAllComponents) {
+        if (!cancelCompsByKitId.has(c.kitProductId)) cancelCompsByKitId.set(c.kitProductId, []);
+        cancelCompsByKitId.get(c.kitProductId)!.push(c);
+      }
+
+      // Aggregate component restorations
+      const componentRestorations = new Map<string, number>();
       for (const item of saleItems) {
+        const productInfo = cancelProductMap.get(item.productId);
+        if (!productInfo?.isKit) continue;
+        const comps = cancelCompsByKitId.get(item.productId) ?? [];
+        for (const comp of comps) {
+          componentRestorations.set(
+            comp.componentProductId,
+            (componentRestorations.get(comp.componentProductId) ?? 0) + comp.quantity * item.quantity,
+          );
+        }
+      }
+
+      // Restore non-kit product stocks
+      for (const item of saleItems) {
+        const productInfo = cancelProductMap.get(item.productId);
+        if (productInfo?.isKit) continue;
+
         const product = await productRepository.findByIdForUpdate(tx, item.productId);
         if (product) {
           const newQuantity = product.quantity + item.quantity;
           await productRepository.updateStock(tx, product.id, newQuantity);
-
-          // Atualizar estoque no Google Sheets
           if (product.sku) {
             await googleSheetsService.updateStockInSheet(product.sku, newQuantity);
+          }
+        }
+      }
+
+      // Restore component stocks for kit items
+      for (const [componentId, restoreQty] of componentRestorations) {
+        const component = await productRepository.findByIdForUpdate(tx, componentId);
+        if (component) {
+          const newQuantity = component.quantity + restoreQty;
+          await productRepository.updateStock(tx, component.id, newQuantity);
+          if (component.sku) {
+            await googleSheetsService.updateStockInSheet(component.sku, newQuantity);
           }
         }
       }

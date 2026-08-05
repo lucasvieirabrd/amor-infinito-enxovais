@@ -29,6 +29,7 @@ interface Product {
   price: string | number;
   priceDisplay?: string;
   quantity: number;
+  isKit?: boolean;
 }
 
 interface CartItem {
@@ -329,7 +330,12 @@ export const Sales: React.FC = () => {
                         className={`w-full text-left px-4 py-3 border-b last:border-0 transition-colors flex justify-between items-center ${semPreco ? 'bg-red-50 hover:bg-red-100 cursor-not-allowed' : 'hover:bg-background'}`}
                       >
                         <div>
-                          <p className="font-semibold text-gray-900">{p.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-gray-900">{p.name}</p>
+                            {p.isKit && (
+                              <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5">KIT</span>
+                            )}
+                          </div>
                           {p.description && (
                             <p className="text-xs text-gray-500">{p.description}</p>
                           )}
@@ -361,7 +367,12 @@ export const Sales: React.FC = () => {
                     return (
                       <div key={item.product.id} className="flex items-center justify-between p-3 bg-background rounded-lg border border-gray-200 hover:border-primary transition-colors">
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900">{item.product.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-gray-900">{item.product.name}</p>
+                            {item.product.isKit && (
+                              <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5 shrink-0">KIT</span>
+                            )}
+                          </div>
                           {item.product.description && (
                             <p className="text-xs text-gray-500">{item.product.description}</p>
                           )}

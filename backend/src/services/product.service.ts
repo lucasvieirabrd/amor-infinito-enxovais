@@ -1,4 +1,5 @@
 import { ProductRepository } from '../repositories/product.repository';
+import { KitRepository } from '../repositories/kit.repository';
 import { GoogleSheetsService } from '../integrations/googleSheets.service';
 import { AppError } from '../utils/AppError';
 import { db } from '../database';
@@ -6,6 +7,7 @@ import { auditLogs } from '../database/schema';
 import { v4 as uuidv4 } from 'uuid';
 
 const productRepository = new ProductRepository();
+const kitRepository = new KitRepository();
 const googleSheetsService = new GoogleSheetsService();
 
 export class ProductService {
@@ -29,7 +31,37 @@ export class ProductService {
   }
 
   async list(page = 1, limit = 10, search?: string, category?: string) {
-    return productRepository.list(page, limit, search, category);
+    const result = await productRepository.list(page, limit, search, category);
+
+    const kitIds = result.data.filter(p => p.isKit).map(p => p.id);
+    if (kitIds.length === 0) return result;
+
+    const allComponents = await kitRepository.findComponentsByKitIds(kitIds);
+    const compsByKitId = new Map<string, typeof allComponents>();
+    for (const c of allComponents) {
+      if (!compsByKitId.has(c.kitProductId)) compsByKitId.set(c.kitProductId, []);
+      compsByKitId.get(c.kitProductId)!.push(c);
+    }
+
+    const enriched = result.data.map(p => {
+      if (!p.isKit) return p;
+      const comps = compsByKitId.get(p.id) ?? [];
+      let computedPrice = 0;
+      let effectiveStock = comps.length > 0 ? Infinity : 0;
+      for (const c of comps) {
+        const price = typeof c.componentPrice === 'string' ? parseFloat(c.componentPrice) : (c.componentPrice as number);
+        computedPrice += price * c.quantity;
+        const stock = Math.floor((c.componentStock ?? 0) / c.quantity);
+        if (stock < effectiveStock) effectiveStock = stock;
+      }
+      return {
+        ...p,
+        price: computedPrice.toFixed(2) as any,
+        quantity: effectiveStock === Infinity ? 0 : effectiveStock,
+      };
+    });
+
+    return { ...result, data: enriched };
   }
 
   async listCategories() {

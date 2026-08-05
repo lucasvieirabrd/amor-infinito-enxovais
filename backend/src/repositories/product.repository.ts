@@ -51,7 +51,7 @@ export class ProductRepository {
     return db.select().from(products).where(inArray(products.sku, skus));
   }
 
-  /** Retorna todos os produtos ativos com SKU não vazio — para cálculo dos candidatos a remoção. */
+  /** Retorna todos os produtos ativos com SKU não vazio — para cálculo dos candidatos a remoção. Exclui kits. */
   async findActiveWithSku() {
     return db
       .select({ id: products.id, sku: products.sku, name: products.name, category: products.category, quantity: products.quantity })
@@ -60,6 +60,7 @@ export class ProductRepository {
         isNull(products.deletedAt),
         isNotNull(products.sku),
         sql`TRIM(${products.sku}) != ''`,
+        eq(products.isKit, false),
       ));
   }
 

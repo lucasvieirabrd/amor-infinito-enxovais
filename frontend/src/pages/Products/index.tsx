@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
-import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit, FiChevronLeft, FiChevronRight, FiFileText, FiTrash2 } from 'react-icons/fi';
+import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit, FiChevronLeft, FiChevronRight, FiFileText, FiTrash2, FiLayers } from 'react-icons/fi';
 import { Button, Card, Badge, Loading, Modal, Input } from '../../components/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { NfImportModal } from './NfImportModal';
+import { KitModal } from './KitModal';
 import { toast } from 'react-toastify';
 
 interface Product {
@@ -16,6 +17,27 @@ interface Product {
   priceDisplay?: string;
   quantity: number;
   minStockLevel: number;
+  isKit: boolean;
+}
+
+interface KitComponent {
+  componentProductId: string;
+  componentName: string;
+  componentSku: string | null;
+  quantity: number;
+  unitPrice: number;
+}
+
+interface Kit {
+  id: string;
+  name: string;
+  sku: string | null;
+  category: string | null;
+  description: string | null;
+  minStockLevel: number;
+  price: string | number;
+  quantity: number;
+  components: KitComponent[];
 }
 
 interface PaginatedResponse {
@@ -60,6 +82,12 @@ export const Products: React.FC = () => {
   const [removalCandidates, setRemovalCandidates] = useState<RemovalCandidate[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showRemovalModal, setShowRemovalModal] = useState(false);
+
+  // Estado de gerenciamento de kits
+  const [showKitPanel, setShowKitPanel] = useState(false);
+  const [editingKit, setEditingKit] = useState<Kit | null>(null);
+  const [showKitModal, setShowKitModal] = useState(false);
+  const [deletingKitId, setDeletingKitId] = useState<string | null>(null);
 
   const ITEMS_PER_PAGE = 12;
 
@@ -149,6 +177,64 @@ export const Products: React.FC = () => {
     },
   });
 
+  const { data: kits = [], isLoading: kitsLoading } = useQuery<Kit[]>({
+    queryKey: ['kits'],
+    queryFn: async () => {
+      const res = await api.get('/kits');
+      return res.data as Kit[];
+    },
+    enabled: showKitPanel,
+  });
+
+  const createKitMutation = useMutation({
+    mutationFn: (data: any) => api.post('/kits', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kits'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      setShowKitModal(false);
+      setEditingKit(null);
+      toast.success('Kit criado com sucesso!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Erro ao criar kit.');
+    },
+  });
+
+  const updateKitMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => api.put(`/kits/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kits'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      setShowKitModal(false);
+      setEditingKit(null);
+      toast.success('Kit atualizado com sucesso!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Erro ao atualizar kit.');
+    },
+  });
+
+  const deleteKitMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/kits/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kits'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      setDeletingKitId(null);
+      toast.success('Kit removido com sucesso!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Erro ao remover kit.');
+    },
+  });
+
+  const handleKitSave = (data: any) => {
+    if (editingKit) {
+      updateKitMutation.mutate({ id: editingKit.id, data });
+    } else {
+      createKitMutation.mutate(data);
+    }
+  };
+
   const handleEditClick = (product: Product) => {
     setEditingProduct(product);
     setEditFormData({
@@ -221,15 +307,26 @@ export const Products: React.FC = () => {
               {syncMutation.isPending ? 'Sincronizando...' : 'Sincronizar Planilha'}
             </Button>
             {user?.role === 'admin' && (
-              <Button
-                variant="secondary"
-                size="lg"
-                onClick={() => setShowNfImport(true)}
-                className="flex items-center gap-2"
-              >
-                <FiFileText size={20} />
-                Importar Nota
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => setShowKitPanel(v => !v)}
+                  className="flex items-center gap-2"
+                >
+                  <FiLayers size={20} />
+                  {showKitPanel ? 'Ocultar Kits' : 'Gerenciar Kits'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => setShowNfImport(true)}
+                  className="flex items-center gap-2"
+                >
+                  <FiFileText size={20} />
+                  Importar Nota
+                </Button>
+              </>
             )}
             <Button variant="primary" size="lg" className="flex items-center gap-2">
               <FiPlus size={20} />
@@ -269,6 +366,67 @@ export const Products: React.FC = () => {
           </div>
         </Card>
 
+        {/* Painel de Kits */}
+        {showKitPanel && user?.role === 'admin' && (
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <FiLayers className="text-purple-600" size={20} />
+                <h2 className="text-lg font-bold text-gray-900">Kits cadastrados</h2>
+                <Badge variant="primary">{kits.length}</Badge>
+              </div>
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={() => { setEditingKit(null); setShowKitModal(true); }}
+                className="flex items-center gap-2"
+              >
+                <FiPlus size={18} /> Novo Kit
+              </Button>
+            </div>
+
+            {kitsLoading ? (
+              <Loading />
+            ) : kits.length === 0 ? (
+              <p className="text-center text-gray-400 py-6">Nenhum kit cadastrado</p>
+            ) : (
+              <div className="space-y-2">
+                {kits.map(kit => (
+                  <div key={kit.id} className="flex items-center justify-between p-3 bg-purple-50 border border-purple-100 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-900">{kit.name}</span>
+                        {kit.sku && <span className="text-xs text-gray-400 font-mono">{kit.sku}</span>}
+                        {kit.category && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">{kit.category}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {kit.components.length} componente(s) · Estoque efetivo: {kit.quantity} un
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 ml-4 shrink-0">
+                      <span className="font-bold text-purple-700">R$ {parseFloat(kit.price.toString()).toFixed(2)}</span>
+                      <button
+                        onClick={() => { setEditingKit(kit); setShowKitModal(true); }}
+                        className="p-1.5 hover:bg-purple-100 rounded text-purple-600 transition"
+                      >
+                        <FiEdit size={16} />
+                      </button>
+                      <button
+                        onClick={() => setDeletingKitId(kit.id)}
+                        className="p-1.5 hover:bg-red-50 rounded text-red-400 hover:text-red-600 transition"
+                      >
+                        <FiTrash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
+
         {/* Grade de produtos */}
         <div>
           {isLoading ? (
@@ -278,19 +436,27 @@ export const Products: React.FC = () => {
               {(response?.data || []).map((product) => (
                 <Card key={product.id} className="p-4 hover:shadow-lg transition">
                   <div className="flex items-start justify-between mb-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <FiBox className="text-primary" size={20} />
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${product.isKit ? 'bg-purple-100' : 'bg-primary/10'}`}>
+                      {product.isKit
+                        ? <FiLayers className="text-purple-600" size={20} />
+                        : <FiBox className="text-primary" size={20} />
+                      }
                     </div>
                     <div className="flex items-center gap-1.5">
-                      {parseFloat(product.price.toString()) === 0 && (
+                      {product.isKit && (
+                        <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5">KIT</span>
+                      )}
+                      {parseFloat(product.price.toString()) === 0 && !product.isKit && (
                         <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">⚠ sem preço</span>
                       )}
-                      <button
-                        onClick={() => handleEditClick(product)}
-                        className="p-1.5 hover:bg-blue-50 rounded text-blue-600 transition"
-                      >
-                        <FiEdit size={16} />
-                      </button>
+                      {!product.isKit && (
+                        <button
+                          onClick={() => handleEditClick(product)}
+                          className="p-1.5 hover:bg-blue-50 rounded text-blue-600 transition"
+                        >
+                          <FiEdit size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -427,6 +593,40 @@ export const Products: React.FC = () => {
               onClick={() => setEditingProduct(null)}
               className="flex-1"
             >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <KitModal
+        isOpen={showKitModal}
+        kit={editingKit}
+        onClose={() => { setShowKitModal(false); setEditingKit(null); }}
+        onSave={handleKitSave}
+        isSaving={createKitMutation.isPending || updateKitMutation.isPending}
+        categories={categories}
+      />
+
+      {/* Confirmação de exclusão de kit */}
+      <Modal
+        isOpen={!!deletingKitId}
+        onClose={() => setDeletingKitId(null)}
+        title="Remover Kit"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Tem certeza que deseja remover este kit? O estoque dos componentes <strong>não</strong> será afetado.
+          </p>
+          <div className="flex gap-3">
+            <Button
+              onClick={() => deletingKitId && deleteKitMutation.mutate(deletingKitId)}
+              loading={deleteKitMutation.isPending}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+            >
+              Remover
+            </Button>
+            <Button variant="secondary" onClick={() => setDeletingKitId(null)} className="flex-1">
               Cancelar
             </Button>
           </div>

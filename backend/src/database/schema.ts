@@ -59,6 +59,17 @@ export const products = mysqlTable("products", {
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   minStockLevel: int("min_stock_level").notNull().default(0),
   cost: decimal("cost", { precision: 10, scale: 2 }),
+  isKit: boolean("is_kit").notNull().default(false),
+  createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime("updated_at").notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  deletedAt: datetime("deleted_at"),
+});
+
+export const kitComponents = mysqlTable("kit_components", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  kitProductId: varchar("kit_product_id", { length: 36 }).notNull(),
+  componentProductId: varchar("component_product_id", { length: 36 }).notNull(),
+  quantity: int("quantity").notNull().default(1),
   createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime("updated_at").notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime("deleted_at"),
