@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
-import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit, FiChevronLeft, FiChevronRight, FiFileText } from 'react-icons/fi';
+import { FiSearch, FiRefreshCw, FiAlertTriangle, FiPlus, FiBox, FiEdit, FiChevronLeft, FiChevronRight, FiFileText, FiTrash2 } from 'react-icons/fi';
 import { Button, Card, Badge, Loading, Modal, Input } from '../../components/ui';
 import { useAuth } from '../../hooks/useAuth';
 import { NfImportModal } from './NfImportModal';
+import { toast } from 'react-toastify';
 
 interface Product {
   id: string;
@@ -25,6 +26,25 @@ interface PaginatedResponse {
   totalPages: number;
 }
 
+interface RemovalCandidate {
+  id: string;
+  sku: string;
+  name: string;
+  category: string | null;
+  quantity: number;
+}
+
+interface SyncResult {
+  upsertSummary: { created: number; updated: number; revived: number; skipped: number };
+  removalCandidates: RemovalCandidate[];
+  sanityWarning?: string;
+}
+
+interface ConfirmRemovalResult {
+  removed: number;
+  skippedReappeared: Array<{ id: string; sku: string; name: string }>;
+}
+
 export const Products: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -35,6 +55,11 @@ export const Products: React.FC = () => {
   const [showNfImport, setShowNfImport] = useState(false);
   const queryClient = useQueryClient();
   const { user } = useAuth();
+
+  // Estado do modal de remoção
+  const [removalCandidates, setRemovalCandidates] = useState<RemovalCandidate[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showRemovalModal, setShowRemovalModal] = useState(false);
 
   const ITEMS_PER_PAGE = 12;
 
@@ -59,12 +84,56 @@ export const Products: React.FC = () => {
 
   const syncMutation = useMutation({
     mutationFn: () => api.post('/products/sync'),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
-      alert('Sincronização com Google Sheets concluída com sucesso!');
+      const data = res.data as SyncResult;
+      const s = data.upsertSummary;
+
+      const summaryParts = [`${s.created} criado(s)`, `${s.updated} atualizado(s)`];
+      if (s.revived > 0) summaryParts.push(`${s.revived} reativado(s)`);
+      const summaryMsg = summaryParts.join(', ');
+
+      if (data.sanityWarning) {
+        toast.warn(data.sanityWarning, { autoClose: 8000 });
+        toast.success(`Sync concluído: ${summaryMsg}.`);
+        return;
+      }
+
+      if (data.removalCandidates?.length > 0) {
+        setRemovalCandidates(data.removalCandidates);
+        setSelectedIds(new Set(data.removalCandidates.map(p => p.id)));
+        setShowRemovalModal(true);
+        toast.success(`Sync concluído: ${summaryMsg}. ${data.removalCandidates.length} produto(s) ausente(s) da planilha — confirme a remoção.`);
+      } else {
+        toast.success(`Sincronização concluída! ${summaryMsg}.`);
+      }
     },
     onError: () => {
-      alert('Erro ao sincronizar com Google Sheets. Verifique as credenciais.');
+      toast.error('Erro ao sincronizar com Google Sheets. Verifique as credenciais.');
+    },
+  });
+
+  const confirmRemovalMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      api.post('/products/confirm-removal', { productIds: ids }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      const data = res.data as ConfirmRemovalResult;
+      setShowRemovalModal(false);
+      setRemovalCandidates([]);
+      setSelectedIds(new Set());
+
+      if (data.skippedReappeared?.length > 0) {
+        toast.info(
+          `${data.removed} produto(s) removido(s). ${data.skippedReappeared.length} ignorado(s) pois reapareceram na planilha.`,
+          { autoClose: 7000 },
+        );
+      } else {
+        toast.success(`${data.removed} produto(s) removido(s) com sucesso.`);
+      }
+    },
+    onError: () => {
+      toast.error('Erro ao confirmar remoção. Tente novamente.');
     },
   });
 
@@ -73,10 +142,10 @@ export const Products: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       setEditingProduct(null);
-      alert('Produto atualizado com sucesso!');
+      toast.success('Produto atualizado com sucesso!');
     },
     onError: () => {
-      alert('Erro ao atualizar produto.');
+      toast.error('Erro ao atualizar produto.');
     },
   });
 
@@ -96,6 +165,23 @@ export const Products: React.FC = () => {
         category: editFormData.category || null,
       });
     }
+  };
+
+  const toggleRemovalId = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleConfirmRemoval = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) {
+      toast.warn('Nenhum produto selecionado para remoção.');
+      return;
+    }
+    confirmRemovalMutation.mutate(ids);
   };
 
   const lowStockCount = response?.data?.filter((p) => p.quantity <= p.minStockLevel).length || 0;
@@ -128,6 +214,7 @@ export const Products: React.FC = () => {
               size="lg"
               onClick={() => syncMutation.mutate()}
               loading={syncMutation.isPending}
+              disabled={syncMutation.isPending}
               className="flex items-center gap-2"
             >
               <FiRefreshCw size={20} />
@@ -345,6 +432,111 @@ export const Products: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* ── Modal de Confirmação de Remoção ── */}
+      {showRemovalModal && user?.role === 'admin' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-16 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl">
+            {/* Header */}
+            <div className="flex items-start gap-3 p-6 border-b border-gray-100">
+              <div className="p-2 bg-red-50 rounded-lg shrink-0">
+                <FiTrash2 className="text-red-600" size={20} />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Confirmar Remoção de Produtos</h2>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Os produtos abaixo estão ativos no sistema mas <strong>não foram encontrados na planilha</strong>.
+                  Desmarque os que quiser manter e clique em "Confirmar exclusão".
+                </p>
+              </div>
+            </div>
+
+            {/* Tabela */}
+            <div className="overflow-x-auto max-h-96 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3 text-left w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.size === removalCandidates.length}
+                        onChange={() => {
+                          if (selectedIds.size === removalCandidates.length) {
+                            setSelectedIds(new Set());
+                          } else {
+                            setSelectedIds(new Set(removalCandidates.map(p => p.id)));
+                          }
+                        }}
+                        className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                      />
+                    </th>
+                    <th className="px-4 py-3 text-left text-gray-600 font-medium">Código (SKU)</th>
+                    <th className="px-4 py-3 text-left text-gray-600 font-medium">Nome</th>
+                    <th className="px-4 py-3 text-left text-gray-600 font-medium">Categoria</th>
+                    <th className="px-4 py-3 text-right text-gray-600 font-medium">Estoque</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {removalCandidates.map(p => (
+                    <tr
+                      key={p.id}
+                      onClick={() => toggleRemovalId(p.id)}
+                      className={`cursor-pointer transition-colors ${selectedIds.has(p.id) ? 'bg-red-50' : 'hover:bg-gray-50'}`}
+                    >
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(p.id)}
+                          onChange={() => toggleRemovalId(p.id)}
+                          onClick={e => e.stopPropagation()}
+                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        />
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.sku}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
+                      <td className="px-4 py-3 text-gray-500">{p.category || '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`font-semibold ${p.quantity === 0 ? 'text-gray-400' : 'text-gray-700'}`}>
+                          {p.quantity} un
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-100">
+              <p className="text-sm text-gray-500">
+                <span className="font-semibold text-red-600">{selectedIds.size}</span> de {removalCandidates.length} selecionado(s) para remoção
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowRemovalModal(false);
+                    setRemovalCandidates([]);
+                    setSelectedIds(new Set());
+                  }}
+                  disabled={confirmRemovalMutation.isPending}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleConfirmRemoval}
+                  loading={confirmRemovalMutation.isPending}
+                  disabled={confirmRemovalMutation.isPending || selectedIds.size === 0}
+                  className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-2"
+                >
+                  <FiTrash2 size={15} />
+                  {confirmRemovalMutation.isPending ? 'Removendo...' : `Confirmar exclusão (${selectedIds.size})`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

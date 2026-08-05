@@ -20,6 +20,9 @@ productRouter.put('/:id', ensureAuthorized(['admin']), productController.update)
 productRouter.delete('/:id', ensureAuthorized(['admin']), productController.delete);
 
 // Endpoint de sincronização manual apenas para Admin
-productRouter.post('/sync', ensureAuthorized(['admin']), productController.sync);
+productRouter.post('/sync', ensureAuthorized(['admin']), (req, res) => productController.sync(req, res));
+
+// Confirmação de remoção dos candidatos retornados pelo sync — admin-only
+productRouter.post('/confirm-removal', ensureAuthorized(['admin']), (req, res) => productController.confirmRemoval(req, res));
 
 export { productRouter };

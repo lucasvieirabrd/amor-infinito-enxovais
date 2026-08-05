@@ -1,6 +1,6 @@
 import { db } from '../database';
 import { products } from '../database/schema';
-import { eq, and, isNull, or, like, sql } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, inArray, or, like, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { MySqlTransaction } from 'drizzle-orm/mysql-core';
 
@@ -34,6 +34,59 @@ export class ProductRepository {
       .where(and(eq(products.id, id), isNull(products.deletedAt)))
       .for('update');
     return result[0];
+  }
+
+  /** Batch load por IDs — inclui soft-deletados (para snapshot de auditoria). */
+  async findByIds(ids: string[]) {
+    if (ids.length === 0) return [];
+    return db.select().from(products).where(inArray(products.id, ids));
+  }
+
+  /**
+   * Batch load por SKUs — inclui soft-deletados.
+   * Usado no upsert do sync para detectar revive-on-reappear sem N+1.
+   */
+  async findAllBySkus(skus: string[]) {
+    if (skus.length === 0) return [];
+    return db.select().from(products).where(inArray(products.sku, skus));
+  }
+
+  /** Retorna todos os produtos ativos com SKU não vazio — para cálculo dos candidatos a remoção. */
+  async findActiveWithSku() {
+    return db
+      .select({ id: products.id, sku: products.sku, name: products.name, category: products.category, quantity: products.quantity })
+      .from(products)
+      .where(and(
+        isNull(products.deletedAt),
+        isNotNull(products.sku),
+        sql`TRIM(${products.sku}) != ''`,
+      ));
+  }
+
+  /** Conta produtos ativos (para trava de sanidade do sync). */
+  async countActives(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(products)
+      .where(isNull(products.deletedAt));
+    return Number(result[0].count);
+  }
+
+  /** Revive produto soft-deletado (zera deleted_at). */
+  async revive(id: string) {
+    await db
+      .update(products)
+      .set({ deletedAt: null, updatedAt: new Date() })
+      .where(eq(products.id, id));
+  }
+
+  /** Soft-delete em lote — uma única query UPDATE com IN. */
+  async softDeleteBatch(ids: string[]) {
+    if (ids.length === 0) return;
+    await db
+      .update(products)
+      .set({ deletedAt: new Date() })
+      .where(inArray(products.id, ids));
   }
 
   async list(page: number, limit: number, search?: string, category?: string) {

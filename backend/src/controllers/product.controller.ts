@@ -71,11 +71,21 @@ export class ProductController {
     return res.status(204).send();
   }
 
-  /**
-   * Endpoint para sincronizar dados locais com o Google Sheets manualmente.
-   */
   async sync(req: Request, res: Response) {
-    const result = await productService.syncFromSheet();
+    const userId = (req as any).user!.id as string;
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.ip || '';
+    const result = await productService.syncFromSheet(userId, ipAddress);
+    return res.json(result);
+  }
+
+  async confirmRemoval(req: Request, res: Response) {
+    const schema = z.object({
+      productIds: z.array(z.string().uuid()).min(1, 'Selecione ao menos um produto'),
+    });
+    const { productIds } = schema.parse(req.body);
+    const userId = (req as any).user!.id as string;
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.ip || '';
+    const result = await productService.confirmRemoval(productIds, userId, ipAddress);
     return res.json(result);
   }
 }
