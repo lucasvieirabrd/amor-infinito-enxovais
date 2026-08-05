@@ -75,6 +75,10 @@ export const Products: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editFormData, setEditFormData] = useState({ quantity: 0, price: 0, category: '' });
   const [showNfImport, setShowNfImport] = useState(false);
+  const [showNewProductModal, setShowNewProductModal] = useState(false);
+  const [newProductForm, setNewProductForm] = useState({
+    name: '', sku: '', category: '', description: '', quantity: 0, price: 0, minStockLevel: 0,
+  });
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -177,13 +181,28 @@ export const Products: React.FC = () => {
     },
   });
 
-  const { data: kits = [], isLoading: kitsLoading } = useQuery<Kit[]>({
+  const { data: kits = [], isLoading: kitsLoading, isError: kitsError } = useQuery<Kit[]>({
     queryKey: ['kits'],
     queryFn: async () => {
       const res = await api.get('/kits');
       return res.data as Kit[];
     },
     enabled: showKitPanel,
+    retry: 1,
+  });
+
+  const createProductMutation = useMutation({
+    mutationFn: (data: any) => api.post('/products', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['product-categories'] });
+      setShowNewProductModal(false);
+      setNewProductForm({ name: '', sku: '', category: '', description: '', quantity: 0, price: 0, minStockLevel: 0 });
+      toast.success('Produto cadastrado com sucesso!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Erro ao cadastrar produto.');
+    },
   });
 
   const createKitMutation = useMutation({
@@ -328,7 +347,12 @@ export const Products: React.FC = () => {
                 </Button>
               </>
             )}
-            <Button variant="primary" size="lg" className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={() => setShowNewProductModal(true)}
+              className="flex items-center gap-2"
+            >
               <FiPlus size={20} />
               Novo Produto
             </Button>
@@ -385,7 +409,11 @@ export const Products: React.FC = () => {
               </Button>
             </div>
 
-            {kitsLoading ? (
+            {kitsError ? (
+              <p className="text-center text-red-500 py-6 text-sm">
+                Erro ao carregar kits. Verifique se o backend está atualizado e tente novamente.
+              </p>
+            ) : kitsLoading ? (
               <Loading />
             ) : kits.length === 0 ? (
               <p className="text-center text-gray-400 py-6">Nenhum kit cadastrado</p>
@@ -591,6 +619,112 @@ export const Products: React.FC = () => {
             <Button
               variant="secondary"
               onClick={() => setEditingProduct(null)}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Novo Produto */}
+      <Modal
+        isOpen={showNewProductModal}
+        onClose={() => setShowNewProductModal(false)}
+        title="Novo Produto"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
+            <Input
+              value={newProductForm.name}
+              onChange={e => setNewProductForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="Nome do produto"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+              <Input
+                value={newProductForm.sku}
+                onChange={e => setNewProductForm(f => ({ ...f, sku: e.target.value }))}
+                placeholder="Ex: PROD001"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+              <select
+                value={newProductForm.category}
+                onChange={e => setNewProductForm(f => ({ ...f, category: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Sem categoria</option>
+                {categories.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+            <Input
+              value={newProductForm.description}
+              onChange={e => setNewProductForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="Descrição do produto"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Preço (R$) *</label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={newProductForm.price || ''}
+                onChange={e => setNewProductForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))}
+                placeholder="0,00"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Quantidade</label>
+              <Input
+                type="number"
+                min="0"
+                value={newProductForm.quantity}
+                onChange={e => setNewProductForm(f => ({ ...f, quantity: parseInt(e.target.value) || 0 }))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Estoque mín.</label>
+              <Input
+                type="number"
+                min="0"
+                value={newProductForm.minStockLevel}
+                onChange={e => setNewProductForm(f => ({ ...f, minStockLevel: parseInt(e.target.value) || 0 }))}
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button
+              onClick={() => createProductMutation.mutate({
+                name: newProductForm.name,
+                sku: newProductForm.sku || undefined,
+                category: newProductForm.category || null,
+                description: newProductForm.description || null,
+                quantity: newProductForm.quantity,
+                price: newProductForm.price,
+                minStockLevel: newProductForm.minStockLevel,
+              })}
+              loading={createProductMutation.isPending}
+              disabled={newProductForm.name.length < 3 || newProductForm.price <= 0 || createProductMutation.isPending}
+              className="flex-1"
+            >
+              Cadastrar Produto
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setShowNewProductModal(false)}
+              disabled={createProductMutation.isPending}
               className="flex-1"
             >
               Cancelar
