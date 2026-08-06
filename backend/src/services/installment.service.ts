@@ -17,7 +17,12 @@ export class InstallmentService {
     const today = startOfDay(new Date());
 
     const saleIds = [...new Set(installments.map(i => i.saleId))];
-    const productInfo = await installmentRepository.getProductInfoBySaleIds(saleIds);
+    let productInfo = new Map<string, { productNames: string | null; productCount: number; isSale: boolean }>();
+    try {
+      productInfo = await installmentRepository.getProductInfoBySaleIds(saleIds);
+    } catch (err) {
+      console.error('[InstallmentService.getByCustomer] getProductInfoBySaleIds failed:', err);
+    }
 
     return installments.map(inst => {
       let status = inst.status;
@@ -219,7 +224,12 @@ export class InstallmentService {
     const rows = await installmentRepository.listPendingOverdue();
 
     const saleIds = [...new Set(rows.map(r => r.installment.saleId))];
-    const productInfo = await installmentRepository.getProductInfoBySaleIds(saleIds);
+    let productInfo = new Map<string, { productNames: string | null; productCount: number; isSale: boolean }>();
+    try {
+      productInfo = await installmentRepository.getProductInfoBySaleIds(saleIds);
+    } catch (err) {
+      console.error('[InstallmentService.getBillingList] getProductInfoBySaleIds failed:', err);
+    }
 
     return rows.map(row => {
       const info = productInfo.get(row.installment.saleId);
