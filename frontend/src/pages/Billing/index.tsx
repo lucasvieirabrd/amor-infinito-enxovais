@@ -34,6 +34,9 @@ interface BillingRecord {
   paymentDate: string | null;
   status: 'pending' | 'paid' | 'overdue' | 'partial';
   daysOverdue?: number;
+  saleReference?: string;
+  productNames?: string | null;
+  productCount?: number;
 }
 
 interface CustomerGroup {
@@ -481,7 +484,7 @@ export const Billing: React.FC = () => {
                               <Card key={inst.id} className="p-4 hover:shadow-md transition">
                                 <div className="flex items-center justify-between">
                                   <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-2">
+                                    <div className="flex items-center gap-3 mb-1">
                                       <span className="font-semibold text-gray-900">Parcela {inst.installmentNumber}</span>
                                       <Badge
                                         variant={
@@ -499,6 +502,20 @@ export const Billing: React.FC = () => {
                                           : 'Pendente'}
                                       </Badge>
                                     </div>
+                                    {inst.productNames ? (
+                                      <p
+                                        className="text-xs text-gray-500 mb-2 truncate max-w-xs"
+                                        title={inst.productNames}
+                                      >
+                                        {(inst.productCount ?? 0) > 1
+                                          ? `${inst.productNames.split(', ')[0]} +${(inst.productCount ?? 0) - 1}`
+                                          : inst.productNames}
+                                      </p>
+                                    ) : inst.saleReference?.startsWith('REN') ? (
+                                      <p className="text-xs text-orange-500 font-medium mb-2">Renegociação</p>
+                                    ) : (
+                                      <p className="mb-2" />
+                                    )}
                                     <div className="grid grid-cols-2 gap-4 text-sm">
                                       <div>
                                         <p className="text-gray-600">Vencimento</p>

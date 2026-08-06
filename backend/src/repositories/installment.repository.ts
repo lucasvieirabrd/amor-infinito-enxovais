@@ -1,6 +1,6 @@
 import { db } from '../database';
-import { installments, customers, sales } from '../database/schema';
-import { eq, and, isNull, lt, gte, sql, or } from 'drizzle-orm';
+import { installments, customers, sales, saleItems, products } from '../database/schema';
+import { eq, and, isNull, lt, gte, sql, or, inArray } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export class InstallmentRepository {
@@ -292,6 +292,45 @@ export class InstallmentRepository {
       day: row.day,
       total: parseFloat(row.total?.toString() ?? '0') || 0,
     }));
+  }
+
+  async getProductInfoBySaleIds(saleIds: string[]): Promise<Map<string, { productNames: string | null; productCount: number; isSale: boolean }>> {
+    if (saleIds.length === 0) return new Map();
+
+    const [productRows, salesRows] = await Promise.all([
+      db
+        .select({ saleId: saleItems.saleId, productId: products.id, productName: products.name })
+        .from(saleItems)
+        .innerJoin(products, eq(saleItems.productId, products.id))
+        .where(inArray(saleItems.saleId, saleIds)),
+      db
+        .select({ id: sales.id })
+        .from(sales)
+        .where(and(inArray(sales.id, saleIds), isNull(sales.deletedAt))),
+    ]);
+
+    const saleIdSet = new Set(salesRows.map(r => r.id));
+
+    const productMap = new Map<string, { ids: Set<string>; names: string[] }>();
+    for (const row of productRows) {
+      if (!productMap.has(row.saleId)) productMap.set(row.saleId, { ids: new Set(), names: [] });
+      const entry = productMap.get(row.saleId)!;
+      if (!entry.ids.has(row.productId)) {
+        entry.ids.add(row.productId);
+        entry.names.push(row.productName);
+      }
+    }
+
+    const result = new Map<string, { productNames: string | null; productCount: number; isSale: boolean }>();
+    for (const id of saleIds) {
+      const prod = productMap.get(id);
+      result.set(id, {
+        productNames: prod ? prod.names.sort().join(', ') : null,
+        productCount: prod ? prod.ids.size : 0,
+        isSale: saleIdSet.has(id),
+      });
+    }
+    return result;
   }
 
   async softDelete(id: string) {

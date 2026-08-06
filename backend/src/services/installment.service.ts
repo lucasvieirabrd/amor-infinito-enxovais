@@ -14,16 +14,27 @@ const billingService = new BillingService();
 export class InstallmentService {
   async getByCustomer(customerId: string) {
     const installments = await installmentRepository.findByCustomer(customerId);
-    
-    // Mapear status atualizado (vencido/pendente)
     const today = startOfDay(new Date());
-    
+
+    const saleIds = [...new Set(installments.map(i => i.saleId))];
+    const productInfo = await installmentRepository.getProductInfoBySaleIds(saleIds);
+
     return installments.map(inst => {
       let status = inst.status;
       if (status === 'pending' && isBefore(startOfDay(new Date(inst.dueDate)), today)) {
         status = 'overdue';
       }
-      return { ...inst, status };
+      const info = productInfo.get(inst.saleId);
+      const saleReference = info?.isSale
+        ? `VEN-${inst.saleId.slice(0, 6).toUpperCase()}`
+        : `REN-${inst.saleId.slice(0, 6).toUpperCase()}`;
+      return {
+        ...inst,
+        status,
+        saleReference,
+        productNames: info?.productNames ?? null,
+        productCount: info?.productCount ?? 0,
+      };
     });
   }
 
@@ -207,22 +218,34 @@ export class InstallmentService {
   async getBillingList() {
     const rows = await installmentRepository.listPendingOverdue();
 
-    return rows.map(row => ({
-      id: row.installment.id,
-      customerId: row.customer.id,
-      customerName: row.customer.name,
-      customerPhone: row.customer.phone,
-      inLegalProcess: row.customer.inLegalProcess,
-      installmentNumber: row.installment.installmentNumber,
-      originalAmount: Number(row.installment.originalAmount),
-      paidAmount: row.installment.paidAmount ? Number(row.installment.paidAmount) : null,
-      paymentDate: row.installment.paymentDate,
-      dueDate: row.installment.dueDate,
-      status: row.installment.status,
-      daysOverdue: Math.floor(
-        (new Date().getTime() - new Date(row.installment.dueDate).getTime()) / (1000 * 60 * 60 * 24)
-      ),
-    }));
+    const saleIds = [...new Set(rows.map(r => r.installment.saleId))];
+    const productInfo = await installmentRepository.getProductInfoBySaleIds(saleIds);
+
+    return rows.map(row => {
+      const info = productInfo.get(row.installment.saleId);
+      const saleReference = info?.isSale
+        ? `VEN-${row.installment.saleId.slice(0, 6).toUpperCase()}`
+        : `REN-${row.installment.saleId.slice(0, 6).toUpperCase()}`;
+      return {
+        id: row.installment.id,
+        customerId: row.customer.id,
+        customerName: row.customer.name,
+        customerPhone: row.customer.phone,
+        inLegalProcess: row.customer.inLegalProcess,
+        installmentNumber: row.installment.installmentNumber,
+        originalAmount: Number(row.installment.originalAmount),
+        paidAmount: row.installment.paidAmount ? Number(row.installment.paidAmount) : null,
+        paymentDate: row.installment.paymentDate,
+        dueDate: row.installment.dueDate,
+        status: row.installment.status,
+        daysOverdue: Math.floor(
+          (new Date().getTime() - new Date(row.installment.dueDate).getTime()) / (1000 * 60 * 60 * 24)
+        ),
+        saleReference,
+        productNames: info?.productNames ?? null,
+        productCount: info?.productCount ?? 0,
+      };
+    });
   }
 
   async bulkUpdateDay(params: {
