@@ -39,6 +39,7 @@ const boletoParseUpload = multer({
   },
 });
 payableRouter.post('/parse-boleto', boletoParseUpload.single('boleto'), controller.parseBoleto);
+payableRouter.post('/parse-boleto-batch', boletoParseUpload.single('boleto'), controller.parseBatchBoletos);
 
 // Summary (before /:id)
 payableRouter.get('/summary', controller.summary);

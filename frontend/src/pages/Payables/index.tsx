@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FiPlus, FiChevronLeft, FiChevronRight, FiEdit2, FiTrash2,
   FiCheckCircle, FiRotateCcw, FiAlertTriangle, FiClock,
-  FiDollarSign, FiRepeat, FiPaperclip, FiX, FiFileText, FiLoader, FiLayers,
+  FiDollarSign, FiRepeat, FiPaperclip, FiX, FiFileText, FiLoader, FiLayers, FiUpload,
 } from 'react-icons/fi';
 import api from '../../services/api';
 import { Navigate } from 'react-router-dom';
@@ -47,6 +47,21 @@ interface Summary {
   overdueAmount: number;
   dueSoonCount: number;
   paidThisMonth: number;
+}
+
+interface ParsedBoleto {
+  linhaDigitavel: string;
+  amount: number | null;
+  dueDate: string | null;
+}
+
+interface BatchBoletoResult {
+  found: number;
+  beneficiary: string | null;
+  docRef: string | null;
+  totalInstallments: number | null;
+  boletos: ParsedBoleto[];
+  message: string;
 }
 
 const CATEGORY_LABELS: Record<Category, string> = {
@@ -530,6 +545,113 @@ const InstallmentGroupModal: React.FC<InstallmentGroupModalProps> = ({ onClose, 
   );
 };
 
+// ─── Modal: Importar PDF com múltiplos boletos ───────────────────────────────
+
+interface BatchBoletoImportModalProps {
+  data: BatchBoletoResult;
+  onClose: () => void;
+  onConfirm: (data: { description: string; category: Category; notes?: string; installments: Array<{ amount: number; dueDate: string }> }) => void;
+  saving: boolean;
+}
+
+const BatchBoletoImportModal: React.FC<BatchBoletoImportModalProps> = ({ data, onClose, onConfirm, saving }) => {
+  const suggestedDesc = [data.beneficiary, data.docRef].filter(Boolean).join(' - ') || 'Boleto importado';
+  const [description, setDescription] = useState(suggestedDesc);
+  const [category, setCategory] = useState<Category>('fornecedores');
+  const [notes, setNotes] = useState('');
+  const [installments, setInstallments] = useState(() =>
+    data.boletos.map(b => ({
+      amount: b.amount != null ? String(b.amount) : '',
+      dueDate: b.dueDate ?? '',
+    }))
+  );
+
+  const update = (i: number, field: 'amount' | 'dueDate', value: string) =>
+    setInstallments(prev => { const a = [...prev]; a[i] = { ...a[i], [field]: value }; return a; });
+
+  const total = installments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const isValid = description.trim().length > 0 && installments.every(i => Number(i.amount) > 0 && i.dueDate);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] flex flex-col">
+        <div className="p-6 pb-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-800">Importar Boletos do PDF</h2>
+          <p className="text-xs text-gray-500 mt-0.5">{data.found} boleto(s) encontrado(s) — confira os dados antes de confirmar</p>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Descrição *</label>
+            <input type="text" value={description} onChange={e => setDescription(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Categoria *</label>
+              <select value={category} onChange={e => setCategory(e.target.value as Category)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                {(Object.keys(CATEGORY_LABELS) as Category[]).map(k => (
+                  <option key={k} value={k}>{CATEGORY_LABELS[k]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+              <input type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opcional"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2 flex items-center justify-between">
+              <span>Parcelas ({installments.length})</span>
+              <span className="text-xs text-gray-500 font-normal">Total: {fmtBRL(total)}</span>
+            </p>
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-3 py-2 text-gray-500 font-medium">#</th>
+                    <th className="text-left px-3 py-2 text-gray-500 font-medium">Vencimento</th>
+                    <th className="text-right px-3 py-2 text-gray-500 font-medium">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {installments.map((inst, i) => (
+                    <tr key={i} className="border-t border-gray-100">
+                      <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                      <td className="px-3 py-2">
+                        <input type="date" value={inst.dueDate} onChange={e => update(i, 'dueDate', e.target.value)}
+                          className="border border-gray-200 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <input type="number" min="0.01" step="0.01" value={inst.amount}
+                          onChange={e => update(i, 'amount', e.target.value)}
+                          className="w-28 text-right border border-gray-200 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 pt-4 border-t border-gray-100 flex justify-end gap-2">
+          <button type="button" onClick={onClose}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancelar</button>
+          <button type="button" disabled={!isValid || saving}
+            onClick={() => onConfirm({ description: description.trim(), category, notes: notes || undefined, installments: installments.map(i => ({ amount: Number(i.amount), dueDate: i.dueDate })) })}
+            className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 disabled:opacity-50">
+            {saving ? 'Criando...' : `Criar ${installments.length} Parcelas`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export const Payables: React.FC = () => {
@@ -549,9 +671,13 @@ export const Payables: React.FC = () => {
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
   const [editingRecurrence, setEditingRecurrence] = useState<Recurrence | null>(null);
   const [showInstallmentModal, setShowInstallmentModal] = useState(false);
+  const [showBatchBoletoModal, setShowBatchBoletoModal] = useState(false);
+  const [batchBoletoData, setBatchBoletoData] = useState<BatchBoletoResult | null>(null);
+  const [parsingBatchBoleto, setParsingBatchBoleto] = useState(false);
 
   // Hidden file input for boleto upload; uploadTargetId tracks which payable
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const batchBoletoInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
 
   // Boleto scan (parse-boleto flow)
@@ -670,7 +796,7 @@ export const Payables: React.FC = () => {
 
   const createInstallments = useMutation({
     mutationFn: (d: any) => api.post('/payables/installments', d),
-    onSuccess: () => { invalidate(); setShowInstallmentModal(false); },
+    onSuccess: () => { invalidate(); setShowInstallmentModal(false); setShowBatchBoletoModal(false); setBatchBoletoData(null); },
     onError: (err: any) => alert(err?.response?.data?.message ?? err?.message ?? 'Erro ao criar parcelas.'),
   });
 
@@ -734,6 +860,31 @@ export const Payables: React.FC = () => {
     setShowPayableModal(true);
   };
 
+  const handleBatchBoletoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setParsingBatchBoleto(true);
+    try {
+      const formData = new FormData();
+      formData.append('boleto', file);
+      const res = await api.post('/payables/parse-boleto-batch', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const parsed: BatchBoletoResult = res.data;
+      if (parsed.found === 0) {
+        alert('Nenhuma linha digitável encontrada neste PDF. Verifique se é um PDF de boleto bancário.');
+        return;
+      }
+      setBatchBoletoData(parsed);
+      setShowBatchBoletoModal(true);
+    } catch (err: any) {
+      alert(err?.response?.data?.message ?? 'Erro ao processar o PDF.');
+    } finally {
+      setParsingBatchBoleto(false);
+    }
+  };
+
   const openBoleto = async (payableId: string, filename: string) => {
     try {
       const res = await api.get(`/payables/${payableId}/boleto`, { responseType: 'blob' });
@@ -775,6 +926,14 @@ export const Payables: React.FC = () => {
         className="hidden"
         onChange={handleBoletoScanFileChange}
       />
+      {/* Hidden file input for batch boleto PDF import */}
+      <input
+        ref={batchBoletoInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        className="hidden"
+        onChange={handleBatchBoletoFileChange}
+      />
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
@@ -806,6 +965,15 @@ export const Payables: React.FC = () => {
           >
             {parsingBoleto ? <FiLoader size={16} className="animate-spin" /> : <FiFileText size={16} />}
             {parsingBoleto ? 'Lendo...' : 'Novo boleto'}
+          </button>
+          <button
+            onClick={() => batchBoletoInputRef.current?.click()}
+            disabled={parsingBatchBoleto}
+            title="Importar várias parcelas de um PDF com múltiplos boletos"
+            className="flex items-center gap-2 px-4 py-2 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-50 text-sm disabled:opacity-50"
+          >
+            {parsingBatchBoleto ? <FiLoader size={16} className="animate-spin" /> : <FiUpload size={16} />}
+            {parsingBatchBoleto ? 'Lendo...' : 'Importar PDF'}
           </button>
           <button
             onClick={() => { setPendingBoletoFile(null); setBoletoCreatePrefill(null); setShowPayableModal(true); setEditingPayable(null); }}
@@ -1151,6 +1319,14 @@ export const Payables: React.FC = () => {
         <InstallmentGroupModal
           onClose={() => setShowInstallmentModal(false)}
           onSave={d => createInstallments.mutate(d)}
+          saving={createInstallments.isPending}
+        />
+      )}
+      {showBatchBoletoModal && batchBoletoData && (
+        <BatchBoletoImportModal
+          data={batchBoletoData}
+          onClose={() => { setShowBatchBoletoModal(false); setBatchBoletoData(null); }}
+          onConfirm={d => createInstallments.mutate(d)}
           saving={createInstallments.isPending}
         />
       )}

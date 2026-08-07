@@ -280,3 +280,102 @@ export async function parseBoletoFromPDF(
   if (includeDebug) result._rawText = rawText;
   return result;
 }
+
+// ── Batch parsing (PDF com múltiplos boletos) ─────────────────────────────────
+
+export interface BatchBoletoItem {
+  linhaDigitavel: string;
+  amount: number | null;
+  dueDate: string | null; // YYYY-MM-DD
+}
+
+export interface BatchBoletoResult {
+  found: number;
+  beneficiary: string | null;
+  docRef: string | null;
+  totalInstallments: number | null;
+  boletos: BatchBoletoItem[];
+}
+
+function findAllBankLinhas(text: string): string[] {
+  const found: string[] = [];
+  const bankRe =
+    /(\d{5})[.\s]{0,3}(\d{5})\s*(\d{5})[.\s]{0,3}(\d{6})\s*(\d{5})[.\s]{0,3}(\d{6})\s*(\d)\s*(\d{14})/g;
+  let m: RegExpExecArray | null;
+  while ((m = bankRe.exec(text)) !== null) {
+    const d = onlyDigits(m[1]+m[2]+m[3]+m[4]+m[5]+m[6]+m[7]+m[8]);
+    if (d.length === 47 && validateBankDV(d) && !found.includes(d)) {
+      found.push(d);
+    }
+  }
+  return found;
+}
+
+function extractBoletoMeta(text: string): {
+  beneficiary: string | null;
+  docRef: string | null;
+  totalInstallments: number | null;
+} {
+  // Procura "Beneficiário" sozinho na linha, seguido do nome na linha seguinte
+  let beneficiary: string | null = null;
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (/^Benefici[aá]rio\s*$/i.test(lines[i].trim())) {
+      const next = lines[i + 1].trim();
+      if (next && next.length > 2 && /[A-Z]{2,}/.test(next) && !/^Agênc/i.test(next)) {
+        beneficiary = next.replace(/\s+/g, ' ');
+        break;
+      }
+    }
+  }
+  // Fallback: Beneficiário seguido de nome na mesma linha ou logo após
+  if (!beneficiary) {
+    const bm = text.match(/Benefici[aá]rio[\s\n\r]+([A-ZÁÀÂÃÉÈÊÍÓÔÕÚ][^\n\r]{2,80})/);
+    if (bm) {
+      const candidate = bm[1].trim().split(/[\n\r]/)[0].trim();
+      if (!/^Agênc/i.test(candidate)) beneficiary = candidate.replace(/\s+/g, ' ');
+    }
+  }
+
+  // Referência do documento: ex "REN099261 - 2/6" → docRef=REN099261, total=6
+  const dm = text.match(/([A-Z]{2,6}\d{4,10})\s*-\s*\d+\/(\d+)/);
+  const docRef = dm ? dm[1] : null;
+  const totalInstallments = dm ? parseInt(dm[2]) : null;
+
+  return { beneficiary, docRef, totalInstallments };
+}
+
+export async function parseBatchBoletosFromPDF(buffer: Buffer): Promise<BatchBoletoResult> {
+  let rawText = '';
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require('pdf-parse');
+    const data = await pdfParse(buffer, { max: 30 });
+    rawText = data.text ?? '';
+  } catch {
+    return { found: 0, beneficiary: null, docRef: null, totalInstallments: null, boletos: [] };
+  }
+
+  const linhas = findAllBankLinhas(rawText);
+  const meta   = extractBoletoMeta(rawText);
+
+  const boletos: BatchBoletoItem[] = linhas.map(d => ({
+    linhaDigitavel: d,
+    ...parseBankDigits(d),
+  }));
+
+  // Ordenar por data de vencimento crescente
+  boletos.sort((a, b) => {
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return a.dueDate.localeCompare(b.dueDate);
+  });
+
+  return {
+    found: boletos.length,
+    beneficiary: meta.beneficiary,
+    docRef: meta.docRef,
+    totalInstallments: meta.totalInstallments,
+    boletos,
+  };
+}

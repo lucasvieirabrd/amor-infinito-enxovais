@@ -98,6 +98,20 @@ export class PayableController {
     });
   };
 
+  parseBatchBoletos = async (req: Request, res: Response) => {
+    if (!req.file) {
+      res.status(400).json({ message: 'Nenhum arquivo enviado.' });
+      return;
+    }
+    const result = await payableService.parseBatchBoletos(req.file.buffer);
+    res.json({
+      ...result,
+      message: result.found > 0
+        ? `${result.found} boleto(s) encontrado(s).`
+        : 'Nenhuma linha digitável encontrada neste PDF.',
+    });
+  };
+
   uploadBoleto = async (req: Request, res: Response) => {
     const { id } = req.params;
     if (!req.file) {

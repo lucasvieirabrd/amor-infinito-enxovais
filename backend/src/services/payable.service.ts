@@ -5,7 +5,7 @@ import { getDaysInMonth } from 'date-fns';
 import { db } from '../database';
 import { auditLogs, messages } from '../database/schema';
 import { v4 as uuidv4 } from 'uuid';
-import { parseBoletoFromPDF } from '../utils/boleto';
+import { parseBoletoFromPDF, parseBatchBoletosFromPDF } from '../utils/boleto';
 
 const payableRepository = new PayableRepository();
 const whatsAppService = new WhatsAppService();
@@ -152,6 +152,10 @@ export class PayableService {
 
   async parseBoleto(buffer: Buffer, debug = false) {
     return parseBoletoFromPDF(buffer, debug);
+  }
+
+  async parseBatchBoletos(buffer: Buffer) {
+    return parseBatchBoletosFromPDF(buffer);
   }
 
   async removeBoleto(id: string, userId: string) {
