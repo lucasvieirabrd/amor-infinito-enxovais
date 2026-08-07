@@ -252,7 +252,7 @@ export class CustomerImportService {
     data: any,
     tx: any
   ): Promise<FindOrCreateResult> {
-    // Buscar por CPF (cobre tanto CPF real quanto CPF provisório gerado da linha anterior)
+    // 1. Buscar cliente ATIVO por CPF
     if (data.cpf) {
       const byCpf = await tx
         .select()
@@ -261,15 +261,11 @@ export class CustomerImportService {
         .limit(1);
 
       if (byCpf.length > 0) {
-        return {
-          id: byCpf[0].id,
-          isNew: false,
-          note: `Cliente já existente (encontrado por CPF)`,
-        };
+        return { id: byCpf[0].id, isNew: false, note: `Cliente já existente (encontrado por CPF)` };
       }
     }
 
-    // Buscar por telefone (cliente com dívida diferente no mesmo CSV)
+    // 2. Buscar cliente ATIVO por telefone
     if (data.phone) {
       const byPhone = await tx
         .select()
@@ -278,15 +274,43 @@ export class CustomerImportService {
         .limit(1);
 
       if (byPhone.length > 0) {
-        return {
-          id: byPhone[0].id,
-          isNew: false,
-          note: `Cliente já existente (encontrado por telefone)`,
-        };
+        return { id: byPhone[0].id, isNew: false, note: `Cliente já existente (encontrado por telefone)` };
       }
     }
 
-    // Criar novo cliente
+    // 3. Buscar cliente DELETADO por CPF — restaurar para evitar violação de UNIQUE constraint
+    if (data.cpf) {
+      const deletedByCpf = await tx
+        .select()
+        .from(customers)
+        .where(and(eq(customers.cpf, data.cpf), sql`${customers.deletedAt} IS NOT NULL`))
+        .limit(1);
+
+      if (deletedByCpf.length > 0) {
+        await tx.update(customers)
+          .set({ deletedAt: null, name: data.name, phone: data.phone, email: data.email, updatedAt: new Date() })
+          .where(eq(customers.id, deletedByCpf[0].id));
+        return { id: deletedByCpf[0].id, isNew: true };
+      }
+    }
+
+    // 4. Buscar cliente DELETADO por telefone — restaurar
+    if (data.phone) {
+      const deletedByPhone = await tx
+        .select()
+        .from(customers)
+        .where(and(eq(customers.phone, data.phone), sql`${customers.deletedAt} IS NOT NULL`))
+        .limit(1);
+
+      if (deletedByPhone.length > 0) {
+        await tx.update(customers)
+          .set({ deletedAt: null, name: data.name, phone: data.phone, email: data.email, updatedAt: new Date() })
+          .where(eq(customers.id, deletedByPhone[0].id));
+        return { id: deletedByPhone[0].id, isNew: true };
+      }
+    }
+
+    // 5. Criar novo cliente
     const customerId = uuidv4();
     await tx.insert(customers).values({ id: customerId, ...data });
     return { id: customerId, isNew: true };
