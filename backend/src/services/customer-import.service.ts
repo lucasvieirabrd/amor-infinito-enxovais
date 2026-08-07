@@ -257,7 +257,7 @@ export class CustomerImportService {
       const byCpf = await tx
         .select()
         .from(customers)
-        .where(eq(customers.cpf, data.cpf))
+        .where(and(eq(customers.cpf, data.cpf), isNull(customers.deletedAt)))
         .limit(1);
 
       if (byCpf.length > 0) {
@@ -274,7 +274,7 @@ export class CustomerImportService {
       const byPhone = await tx
         .select()
         .from(customers)
-        .where(eq(customers.phone, data.phone))
+        .where(and(eq(customers.phone, data.phone), isNull(customers.deletedAt)))
         .limit(1);
 
       if (byPhone.length > 0) {
