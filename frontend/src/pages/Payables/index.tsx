@@ -673,11 +673,9 @@ export const Payables: React.FC = () => {
   const [showInstallmentModal, setShowInstallmentModal] = useState(false);
   const [showBatchBoletoModal, setShowBatchBoletoModal] = useState(false);
   const [batchBoletoData, setBatchBoletoData] = useState<BatchBoletoResult | null>(null);
-  const [parsingBatchBoleto, setParsingBatchBoleto] = useState(false);
 
   // Hidden file input for boleto upload; uploadTargetId tracks which payable
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const batchBoletoInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
 
   // Boleto scan (parse-boleto flow)
@@ -835,36 +833,7 @@ export const Payables: React.FC = () => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-
     setParsingBoleto(true);
-    let prefill: { amount: number | null; dueDate: string | null } | null = null;
-    try {
-      const formData = new FormData();
-      formData.append('boleto', file);
-      const res = await api.post('/payables/parse-boleto', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const d = res.data;
-      if (d.amount != null || d.dueDate != null) {
-        prefill = { amount: d.amount ?? null, dueDate: d.dueDate ?? null };
-      }
-    } catch {
-      // sem parse — abre modal vazio mesmo assim
-    } finally {
-      setParsingBoleto(false);
-    }
-
-    setPendingBoletoFile(file);
-    setBoletoCreatePrefill(prefill);
-    setEditingPayable(null);
-    setShowPayableModal(true);
-  };
-
-  const handleBatchBoletoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setParsingBatchBoleto(true);
     try {
       const formData = new FormData();
       formData.append('boleto', file);
@@ -872,16 +841,26 @@ export const Payables: React.FC = () => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       const parsed: BatchBoletoResult = res.data;
-      if (parsed.found === 0) {
-        alert('Nenhuma linha digitável encontrada neste PDF. Verifique se é um PDF de boleto bancário.');
-        return;
+      if (parsed.found >= 2) {
+        // Múltiplos boletos → modal de lote
+        setBatchBoletoData(parsed);
+        setShowBatchBoletoModal(true);
+      } else {
+        // 0 ou 1 boleto → modal individual com prefill (ou vazio)
+        const single = parsed.boletos[0] ?? null;
+        setPendingBoletoFile(file);
+        setBoletoCreatePrefill(single ? { amount: single.amount, dueDate: single.dueDate } : null);
+        setEditingPayable(null);
+        setShowPayableModal(true);
       }
-      setBatchBoletoData(parsed);
-      setShowBatchBoletoModal(true);
-    } catch (err: any) {
-      alert(err?.response?.data?.message ?? 'Erro ao processar o PDF.');
+    } catch {
+      // Falha no parse — abre modal individual vazio com o arquivo
+      setPendingBoletoFile(file);
+      setBoletoCreatePrefill(null);
+      setEditingPayable(null);
+      setShowPayableModal(true);
     } finally {
-      setParsingBatchBoleto(false);
+      setParsingBoleto(false);
     }
   };
 
@@ -918,21 +897,13 @@ export const Payables: React.FC = () => {
         className="hidden"
         onChange={handleFileChange}
       />
-      {/* Hidden file input for boleto PDF scan (parse-boleto flow) */}
+      {/* Hidden file input: boleto único ou PDF com múltiplos boletos */}
       <input
         ref={boletoScanInputRef}
         type="file"
         accept=".pdf,application/pdf"
         className="hidden"
         onChange={handleBoletoScanFileChange}
-      />
-      {/* Hidden file input for batch boleto PDF import */}
-      <input
-        ref={batchBoletoInputRef}
-        type="file"
-        accept=".pdf,application/pdf"
-        className="hidden"
-        onChange={handleBatchBoletoFileChange}
       />
 
       {/* Header */}
@@ -960,20 +931,11 @@ export const Payables: React.FC = () => {
           <button
             onClick={() => boletoScanInputRef.current?.click()}
             disabled={parsingBoleto}
-            title="Ler dados de um boleto PDF automaticamente"
+            title="Importar boleto PDF — detecta automaticamente se é 1 boleto ou vários"
             className="flex items-center gap-2 px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 text-sm disabled:opacity-50"
           >
-            {parsingBoleto ? <FiLoader size={16} className="animate-spin" /> : <FiFileText size={16} />}
-            {parsingBoleto ? 'Lendo...' : 'Novo boleto'}
-          </button>
-          <button
-            onClick={() => batchBoletoInputRef.current?.click()}
-            disabled={parsingBatchBoleto}
-            title="Importar várias parcelas de um PDF com múltiplos boletos"
-            className="flex items-center gap-2 px-4 py-2 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-50 text-sm disabled:opacity-50"
-          >
-            {parsingBatchBoleto ? <FiLoader size={16} className="animate-spin" /> : <FiUpload size={16} />}
-            {parsingBatchBoleto ? 'Lendo...' : 'Importar PDF'}
+            {parsingBoleto ? <FiLoader size={16} className="animate-spin" /> : <FiUpload size={16} />}
+            {parsingBoleto ? 'Lendo...' : 'Importar boleto'}
           </button>
           <button
             onClick={() => { setPendingBoletoFile(null); setBoletoCreatePrefill(null); setShowPayableModal(true); setEditingPayable(null); }}
