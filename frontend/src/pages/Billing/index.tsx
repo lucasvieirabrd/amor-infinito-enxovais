@@ -48,6 +48,7 @@ interface CustomerGroup {
   overdueCount: number;
   totalOverdue: number;
   todayCount: number;
+  worstOverdueDays: number;
 }
 
 interface StatsResponse {
@@ -215,9 +216,25 @@ export const Billing: React.FC = () => {
     if (selectedInstallment) editDateMutation.mutate({ id: selectedInstallment.id, dueDate: newDueDate });
   };
 
+  // ── helper: badge de dias de atraso ─────────────────────────
+  const overdueDaysBadge = (days: number) => {
+    if (days <= 0) return null;
+    const cls = days <= 30
+      ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
+      : days <= 60
+      ? 'bg-orange-100 text-orange-700 border-orange-200'
+      : 'bg-red-100 text-red-700 border-red-200';
+    return (
+      <span className={`flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded border ${cls}`}>
+        {days}d
+      </span>
+    );
+  };
+
   // ── agrupamento por cliente ───────────────────────────────
   const customerGroups: CustomerGroup[] = React.useMemo(() => {
     if (!billingRecords) return [];
+    const today = startOfDay(new Date());
     const map = new Map<string, CustomerGroup>();
     billingRecords.forEach((rec) => {
       if (!map.has(rec.customerId)) {
@@ -230,23 +247,40 @@ export const Billing: React.FC = () => {
           overdueCount: 0,
           totalOverdue: 0,
           todayCount: 0,
+          worstOverdueDays: 0,
         });
       }
       const group = map.get(rec.customerId)!;
       group.installments.push(rec);
       const isOverdue =
         rec.status === 'overdue' ||
-        ((rec.status === 'pending' || rec.status === 'partial') && isBefore(new Date(rec.dueDate), startOfDay(new Date())));
+        ((rec.status === 'pending' || rec.status === 'partial') && isBefore(new Date(rec.dueDate), today));
       const isTodayRec =
         (rec.status === 'pending' || rec.status === 'partial') &&
         format(new Date(rec.dueDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
       if (isOverdue) {
         group.overdueCount += 1;
         group.totalOverdue += Number(rec.originalAmount);
+        const days = rec.daysOverdue ?? 0;
+        if (days > group.worstOverdueDays) group.worstOverdueDays = days;
       } else if (isTodayRec) {
         group.todayCount += 1;
       }
     });
+
+    const sortInsts = (insts: BillingRecord[]) =>
+      [...insts].sort((a, b) => {
+        const aOverdue = a.status === 'overdue' || ((a.status === 'pending' || a.status === 'partial') && isBefore(new Date(a.dueDate), today));
+        const bOverdue = b.status === 'overdue' || ((b.status === 'pending' || b.status === 'partial') && isBefore(new Date(b.dueDate), today));
+        const aPaid = a.status === 'paid';
+        const bPaid = b.status === 'paid';
+        if (aOverdue && !bOverdue) return -1;
+        if (!aOverdue && bOverdue) return 1;
+        if (aPaid && !bPaid) return 1;
+        if (!aPaid && bPaid) return -1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      });
+
     return Array.from(map.values())
       .filter(
         (g) =>
@@ -257,7 +291,9 @@ export const Billing: React.FC = () => {
         if (billingStatusFilter === 'overdue') return g.overdueCount > 0;
         if (billingStatusFilter === 'today') return g.todayCount > 0 && g.overdueCount === 0;
         return true;
-      });
+      })
+      .sort((a, b) => b.worstOverdueDays - a.worstOverdueDays)
+      .map((g) => ({ ...g, installments: sortInsts(g.installments) }));
   }, [billingRecords, search, billingStatusFilter]);
 
   if (isLoading) return <Loading />;
@@ -452,10 +488,11 @@ export const Billing: React.FC = () => {
                             </p>
                           </div>
                           {group.overdueCount > 0 && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant="error">
                                 {group.overdueCount} {group.overdueCount === 1 ? 'parcela atrasada' : 'parcelas atrasadas'}
                               </Badge>
+                              {group.worstOverdueDays > 0 && overdueDaysBadge(group.worstOverdueDays)}
                               <span className="text-sm font-medium text-red-600">
                                 R$ {group.totalOverdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </span>
@@ -484,7 +521,7 @@ export const Billing: React.FC = () => {
                               <Card key={inst.id} className="p-4 hover:shadow-md transition">
                                 <div className="flex items-center justify-between">
                                   <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-1">
+                                    <div className="flex items-center gap-3 mb-1 flex-wrap">
                                       <span className="font-semibold text-gray-900">Parcela {inst.installmentNumber}</span>
                                       <Badge
                                         variant={
@@ -501,6 +538,7 @@ export const Billing: React.FC = () => {
                                           : isToday ? 'Vence hoje'
                                           : 'Pendente'}
                                       </Badge>
+                                      {isOverdue && inst.daysOverdue != null && inst.daysOverdue > 0 && overdueDaysBadge(inst.daysOverdue)}
                                     </div>
                                     {inst.productNames ? (
                                       <p

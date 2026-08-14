@@ -47,6 +47,7 @@ interface CustomerCrediario {
   totalPending: number;
   overdueCount: number;
   todayCount: number;
+  worstOverdueDays: number;
   lastDateChangeAt: string | null;
   dateChangeCount: number;
 }
@@ -318,6 +319,22 @@ export const Installments: React.FC = () => {
 
   // ── Renegociação ───────────────────────────────────────────────────────────
 
+  const sortedInstallments = useMemo(() => {
+    if (!customerInstallments) return [];
+    const today = startOfDay(new Date());
+    return [...customerInstallments].sort((a, b) => {
+      const aOverdue = a.status === 'overdue' || ((a.status === 'pending' || a.status === 'partial') && isBefore(new Date(a.dueDate), today));
+      const bOverdue = b.status === 'overdue' || ((b.status === 'pending' || b.status === 'partial') && isBefore(new Date(b.dueDate), today));
+      const aPaid = a.status === 'paid';
+      const bPaid = b.status === 'paid';
+      if (aOverdue && !bOverdue) return -1;
+      if (!aOverdue && bOverdue) return 1;
+      if (aPaid && !bPaid) return 1;
+      if (!aPaid && bPaid) return -1;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    });
+  }, [customerInstallments]);
+
   const renPendingInsts = useMemo(
     () => (customerInstallments || []).filter(i => i.status !== 'paid'),
     [customerInstallments]
@@ -411,6 +428,20 @@ export const Installments: React.FC = () => {
     if (c.overdueCount > 0) return 'Em atraso';
     if (c.todayCount > 0) return 'Vence hoje';
     return 'Em dia';
+  };
+
+  const overdueDaysBadge = (days: number) => {
+    if (days <= 0) return null;
+    const cls = days <= 30
+      ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
+      : days <= 60
+      ? 'bg-orange-100 text-orange-700 border-orange-200'
+      : 'bg-red-100 text-red-700 border-red-200';
+    return (
+      <span className={`flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded border ${cls}`}>
+        {days}d
+      </span>
+    );
   };
 
   // Filtro aplicado no backend via ?filter=; lista já chega filtrada e paginada corretamente
@@ -591,11 +622,12 @@ export const Installments: React.FC = () => {
                       <p className="text-xs text-gray-500">pendente</p>
                     </div>
 
-                    {/* Status */}
-                    <div className="w-28 text-center">
+                    {/* Status + dias de atraso */}
+                    <div className="flex flex-col items-center gap-1 w-28">
                       <Badge variant={customerStatusVariant(customer)}>
                         {customerStatusLabel(customer)}
                       </Badge>
+                      {customer.worstOverdueDays > 0 && overdueDaysBadge(customer.worstOverdueDays)}
                     </div>
 
                     {/* Alteração de Data */}
@@ -672,22 +704,26 @@ export const Installments: React.FC = () => {
 
                       {isLoadingInstallments ? (
                         <Loading />
-                      ) : customerInstallments && customerInstallments.length > 0 ? (
+                      ) : sortedInstallments.length > 0 ? (
                         <div className="space-y-3">
-                          {customerInstallments.map((inst) => {
+                          {sortedInstallments.map((inst) => {
+                            const today = startOfDay(new Date());
                             const isOverdue =
                               inst.status === 'overdue' ||
-                              (inst.status === 'pending' &&
-                                isBefore(new Date(inst.dueDate), startOfDay(new Date())));
+                              ((inst.status === 'pending' || inst.status === 'partial') &&
+                                isBefore(new Date(inst.dueDate), today));
                             const isToday =
                               format(new Date(inst.dueDate), 'yyyy-MM-dd') ===
                                 format(new Date(), 'yyyy-MM-dd') && inst.status === 'pending';
+                            const daysOverdue = isOverdue
+                              ? Math.max(0, Math.floor((Date.now() - new Date(inst.dueDate).getTime()) / 86400000))
+                              : 0;
 
                             return (
                               <Card key={inst.id} className="p-4 bg-white hover:shadow-sm transition">
                                 <div className="flex items-center justify-between gap-4">
                                   <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-1">
+                                    <div className="flex items-center gap-3 mb-1 flex-wrap">
                                       <span className="font-semibold text-gray-900">
                                         Parcela {inst.installmentNumber}
                                       </span>
@@ -714,6 +750,7 @@ export const Installments: React.FC = () => {
                                           ? 'Vence hoje'
                                           : 'Pendente'}
                                       </Badge>
+                                      {daysOverdue > 0 && overdueDaysBadge(daysOverdue)}
                                     </div>
                                     {inst.productNames ? (
                                       <p

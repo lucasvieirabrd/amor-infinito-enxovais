@@ -100,6 +100,12 @@ export class InstallmentRepository {
           WHEN i.status IN ('pending','partial')
             AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
           THEN 1 ELSE 0 END) AS todayCount,
+        MAX(CASE
+          WHEN i.status = 'overdue'
+            OR (i.status IN ('pending','partial') AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')))
+          THEN DATEDIFF(DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')), DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')))
+          ELSE 0
+        END) AS worstOverdueDays,
         dca.lastDateChangeAt,
         dca.dateChangeCount
       FROM customers c
@@ -129,7 +135,7 @@ export class InstallmentRepository {
         ${searchCond}
       GROUP BY c.id, c.name, c.phone, c.in_legal_process, dca.lastDateChangeAt, dca.dateChangeCount
       ${filterHaving}
-      ORDER BY overdueCount DESC, c.name ASC
+      ORDER BY worstOverdueDays DESC, c.name ASC
       LIMIT ${limit} OFFSET ${offset}
     `);
 
@@ -170,6 +176,7 @@ export class InstallmentRepository {
         totalPending: parseFloat(r.totalPending?.toString() ?? '0'),
         overdueCount: Number(r.overdueCount),
         todayCount: Number(r.todayCount),
+        worstOverdueDays: Number(r.worstOverdueDays),
         lastDateChangeAt: r.lastDateChangeAt ? new Date(r.lastDateChangeAt).toISOString() : null,
         dateChangeCount: r.dateChangeCount ? Number(r.dateChangeCount) : 0,
       })),
