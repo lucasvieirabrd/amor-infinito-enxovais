@@ -239,7 +239,7 @@ export class BillingService {
             { type: 'text', text: dateFmt },
           ],
         }];
-        contentText = `Olá ${customer.name}, sua parcela de R$ ${amountNum} venceu em ${dateFmt} e está pendente. Por favor, regularize o pagamento o quanto antes.`;
+        contentText = `Olá ${customer.name}, sua parcela de R$ ${amountNum} venceu em ${dateFmt} e está pendente. Por favor, regularize o pagamento o quanto antes.\n\nCaso já tenha efetuado o pagamento, por favor desconsidere esta mensagem. 😊\n\nEm caso de dúvidas, entre em contato conosco.`;
       }
 
       console.log(`[BillingService] Enviando ${templateName} → ${customer.name} (${customer.phone}) | ${clientDays}d`);
@@ -590,7 +590,7 @@ export class BillingService {
     const result = await whatsAppService.sendTemplateMessage(customer[0].phone, 'cobranca_parcela', components);
 
     if (result && !result.error) {
-      const contentText = `Olá ${customer[0].name}, sua parcela de R$ ${amountNum} venceu em ${dateFmt} e está pendente. Por favor, regularize o pagamento o quanto antes.`;
+      const contentText = `Olá ${customer[0].name}, sua parcela de R$ ${amountNum} venceu em ${dateFmt} e está pendente. Por favor, regularize o pagamento o quanto antes.\n\nCaso já tenha efetuado o pagamento, por favor desconsidere esta mensagem. 😊\n\nEm caso de dúvidas, entre em contato conosco.`;
       await saveMessage(result.messages?.[0]?.id, customer[0].id, customer[0].phone, contentText, 'template', 'sent', 'Cobrança');
     }
 
