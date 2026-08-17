@@ -58,9 +58,12 @@ interface StatsResponse {
 }
 
 interface ChargesPreview {
-  todayCount: number;
-  overdueCount: number;
-  totalCount: number;
+  todayClients: number;
+  overdueClients: number;
+  totalClients: number;
+  todayCount: number;   // compat
+  overdueCount: number; // compat
+  totalCount: number;   // compat
 }
 
 interface BillingMessage {
@@ -676,24 +679,24 @@ export const Billing: React.FC = () => {
               <Loading />
             ) : (
               <>
-                <p className="text-gray-600">Serão enviadas mensagens WhatsApp para:</p>
+                <p className="text-gray-600">Serão enviadas mensagens WhatsApp para os seguintes clientes:</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-yellow-700">{chargesPreview?.todayCount ?? 0}</p>
+                    <p className="text-2xl font-bold text-yellow-700">{chargesPreview?.todayClients ?? chargesPreview?.todayCount ?? 0}</p>
                     <p className="text-sm text-yellow-600 mt-1">Vencendo hoje</p>
                   </div>
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-red-700">{chargesPreview?.overdueCount ?? 0}</p>
-                    <p className="text-sm text-red-600 mt-1">Em atraso</p>
+                    <p className="text-2xl font-bold text-red-700">{chargesPreview?.overdueClients ?? chargesPreview?.overdueCount ?? 0}</p>
+                    <p className="text-sm text-red-600 mt-1">Em atraso (na régua)</p>
                   </div>
                 </div>
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
                   <p className="text-lg font-bold text-gray-800">
-                    Total: {chargesPreview?.totalCount ?? 0} mensagens
+                    Total: {chargesPreview?.totalClients ?? chargesPreview?.totalCount ?? 0} clientes
                   </p>
                 </div>
                 <p className="text-xs text-gray-400">
-                  Cada cliente receberá uma mensagem via WhatsApp com o template de cobrança configurado.
+                  1 mensagem por cliente (parcela mais antiga em atraso). Clientes já notificados hoje são ignorados automaticamente.
                 </p>
               </>
             )}
