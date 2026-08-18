@@ -1,12 +1,17 @@
 import { Router } from 'express';
 import { MessageController } from '../controllers/message.controller';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
+import { ensureTabAccess } from '../middlewares/ensureTabAccess';
 
 const messageRouter = Router();
 const messageController = new MessageController();
 
 // Todas as rotas de mensagens requerem autenticação
 messageRouter.use(ensureAuthenticated);
+messageRouter.use(ensureTabAccess('mensagens'));
+
+// Busca de contatos para modal Nova Conversa (retorna apenas id, name, phone)
+messageRouter.get('/contacts', messageController.getContacts);
 
 // Listar conversas ativas
 messageRouter.get('/conversations', messageController.listConversations);

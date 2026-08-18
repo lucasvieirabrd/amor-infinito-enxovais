@@ -13,6 +13,7 @@ export const users = mysqlTable('users', {
   deletedAt: datetime("deleted_at"),
   resetToken: varchar("reset_token", { length: 255 }),
   resetTokenExpires: datetime("reset_token_expires"),
+  allowedTabs: json('allowed_tabs').$type<string[]>(),
 });
 
 export const customers = mysqlTable('customers', {

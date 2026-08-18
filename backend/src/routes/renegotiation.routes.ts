@@ -3,12 +3,14 @@ import { RenegotiationController } from '../controllers/renegotiation.controller
 import { InstallmentController } from '../controllers/installment.controller';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { ensureAuthorized } from '../middlewares/ensureAuthorized';
+import { ensureTabAccess } from '../middlewares/ensureTabAccess';
 
 const renegotiationRouter = Router();
 const renegotiationController = new RenegotiationController();
 const installmentController = new InstallmentController();
 
 renegotiationRouter.use(ensureAuthenticated);
+renegotiationRouter.use(ensureTabAccess('crediario'));
 renegotiationRouter.post('/', ensureAuthorized(['admin']), renegotiationController.renegotiate);
 renegotiationRouter.get('/:id', renegotiationController.getById);
 renegotiationRouter.post('/:renId/installments', ensureAuthorized(['admin']), installmentController.addToRenegotiation);

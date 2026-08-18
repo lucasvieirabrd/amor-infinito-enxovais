@@ -2,12 +2,14 @@ import { Router } from 'express';
 import { InstallmentController } from '../controllers/installment.controller';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { ensureAuthorized } from '../middlewares/ensureAuthorized';
+import { ensureAnyTabAccess } from '../middlewares/ensureTabAccess';
 
 const installmentRouter = Router();
 const installmentController = new InstallmentController();
 
 // Todas as rotas de crediário requerem autenticação
 installmentRouter.use(ensureAuthenticated);
+installmentRouter.use(ensureAnyTabAccess(['crediario', 'cobranca']));
 
 // Listagens gerais
 installmentRouter.get('/stats', installmentController.getStats);

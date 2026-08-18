@@ -4,6 +4,29 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export class UserRepository {
+  async list() {
+    return db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        allowedTabs: users.allowedTabs,
+        createdAt: users.createdAt,
+        deletedAt: users.deletedAt,
+      })
+      .from(users)
+      .orderBy(users.name);
+  }
+
+  async countActiveAdmins() {
+    const result = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.role, 'admin'), isNull(users.deletedAt)));
+    return result.length;
+  }
+
   async findByEmail(email: string) {
     const result = await db
       .select()
@@ -18,6 +41,15 @@ export class UserRepository {
       .select()
       .from(users)
       .where(and(eq(users.id, id), isNull(users.deletedAt)))
+      .limit(1);
+    return result[0];
+  }
+
+  async findByIdAny(id: string) {
+    const result = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
       .limit(1);
     return result[0];
   }
@@ -42,6 +74,6 @@ export class UserRepository {
 
   async update(id: string, data: any) {
     await db.update(users).set(data).where(eq(users.id, id));
-    return this.findById(id);
+    return this.findByIdAny(id);
   }
 }

@@ -3,6 +3,7 @@ import multer from 'multer';
 import { PayableController } from '../controllers/payable.controller';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { ensureAuthorized } from '../middlewares/ensureAuthorized';
+import { ensureTabAccess } from '../middlewares/ensureTabAccess';
 
 const payableRouter = Router();
 const controller = new PayableController();
@@ -21,7 +22,7 @@ const boletoUpload = multer({
 });
 
 payableRouter.use(ensureAuthenticated);
-payableRouter.use(ensureAuthorized(['admin']));
+payableRouter.use(ensureTabAccess('contas_a_pagar'));
 
 // Recurrences (before /:id to avoid param conflicts)
 payableRouter.get('/recurrences', controller.listRecurrences);

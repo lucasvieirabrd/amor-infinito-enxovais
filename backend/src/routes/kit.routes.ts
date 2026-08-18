@@ -2,11 +2,13 @@ import { Router } from 'express';
 import { KitController } from '../controllers/kit.controller';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { ensureAuthorized } from '../middlewares/ensureAuthorized';
+import { ensureTabAccess } from '../middlewares/ensureTabAccess';
 
 const kitRouter = Router();
 const kitController = new KitController();
 
 kitRouter.use(ensureAuthenticated);
+kitRouter.use(ensureTabAccess('produtos'));
 
 kitRouter.get('/', (req, res) => kitController.list(req, res));
 kitRouter.get('/:id', (req, res) => kitController.getById(req, res));

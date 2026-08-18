@@ -12,7 +12,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Customer { _id: string; name: string; phone: string; }
+interface Customer { id: string; name: string; phone: string; }
 
 interface Conversation {
   id: string;
@@ -442,8 +442,8 @@ export const Messages: React.FC = () => {
     queryKey: ['customer-search', newConvSearch],
     queryFn: async () => {
       if (!newConvSearch.trim()) return [];
-      const res = await api.get('/customers', { params: { search: newConvSearch } });
-      return res.data.data as Customer[];
+      const res = await api.get('/messages/contacts', { params: { search: newConvSearch } });
+      return res.data as { id: string; name: string; phone: string }[];
     },
     enabled: !!newConvSearch.trim(),
   });
@@ -874,7 +874,7 @@ export const Messages: React.FC = () => {
                   {customerResults && customerResults.length > 0 && (
                     <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                       {customerResults.map(c => (
-                        <button key={c._id} onClick={() => { setNewConvSelected(c); setNewConvSearch(''); }}
+                        <button key={c.id} onClick={() => { setNewConvSelected(c); setNewConvSearch(''); }}
                           className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors">
                           <p className="font-medium text-gray-900">{c.name}</p>
                           <p className="text-xs text-gray-500">{c.phone}</p>

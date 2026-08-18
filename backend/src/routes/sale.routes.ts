@@ -6,6 +6,7 @@ import { OrdemController } from '../controllers/ordem.controller';
 import { InstallmentController } from '../controllers/installment.controller';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { ensureAuthorized } from '../middlewares/ensureAuthorized';
+import { ensureTabAccess } from '../middlewares/ensureTabAccess';
 import { db } from '../database';
 import { sql } from 'drizzle-orm';
 
@@ -18,6 +19,7 @@ const installmentController = new InstallmentController();
 
 // Todas as rotas de vendas requerem autenticação
 saleRouter.use(ensureAuthenticated);
+saleRouter.use(ensureTabAccess('vendas'));
 
 saleRouter.post('/', saleController.register);
 saleRouter.get('/', saleController.list);

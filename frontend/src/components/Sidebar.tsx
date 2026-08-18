@@ -21,17 +21,26 @@ const Sidebar: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  const menuItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: FiHome },
-    { path: '/customers', label: 'Clientes', icon: FiUsers },
-    { path: '/products', label: 'Produtos', icon: FiPackage },
-    { path: '/sales', label: 'Vendas', icon: FiShoppingCart },
-    { path: '/crediario', label: 'Crediário', icon: FiCreditCard },
-    { path: '/messages', label: 'Mensagens', icon: FiMessageSquare },
-    { path: '/deliveries', label: 'Entregas', icon: FiTruck },
-    ...(isAdmin ? [{ path: '/contas-a-pagar', label: 'Contas a Pagar', icon: FiDollarSign }] : []),
-    { path: '/settings', label: 'Configurações', icon: FiSettings },
+  const hasTab = (tab: string) =>
+    isAdmin || (user?.allowedTabs ?? []).includes(tab);
+
+  const allItems = [
+    { path: '/dashboard',      label: 'Dashboard',      icon: FiHome,          tab: 'dashboard' },
+    { path: '/customers',      label: 'Clientes',       icon: FiUsers,         tab: 'clientes' },
+    { path: '/products',       label: 'Produtos',       icon: FiPackage,       tab: 'produtos' },
+    { path: '/sales',          label: 'Vendas',         icon: FiShoppingCart,  tab: 'vendas' },
+    { path: '/crediario',      label: 'Crediário',      icon: FiCreditCard,    tab: 'crediario_cobranca' },
+    { path: '/messages',       label: 'Mensagens',      icon: FiMessageSquare, tab: 'mensagens' },
+    { path: '/deliveries',     label: 'Entregas',       icon: FiTruck,         tab: 'entregas' },
+    { path: '/contas-a-pagar', label: 'Contas a Pagar', icon: FiDollarSign,    tab: 'contas_a_pagar' },
+    { path: '/settings',       label: 'Configurações',  icon: FiSettings,      tab: 'admin_only' },
   ];
+
+  const menuItems = allItems.filter(item => {
+    if (item.tab === 'admin_only') return isAdmin;
+    if (item.tab === 'crediario_cobranca') return hasTab('crediario') || hasTab('cobranca');
+    return hasTab(item.tab);
+  });
 
   const isActive = (path: string) => location.pathname === path;
 

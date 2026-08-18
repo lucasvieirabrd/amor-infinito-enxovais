@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import { MessageService } from '../services/message.service';
 import { WhatsAppService } from '../integrations/whatsapp.service';
 import { z } from 'zod';
+import { db } from '../database';
+import { customers } from '../database/schema';
+import { like, or, isNull, and } from 'drizzle-orm';
 
 const messageService = new MessageService();
 const whatsAppService = new WhatsAppService();
@@ -65,6 +68,24 @@ export class MessageController {
   async getStatsToday(req: Request, res: Response) {
     const stats = await messageService.getStatsToday();
     return res.json(stats);
+  }
+
+  async getContacts(req: Request, res: Response) {
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const results = await db
+      .select({ id: customers.id, name: customers.name, phone: customers.phone })
+      .from(customers)
+      .where(
+        and(
+          isNull(customers.deletedAt),
+          search
+            ? or(like(customers.name, `%${search}%`), like(customers.phone, `%${search}%`))
+            : undefined,
+        )
+      )
+      .orderBy(customers.name)
+      .limit(30);
+    return res.json(results);
   }
 
   async proxyMedia(req: Request, res: Response) {

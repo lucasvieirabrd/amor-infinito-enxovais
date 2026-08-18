@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   FiSave, FiAlertCircle, FiKey, FiDatabase, FiMail, FiClock, FiUser,
   FiPlus, FiEdit2, FiTrash2, FiCheck, FiX, FiPhone, FiSend, FiAlertTriangle,
+  FiUserPlus, FiShield, FiToggleLeft, FiToggleRight, FiLock,
 } from 'react-icons/fi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -35,12 +36,36 @@ const ROLE_LABELS: Record<ContactRole, string> = {
 
 const ALL_ROLES: ContactRole[] = ['daily_pdf', 'daily_summary', 'payables_alert', 'delivery_assembly'];
 
+// ─── User types ───────────────────────────────────────────────────────────────
+
+interface SystemUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'seller';
+  allowedTabs: string[] | null;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
+const TAB_OPTIONS = [
+  { key: 'dashboard',      label: 'Dashboard' },
+  { key: 'clientes',       label: 'Clientes' },
+  { key: 'produtos',       label: 'Produtos' },
+  { key: 'vendas',         label: 'Vendas' },
+  { key: 'crediario',      label: 'Crediário' },
+  { key: 'cobranca',       label: 'Cobrança' },
+  { key: 'mensagens',      label: 'Mensagens' },
+  { key: 'entregas',       label: 'Entregas' },
+  { key: 'contas_a_pagar', label: 'Contas a Pagar' },
+] as const;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const Settings: React.FC = () => {
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers' | 'contacts'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers' | 'contacts' | 'usuarios'>('general');
   const [loading, setLoading] = useState(false);
   const [pixLoading, setPixLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -159,6 +184,77 @@ export const Settings: React.FC = () => {
       return;
     }
     saveContactsMutation.mutate(localContacts);
+  };
+
+  // ─── Users state & mutations ──────────────────────────────────────────────
+
+  const [userModal, setUserModal] = useState<{ open: boolean; editing: SystemUser | null }>({ open: false, editing: null });
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'seller' as 'admin' | 'seller', allowedTabs: [] as string[] });
+
+  const { data: systemUsers, isLoading: usersLoading } = useQuery<SystemUser[]>({
+    queryKey: ['system-users'],
+    queryFn: () => api.get('/users').then(r => r.data),
+    enabled: activeTab === 'usuarios',
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: (data: typeof userForm) => api.post('/users', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-users'] });
+      toast.success('Usuário criado com sucesso!');
+      setUserModal({ open: false, editing: null });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error ?? 'Erro ao criar usuário'),
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<typeof userForm> }) => api.put(`/users/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-users'] });
+      toast.success('Usuário atualizado com sucesso!');
+      setUserModal({ open: false, editing: null });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error ?? 'Erro ao atualizar usuário'),
+  });
+
+  const toggleUserMutation = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) => api.patch(`/users/${id}/active`, { active }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['system-users'] }),
+    onError: (err: any) => toast.error(err?.response?.data?.error ?? 'Erro ao atualizar usuário'),
+  });
+
+  const openCreateUser = () => {
+    setUserForm({ name: '', email: '', password: '', role: 'seller', allowedTabs: [] });
+    setUserModal({ open: true, editing: null });
+  };
+
+  const openEditUser = (u: SystemUser) => {
+    setUserForm({ name: u.name, email: u.email, password: '', role: u.role, allowedTabs: u.allowedTabs ?? [] });
+    setUserModal({ open: true, editing: u });
+  };
+
+  const handleUserSubmit = () => {
+    if (!userForm.name.trim() || !userForm.email.trim()) {
+      toast.error('Nome e e-mail são obrigatórios');
+      return;
+    }
+    if (!userModal.editing && !userForm.password) {
+      toast.error('Senha é obrigatória para novo usuário');
+      return;
+    }
+    if (userModal.editing) {
+      const data: any = { name: userForm.name, email: userForm.email, role: userForm.role, allowedTabs: userForm.allowedTabs };
+      if (userForm.password) data.password = userForm.password;
+      updateUserMutation.mutate({ id: userModal.editing.id, data });
+    } else {
+      createUserMutation.mutate(userForm);
+    }
+  };
+
+  const handleToggleUserActive = (u: SystemUser) => {
+    const action = u.deletedAt ? 'ativar' : 'desativar';
+    if (!confirm(`Deseja ${action} o usuário "${u.name}"?`)) return;
+    toggleUserMutation.mutate({ id: u.id, active: !!u.deletedAt });
   };
 
   // ─── Sellers handlers ─────────────────────────────────────────────────────
@@ -294,6 +390,7 @@ export const Settings: React.FC = () => {
             { key: 'notifications', label: 'Notificações' },
             { key: 'sellers', label: 'Vendedores' },
             { key: 'contacts', label: 'Contatos' },
+            { key: 'usuarios', label: 'Usuários' },
           ] as const
         ).map(tab => (
           <button
@@ -735,7 +832,224 @@ export const Settings: React.FC = () => {
             </Card>
           </div>
         )}
+        {/* ── Usuários Tab ── */}
+        {activeTab === 'usuarios' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Usuários do Sistema</h3>
+                <p className="text-sm text-gray-500 mt-0.5">Gerencie os logins e permissões de acesso</p>
+              </div>
+              <Button variant="primary" size="sm" onClick={openCreateUser} className="flex items-center gap-2">
+                <FiUserPlus size={16} /> Novo Usuário
+              </Button>
+            </div>
+            <Card>
+              {usersLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 font-medium text-gray-600">Nome</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-600">E-mail</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-600">Tipo</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-600">Abas</th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-600">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(systemUsers ?? []).map(u => {
+                        const isActive = !u.deletedAt;
+                        return (
+                          <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-3 px-4 font-medium text-gray-900">{u.name}</td>
+                            <td className="py-3 px-4 text-gray-600">{u.email}</td>
+                            <td className="py-3 px-4">
+                              {u.role === 'admin' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                                  <FiShield size={11} /> Admin
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                  <FiUser size={11} /> Vendedor
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              {isActive ? (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Ativo</span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Inativo</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-gray-500 text-xs">
+                              {u.role === 'admin' ? (
+                                <span className="italic text-gray-400">Acesso total</span>
+                              ) : (
+                                (u.allowedTabs ?? []).length === 0
+                                  ? <span className="italic text-red-400">Sem acesso</span>
+                                  : (u.allowedTabs ?? []).map(t => TAB_OPTIONS.find(o => o.key === t)?.label ?? t).join(', ')
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => openEditUser(u)}
+                                  className="p-1.5 text-gray-500 hover:text-primary transition-colors"
+                                  title="Editar"
+                                >
+                                  <FiEdit2 size={15} />
+                                </button>
+                                <button
+                                  onClick={() => handleToggleUserActive(u)}
+                                  className={`p-1.5 transition-colors ${isActive ? 'text-gray-500 hover:text-red-500' : 'text-gray-400 hover:text-green-500'}`}
+                                  title={isActive ? 'Desativar' : 'Ativar'}
+                                >
+                                  {isActive ? <FiToggleRight size={18} /> : <FiToggleLeft size={18} />}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {(systemUsers ?? []).length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-gray-400">Nenhum usuário encontrado</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
       </div>
+
+      {/* ── User Modal ── */}
+      {userModal.open && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">
+                {userModal.editing ? 'Editar Usuário' : 'Novo Usuário'}
+              </h2>
+              <button onClick={() => setUserModal({ open: false, editing: null })} className="text-gray-400 hover:text-gray-600">
+                <FiX size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <Input
+                label="Nome"
+                value={userForm.name}
+                onChange={e => setUserForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Nome completo"
+              />
+              <Input
+                label="E-mail"
+                type="email"
+                value={userForm.email}
+                onChange={e => setUserForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="email@exemplo.com"
+              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Senha {userModal.editing && <span className="text-gray-400 font-normal">(deixe em branco para manter)</span>}
+                </label>
+                <div className="relative">
+                  <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="password"
+                    value={userForm.password}
+                    onChange={e => setUserForm(f => ({ ...f, password: e.target.value }))}
+                    placeholder={userModal.editing ? '••••••' : 'Mínimo 6 caracteres'}
+                    className="input-base pl-9 w-full"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de acesso</label>
+                <div className="flex gap-3">
+                  {(['seller', 'admin'] as const).map(r => (
+                    <button
+                      key={r}
+                      onClick={() => setUserForm(f => ({ ...f, role: r, allowedTabs: r === 'admin' ? [] : f.allowedTabs }))}
+                      className={`flex-1 py-2 px-4 rounded-lg border-2 text-sm font-medium transition-colors ${
+                        userForm.role === r
+                          ? r === 'admin' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-primary bg-primary bg-opacity-10 text-primary'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      {r === 'admin' ? '⚙️ Admin' : '👤 Vendedor'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {userForm.role === 'seller' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Abas permitidas</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TAB_OPTIONS.map(opt => {
+                      const checked = userForm.allowedTabs.includes(opt.key);
+                      return (
+                        <button
+                          key={opt.key}
+                          onClick={() => setUserForm(f => ({
+                            ...f,
+                            allowedTabs: checked
+                              ? f.allowedTabs.filter(t => t !== opt.key)
+                              : [...f.allowedTabs, opt.key],
+                          }))}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
+                            checked
+                              ? 'border-primary bg-primary bg-opacity-10 text-primary'
+                              : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${checked ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+                            {checked && <FiCheck size={10} className="text-white" />}
+                          </span>
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {userForm.role === 'admin' && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 flex items-center gap-2">
+                  <FiShield className="text-purple-600 flex-shrink-0" size={16} />
+                  <p className="text-xs text-purple-700">Administradores têm acesso total ao sistema, incluindo Configurações.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-end p-6 border-t border-gray-200">
+              <Button variant="secondary" onClick={() => setUserModal({ open: false, editing: null })}>
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                loading={createUserMutation.isPending || updateUserMutation.isPending}
+                onClick={handleUserSubmit}
+                className="flex items-center gap-2"
+              >
+                <FiCheck size={16} />
+                {userModal.editing ? 'Salvar alterações' : 'Criar usuário'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Save Button (only for general tab) */}
       {activeTab === 'general' && (

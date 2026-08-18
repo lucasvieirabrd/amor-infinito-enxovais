@@ -18,6 +18,7 @@ import { deliveryRouter } from './delivery.routes';
 import { payableRouter } from './payable.routes';
 import { nfImportRouter } from './nf-import.routes';
 import { kitRouter } from './kit.routes';
+import { userRouter } from './user.routes';
 
 const routes = Router();
 
@@ -40,5 +41,6 @@ routes.use('/deliveries', deliveryRouter);
 routes.use('/payables', payableRouter);
 routes.use('/nf-import', nfImportRouter);
 routes.use('/kits', kitRouter);
+routes.use('/users', userRouter);
 
 export { routes };

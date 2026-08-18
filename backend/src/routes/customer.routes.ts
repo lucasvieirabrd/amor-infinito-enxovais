@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { CustomerController } from '../controllers/customer.controller';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { ensureAuthorized } from '../middlewares/ensureAuthorized';
+import { ensureTabAccess } from '../middlewares/ensureTabAccess';
 import multer from 'multer';
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -22,6 +23,7 @@ const customerController = new CustomerController();
 
 // Todas as rotas de clientes requerem autenticação
 customerRouter.use(ensureAuthenticated);
+customerRouter.use(ensureTabAccess('clientes'));
 
 customerRouter.post('/', customerController.register);
 customerRouter.get('/', customerController.list);

@@ -2,12 +2,14 @@ import { Router } from 'express';
 import { ProductController } from '../controllers/product.controller';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
 import { ensureAuthorized } from '../middlewares/ensureAuthorized';
+import { ensureTabAccess } from '../middlewares/ensureTabAccess';
 
 const productRouter = Router();
 const productController = new ProductController();
 
 // Todas as rotas de produtos requerem autenticação
 productRouter.use(ensureAuthenticated);
+productRouter.use(ensureTabAccess('produtos'));
 
 productRouter.get('/categories', productController.categories);
 productRouter.get('/', productController.list);
