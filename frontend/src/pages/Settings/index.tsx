@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { FiSave, FiAlertCircle, FiKey, FiDatabase, FiMail, FiClock, FiUser, FiPlus, FiEdit2, FiTrash2, FiCheck, FiX } from 'react-icons/fi';
+import {
+  FiSave, FiAlertCircle, FiKey, FiDatabase, FiMail, FiClock, FiUser,
+  FiPlus, FiEdit2, FiTrash2, FiCheck, FiX, FiPhone, FiSend, FiAlertTriangle,
+} from 'react-icons/fi';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-toastify';
 import { Card, Button, Input, Badge } from '../../components/ui';
 import api from '../../services/api';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Seller {
   id: string;
@@ -10,8 +17,30 @@ interface Seller {
   deletedAt?: string | null;
 }
 
+type ContactRole = 'daily_pdf' | 'daily_summary' | 'payables_alert' | 'delivery_assembly';
+
+interface SystemContact {
+  id: string;
+  label: string;
+  phone: string;
+  roles: ContactRole[];
+}
+
+const ROLE_LABELS: Record<ContactRole, string> = {
+  daily_pdf: 'PDF Diário (07h30)',
+  daily_summary: 'Resumo Diário (11h)',
+  payables_alert: 'Alerta Contas a Pagar',
+  delivery_assembly: 'Entrega com Montagem',
+};
+
+const ALL_ROLES: ContactRole[] = ['daily_pdf', 'daily_summary', 'payables_alert', 'delivery_assembly'];
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export const Settings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers'>('general');
+  const queryClient = useQueryClient();
+
+  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers' | 'contacts'>('general');
   const [loading, setLoading] = useState(false);
   const [pixLoading, setPixLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -41,6 +70,98 @@ export const Settings: React.FC = () => {
   const [newSellerName, setNewSellerName] = useState('');
   const [sellerLoading, setSellerLoading] = useState(false);
   const [editingSeller, setEditingSeller] = useState<{ id: string; name: string } | null>(null);
+
+  // ─── Contacts state ───────────────────────────────────────────────────────
+
+  const [localContacts, setLocalContacts] = useState<SystemContact[]>([]);
+  const [testingRole, setTestingRole] = useState<ContactRole | null>(null);
+
+  const { data: fetchedContacts } = useQuery<SystemContact[]>({
+    queryKey: ['system-contacts'],
+    queryFn: () => api.get('/settings/system-contacts').then(r => r.data),
+    enabled: activeTab === 'contacts',
+  });
+
+  useEffect(() => {
+    if (fetchedContacts) setLocalContacts(fetchedContacts);
+  }, [fetchedContacts]);
+
+  const saveContactsMutation = useMutation({
+    mutationFn: (contacts: SystemContact[]) =>
+      api.put('/settings/system-contacts', contacts).then(r => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-contacts'] });
+      toast.success('Contatos salvos com sucesso!');
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error ?? 'Erro ao salvar contatos');
+    },
+  });
+
+  const addContact = () => {
+    setLocalContacts(prev => [
+      ...prev,
+      { id: '', label: '', phone: '', roles: [] },
+    ]);
+  };
+
+  const removeContact = (idx: number) => {
+    setLocalContacts(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateContact = (idx: number, field: keyof SystemContact, value: string) => {
+    setLocalContacts(prev =>
+      prev.map((c, i) => (i === idx ? { ...c, [field]: value } : c))
+    );
+  };
+
+  const toggleRole = (idx: number, role: ContactRole) => {
+    setLocalContacts(prev =>
+      prev.map((c, i) => {
+        if (i !== idx) return c;
+        const hasRole = c.roles.includes(role);
+        return {
+          ...c,
+          roles: hasRole ? c.roles.filter(r => r !== role) : [...c.roles, role],
+        };
+      })
+    );
+  };
+
+  const testRole = async (role: ContactRole) => {
+    setTestingRole(role);
+    try {
+      const res = await api.post(`/settings/system-contacts/test/${role}`);
+      const { results } = res.data as { results: { phone: string; success: boolean; error?: string }[] };
+      const failed = results.filter(r => !r.success);
+      if (failed.length === 0) {
+        toast.success(`Teste enviado para ${results.length} contato(s)!`);
+      } else {
+        toast.warn(`${results.length - failed.length} ok, ${failed.length} falha(s)`);
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error ?? 'Erro ao enviar teste');
+    } finally {
+      setTestingRole(null);
+    }
+  };
+
+  const rolesWithoutContacts = ALL_ROLES.filter(
+    role => !localContacts.some(c => c.roles.includes(role))
+  );
+
+  const handleSaveContacts = () => {
+    const invalid = localContacts.find(
+      c => !c.label.trim() || !/^\d{10,15}$/.test(c.phone)
+    );
+    if (invalid) {
+      toast.error('Preencha label e telefone (somente dígitos, 10–15 caracteres) em todos os contatos');
+      return;
+    }
+    saveContactsMutation.mutate(localContacts);
+  };
+
+  // ─── Sellers handlers ─────────────────────────────────────────────────────
 
   const loadSellers = async () => {
     try {
@@ -96,7 +217,8 @@ export const Settings: React.FC = () => {
     }
   };
 
-  // Load PIX settings and sellers on mount
+  // ─── General / PIX handlers ───────────────────────────────────────────────
+
   useEffect(() => {
     api.get('/settings')
       .then(res => {
@@ -145,6 +267,8 @@ export const Settings: React.FC = () => {
     setPixSettings(prev => ({ ...prev, [key]: value }));
   };
 
+  // ─── Render ───────────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -162,51 +286,33 @@ export const Settings: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('general')}
-          className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-            activeTab === 'general'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Geral
-        </button>
-        <button
-          onClick={() => setActiveTab('integrations')}
-          className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-            activeTab === 'integrations'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Integrações
-        </button>
-        <button
-          onClick={() => setActiveTab('notifications')}
-          className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-            activeTab === 'notifications'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Notificações
-        </button>
-        <button
-          onClick={() => setActiveTab('sellers')}
-          className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-            activeTab === 'sellers'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Vendedores
-        </button>
+      <div className="flex gap-2 border-b border-gray-200 flex-wrap">
+        {(
+          [
+            { key: 'general', label: 'Geral' },
+            { key: 'integrations', label: 'Integrações' },
+            { key: 'notifications', label: 'Notificações' },
+            { key: 'sellers', label: 'Vendedores' },
+            { key: 'contacts', label: 'Contatos' },
+          ] as const
+        ).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-3 font-medium border-b-2 transition-colors ${
+              activeTab === tab.key
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Content */}
       <div className="space-y-6">
+
         {/* General Settings */}
         {activeTab === 'general' && (
           <div className="space-y-6">
@@ -280,9 +386,7 @@ export const Settings: React.FC = () => {
             <Card
               title="Google Sheets"
               subtitle="Sincronize seu estoque com Google Sheets"
-              footer={
-                <Badge variant="success">Conectado</Badge>
-              }
+              footer={<Badge variant="success">Conectado</Badge>}
             >
               <div className="space-y-4">
                 <div className="bg-background p-4 rounded-lg border border-gray-200">
@@ -486,21 +590,168 @@ export const Settings: React.FC = () => {
             </Card>
           </div>
         )}
+
+        {/* Contacts */}
+        {activeTab === 'contacts' && (
+          <div className="space-y-6">
+
+            {/* Warning: roles with no contacts */}
+            {rolesWithoutContacts.length > 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+                <FiAlertTriangle className="text-yellow-600 mt-0.5 flex-shrink-0" size={18} />
+                <div>
+                  <p className="text-sm font-semibold text-yellow-800">Papéis sem contato configurado</p>
+                  <p className="text-xs text-yellow-700 mt-1">
+                    {rolesWithoutContacts.map(r => ROLE_LABELS[r]).join(', ')}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Contact list */}
+            <Card
+              title="Contatos do Sistema"
+              subtitle="Números de WhatsApp que recebem notificações automáticas"
+            >
+              <div className="space-y-4">
+                {localContacts.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <FiPhone size={32} className="mx-auto mb-2 opacity-40" />
+                    <p className="text-sm">Nenhum contato cadastrado</p>
+                  </div>
+                )}
+
+                {localContacts.map((contact, idx) => (
+                  <div key={contact.id || idx} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                    {/* Label + Phone + Remove */}
+                    <div className="flex gap-3 items-start">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Nome / Rótulo</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Celita"
+                          value={contact.label}
+                          onChange={e => updateContact(idx, 'label', e.target.value)}
+                          className="w-full h-9 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Telefone (somente dígitos)</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: 5516997977302"
+                          value={contact.phone}
+                          onChange={e => updateContact(idx, 'phone', e.target.value.replace(/\D/g, ''))}
+                          className="w-full h-9 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-20 transition-colors font-mono"
+                        />
+                      </div>
+                      <button
+                        onClick={() => removeContact(idx)}
+                        className="mt-5 p-2 text-error hover:bg-error hover:bg-opacity-10 rounded-lg transition-colors flex-shrink-0"
+                        title="Remover contato"
+                      >
+                        <FiTrash2 size={16} />
+                      </button>
+                    </div>
+
+                    {/* Role checkboxes */}
+                    <div>
+                      <p className="text-xs font-medium text-gray-600 mb-2">Notificações recebidas</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {ALL_ROLES.map(role => (
+                          <label key={role} className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={contact.roles.includes(role)}
+                              onChange={() => toggleRole(idx, role)}
+                              className="w-4 h-4 rounded cursor-pointer accent-primary"
+                            />
+                            <span className="text-xs text-gray-700">{ROLE_LABELS[role]}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add + Save */}
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    variant="secondary"
+                    onClick={addContact}
+                    className="flex items-center gap-2"
+                  >
+                    <FiPlus size={16} />
+                    Adicionar Contato
+                  </Button>
+                  <Button
+                    variant="primary"
+                    loading={saveContactsMutation.isPending}
+                    disabled={saveContactsMutation.isPending}
+                    onClick={handleSaveContacts}
+                    className="flex items-center gap-2"
+                  >
+                    <FiSave size={16} />
+                    Salvar Contatos
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            {/* Test per role */}
+            <Card
+              title="Testar Notificações"
+              subtitle="Envia uma mensagem de teste via WhatsApp real para todos os contatos do papel"
+            >
+              <div className="space-y-3">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center gap-2">
+                  <FiAlertTriangle className="text-yellow-600 flex-shrink-0" size={16} />
+                  <p className="text-xs text-yellow-800 font-medium">
+                    Atenção: os botões abaixo enviam mensagens WhatsApp reais para os contatos configurados.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {ALL_ROLES.map(role => {
+                    const count = localContacts.filter(c => c.roles.includes(role)).length;
+                    return (
+                      <div key={role} className="flex items-center justify-between p-3 bg-background rounded-lg border border-gray-200">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{ROLE_LABELS[role]}</p>
+                          <p className="text-xs text-gray-500">{count} contato{count !== 1 ? 's' : ''}</p>
+                        </div>
+                        <button
+                          onClick={() => testRole(role)}
+                          disabled={count === 0 || testingRole !== null}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed border-primary text-primary hover:bg-primary hover:bg-opacity-10"
+                        >
+                          <FiSend size={12} />
+                          {testingRole === role ? 'Enviando…' : 'Testar'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
 
-      {/* Save Button (general settings) */}
-      <div className="flex justify-end gap-3">
-        <Button
-          variant="primary"
-          size="lg"
-          loading={loading}
-          onClick={handleSaveSettings}
-          className="flex items-center gap-2"
-        >
-          <FiSave size={20} />
-          Salvar Configurações
-        </Button>
-      </div>
+      {/* Save Button (only for general tab) */}
+      {activeTab === 'general' && (
+        <div className="flex justify-end gap-3">
+          <Button
+            variant="primary"
+            size="lg"
+            loading={loading}
+            onClick={handleSaveSettings}
+            className="flex items-center gap-2"
+          >
+            <FiSave size={20} />
+            Salvar Configurações
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

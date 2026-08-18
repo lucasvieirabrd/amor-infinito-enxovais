@@ -6,11 +6,11 @@ import { db } from '../database';
 import { auditLogs, messages } from '../database/schema';
 import { v4 as uuidv4 } from 'uuid';
 import { parseBoletoFromPDF, parseBatchBoletosFromPDF } from '../utils/boleto';
+import { getContactsByRole } from './settings.service';
 
 const payableRepository = new PayableRepository();
 const whatsAppService = new WhatsAppService();
 
-const CELITA_PHONE = '5516997977302';
 const BOLETO_MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const BOLETO_ALLOWED_MIMETYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
@@ -278,19 +278,27 @@ export class PayableService {
     }
     const text = parts.join('\n');
 
-    // 1º — enviar texto (resumo)
-    try {
-      await whatsAppService.sendTextMessage(CELITA_PHONE, text);
-      console.log(`[PayableService] Alerta de contas enviado para Celita: ${overdue.length} vencidas, ${soon.length} vencendo em breve.`);
-    } catch (err: any) {
-      console.error('[PayableService] Erro ao enviar alerta de contas (texto):', err?.message);
+    const alertPhones = await getContactsByRole('payables_alert');
+    if (alertPhones.length === 0) {
+      console.warn('[PayableService] Nenhum contato configurado para payables_alert');
+      return;
+    }
+
+    // 1º — enviar texto (resumo) para cada contato configurado
+    for (const phone of alertPhones) {
+      try {
+        await whatsAppService.sendTextMessage(phone, text);
+        console.log(`[PayableService] Alerta enviado para ${phone}: ${overdue.length} vencidas, ${soon.length} vencendo em breve.`);
+      } catch (err: any) {
+        console.error('[PayableService] Erro ao enviar alerta de contas (texto):', err?.message);
+      }
     }
 
     // 2º — boletos vencendo HOJE: upload → sendDocument, um por vez
     const boletosHoje = await payableRepository.findBoletosForToday();
     if (boletosHoje.length === 0) return;
 
-    console.log(`[PayableService] Enviando ${boletosHoje.length} boleto(s) vencendo hoje para Celita...`);
+    console.log(`[PayableService] Enviando ${boletosHoje.length} boleto(s) vencendo hoje...`);
 
     for (const boleto of boletosHoje) {
       const dateStr = new Date(boleto.dueDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -303,45 +311,47 @@ export class PayableService {
           boleto.boletoFilename,
         );
 
-        const result = await whatsAppService.sendDocumentMessage(
-          CELITA_PHONE,
-          mediaId,
-          boleto.boletoFilename,
-          caption,
-        );
-
-        if (result && !result.error) {
-          await db.insert(messages).values({
-            id: uuidv4(),
-            metaMessageId: result.messages?.[0]?.id ?? null,
-            customerId: null,
-            fromPhone: 'SISTEMA',
-            toPhone: CELITA_PHONE,
-            type: 'document',
-            content: caption,
+        for (const phone of alertPhones) {
+          const result = await whatsAppService.sendDocumentMessage(
+            phone,
             mediaId,
-            mediaFilename: boleto.boletoFilename,
-            direction: 'outbound',
-            status: 'sent',
-            tag: 'none',
-            timestamp: new Date(),
-          });
-          console.log(`[PayableService] Boleto enviado ✓: ${boleto.boletoFilename}`);
-        } else {
-          await db.insert(messages).values({
-            id: uuidv4(),
-            customerId: null,
-            fromPhone: 'SISTEMA',
-            toPhone: CELITA_PHONE,
-            type: 'document',
-            content: caption,
-            direction: 'outbound',
-            status: 'failed',
-            tag: 'none',
-            errorMessage: result?.message ?? 'Erro desconhecido ao enviar documento',
-            timestamp: new Date(),
-          });
-          console.error(`[PayableService] Falha ao enviar boleto ${boleto.boletoFilename}:`, result?.message);
+            boleto.boletoFilename,
+            caption,
+          );
+
+          if (result && !result.error) {
+            await db.insert(messages).values({
+              id: uuidv4(),
+              metaMessageId: result.messages?.[0]?.id ?? null,
+              customerId: null,
+              fromPhone: 'SISTEMA',
+              toPhone: phone,
+              type: 'document',
+              content: caption,
+              mediaId,
+              mediaFilename: boleto.boletoFilename,
+              direction: 'outbound',
+              status: 'sent',
+              tag: 'none',
+              timestamp: new Date(),
+            });
+            console.log(`[PayableService] Boleto enviado ✓: ${boleto.boletoFilename} → ${phone}`);
+          } else {
+            await db.insert(messages).values({
+              id: uuidv4(),
+              customerId: null,
+              fromPhone: 'SISTEMA',
+              toPhone: phone,
+              type: 'document',
+              content: caption,
+              direction: 'outbound',
+              status: 'failed',
+              tag: 'none',
+              errorMessage: result?.message ?? 'Erro desconhecido ao enviar documento',
+              timestamp: new Date(),
+            });
+            console.error(`[PayableService] Falha ao enviar boleto ${boleto.boletoFilename} → ${phone}:`, result?.message);
+          }
         }
       } catch (err: any) {
         console.error(`[PayableService] Erro inesperado ao enviar boleto ${boleto.boletoFilename}:`, err?.message);

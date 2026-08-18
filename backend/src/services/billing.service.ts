@@ -8,16 +8,11 @@ import { customers, installments } from '../database/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { format, differenceInDays, startOfDay } from 'date-fns';
 import { generateRelatorioCobrancaPdf } from './relatorioCobranca.service';
+import { getContactsByRole } from './settings.service';
 
 const whatsAppService = new WhatsAppService();
 const installmentRepository = new InstallmentRepository();
 const messageRepository = new MessageRepository();
-
-const ADMIN_PHONES = [
-  '+5516982015465',
-  '+5516997977302',
-  '+5516981271021',
-];
 
 /** Formata valor monetário em padrão pt-BR: 150,00 (sem "R$") */
 const formatAmount = (value: number | string) =>
@@ -357,7 +352,8 @@ export class BillingService {
       ],
     }];
 
-    for (const phone of ADMIN_PHONES) {
+    const summaryPhones = await getContactsByRole('daily_summary');
+    for (const phone of summaryPhones) {
       const result = await whatsAppService.sendTemplateMessage(phone, 'msg_resumo_vencimento', components);
 
       if (!result || result.error) {
@@ -391,7 +387,8 @@ export class BillingService {
 
     const results: { phone: string; success: boolean; messageId?: string; error?: string }[] = [];
 
-    for (const phone of ADMIN_PHONES) {
+    const pdfPhones = await getContactsByRole('daily_pdf');
+    for (const phone of pdfPhones) {
       const result = await whatsAppService.sendDocumentMessage(phone, mediaId, filename, caption);
       if (result?.error) {
         console.error(`[BillingService] ✗ Falha ao enviar PDF para ${phone}:`, result.message);

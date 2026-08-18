@@ -2,12 +2,11 @@ import { DeliveryRepository } from '../repositories/delivery.repository';
 import { MessageRepository } from '../repositories/message.repository';
 import { WhatsAppService } from '../integrations/whatsapp.service';
 import { AppError } from '../utils/AppError';
+import { getContactsByRole } from './settings.service';
 
 const deliveryRepository = new DeliveryRepository();
 const messageRepository = new MessageRepository();
 const whatsAppService = new WhatsAppService();
-
-const MARCELO_PHONE = '5516981271021';
 
 export class DeliveryService {
   async list(params: { status?: 'pending' | 'delivered'; search?: string; page?: number; limit?: number }) {
@@ -53,21 +52,24 @@ export class DeliveryService {
           `Tipo: Com montagem\n` +
           `Venda: ${delivery.saleNumber}`;
 
-        const result = await whatsAppService.sendTextMessage(MARCELO_PHONE, text);
+        const assemblyPhones = await getContactsByRole('delivery_assembly');
+        for (const phone of assemblyPhones) {
+          const result = await whatsAppService.sendTextMessage(phone, text);
 
-        await messageRepository.create({
-          metaMessageId: result?.messages?.[0]?.id,
-          customerId: delivery.customerId,
-          fromPhone: 'SISTEMA',
-          toPhone: MARCELO_PHONE,
-          type: 'text',
-          content: text,
-          direction: 'outbound',
-          status: result?.error ? 'failed' : 'sent',
-          tag: 'none',
-          errorMessage: result?.error ? String(result.message ?? '') : null,
-          timestamp: new Date(),
-        });
+          await messageRepository.create({
+            metaMessageId: result?.messages?.[0]?.id,
+            customerId: delivery.customerId,
+            fromPhone: 'SISTEMA',
+            toPhone: phone,
+            type: 'text',
+            content: text,
+            direction: 'outbound',
+            status: result?.error ? 'failed' : 'sent',
+            tag: 'none',
+            errorMessage: result?.error ? String(result.message ?? '') : null,
+            timestamp: new Date(),
+          });
+        }
       } catch (err: any) {
         console.error('[delivery] Erro ao notificar Marcelo via WhatsApp:', err?.message);
       }

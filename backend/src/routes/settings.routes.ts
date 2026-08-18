@@ -11,4 +11,8 @@ settingsRouter.use(ensureAuthenticated);
 settingsRouter.get('/', settingsController.getAll);
 settingsRouter.patch('/', ensureAuthorized(['admin']), settingsController.upsert);
 
+settingsRouter.get('/system-contacts', settingsController.getSystemContacts);
+settingsRouter.put('/system-contacts', ensureAuthorized(['admin']), settingsController.upsertSystemContacts);
+settingsRouter.post('/system-contacts/test/:role', ensureAuthorized(['admin']), settingsController.testContactRole);
+
 export { settingsRouter };
