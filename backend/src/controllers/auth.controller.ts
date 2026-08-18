@@ -1,8 +1,11 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
+import { UserRepository } from '../repositories/user.repository';
+import { AppError } from '../utils/AppError';
 import { z } from 'zod';
 
 const authService = new AuthService();
+const userRepository = new UserRepository();
 
 export class AuthController {
   async register(req: Request, res: Response) {
@@ -36,8 +39,10 @@ export class AuthController {
   }
 
   async me(req: Request, res: Response) {
-    // req.user será preenchido pelo middleware de autenticação
-    return res.json(req.user);
+    const user = await userRepository.findById(req.user!.id);
+    if (!user) throw new AppError('Usuário não encontrado', 404);
+    const { password, ...userWithoutPassword } = user;
+    return res.json(userWithoutPassword);
   }
 
   async forgotPassword(req: Request, res: Response) {
