@@ -11,6 +11,9 @@ const installmentController = new InstallmentController();
 installmentRouter.use(ensureAuthenticated);
 installmentRouter.use(ensureAnyTabAccess(['crediario', 'cobranca']));
 
+// Admin-only: PDF de recebíveis por mês
+installmentRouter.get('/receivables/pdf', ensureAuthorized(['admin']), installmentController.getReceivablesPdf);
+
 // Listagens gerais
 installmentRouter.get('/stats', installmentController.getStats);
 installmentRouter.get('/payments-last-30-days', installmentController.getPaymentsLast30Days);

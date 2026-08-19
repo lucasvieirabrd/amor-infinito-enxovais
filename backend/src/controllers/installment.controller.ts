@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { InstallmentService } from '../services/installment.service';
 import { z } from 'zod';
+import { generateReceivablesPdf } from '../services/receivablesPdf.service';
+import { AppError } from '../utils/AppError';
 
 const installmentService = new InstallmentService();
 
@@ -156,5 +158,28 @@ export class InstallmentController {
     const result = await installmentService.sendManualBillingMessage(parsedCustomerId, parsedInstallmentId);
 
     return res.json(result);
+  }
+
+  async getReceivablesPdf(req: Request, res: Response) {
+    const nowSp = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+
+    const schema = z.object({
+      month: z.string().optional().transform(v => (v ? parseInt(v, 10) : nowSp.getMonth() + 1)),
+      year:  z.string().optional().transform(v => (v ? parseInt(v, 10) : nowSp.getFullYear())),
+    });
+
+    const { month, year } = schema.parse(req.query);
+    if (month < 1 || month > 12) throw new AppError('Mês inválido (1–12)', 400);
+    if (year < 2020 || year > 2100) throw new AppError('Ano inválido', 400);
+
+    const pdf = await generateReceivablesPdf(month, year);
+    const filename = `recebiveis-crediario-${year}-${String(month).padStart(2, '0')}.pdf`;
+
+    res.set({
+      'Content-Type':        'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length':      String(pdf.length),
+    });
+    res.end(pdf);
   }
 }

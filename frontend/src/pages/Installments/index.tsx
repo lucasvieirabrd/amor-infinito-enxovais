@@ -102,6 +102,13 @@ export const Installments: React.FC = () => {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState('');
 
+  // Modal: recebíveis do crediário (admin-only)
+  const nowForModal = new Date();
+  const [isReceivablesModalOpen, setIsReceivablesModalOpen] = useState(false);
+  const [receivablesMonth, setReceivablesMonth] = useState(nowForModal.getMonth() + 1);
+  const [receivablesYear,  setReceivablesYear]  = useState(nowForModal.getFullYear());
+  const [isGeneratingReceivables, setIsGeneratingReceivables] = useState(false);
+
   // Modal: renegociação de dívida
   const [isRenModalOpen, setIsRenModalOpen] = useState(false);
   const [renStep, setRenStep] = useState<1 | 2 | 3>(1);
@@ -317,6 +324,28 @@ export const Installments: React.FC = () => {
     setShowCustomerDropdown(false);
   };
 
+  const handleDownloadReceivables = async () => {
+    setIsGeneratingReceivables(true);
+    try {
+      const res = await api.get('/installments/receivables/pdf', {
+        params: { month: receivablesMonth, year: receivablesYear },
+        responseType: 'blob',
+      });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `recebiveis-crediario-${receivablesYear}-${String(receivablesMonth).padStart(2, '0')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setIsReceivablesModalOpen(false);
+    } catch {
+      import('react-toastify').then(({ toast }) => toast.error('Erro ao gerar PDF de recebíveis'));
+    } finally {
+      setIsGeneratingReceivables(false);
+    }
+  };
+
   // ── Renegociação ───────────────────────────────────────────────────────────
 
   const sortedInstallments = useMemo(() => {
@@ -458,13 +487,25 @@ export const Installments: React.FC = () => {
         {/* Título */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Crediário</h1>
-          <Button
-            onClick={() => setIsReportModalOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <FiFileText size={16} />
-            Gerar Relatório
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button
+                variant="secondary"
+                onClick={() => setIsReceivablesModalOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <FiDownload size={16} />
+                Recebíveis
+              </Button>
+            )}
+            <Button
+              onClick={() => setIsReportModalOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <FiFileText size={16} />
+              Gerar Relatório
+            </Button>
+          </div>
         </div>
 
         {/* KPI cards */}
@@ -1340,6 +1381,66 @@ export const Installments: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Modal: Recebíveis do Crediário (admin-only) */}
+      {isAdmin && (
+        <Modal
+          isOpen={isReceivablesModalOpen}
+          onClose={() => setIsReceivablesModalOpen(false)}
+          title="Relatório de Recebíveis"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              Gera um PDF com a previsão de recebimentos dia a dia para o mês selecionado.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mês</label>
+                <select
+                  value={receivablesMonth}
+                  onChange={e => setReceivablesMonth(Number(e.target.value))}
+                  className="input-base w-full"
+                >
+                  {[
+                    'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                    'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro',
+                  ].map((name, i) => (
+                    <option key={i + 1} value={i + 1}>{name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Ano</label>
+                <select
+                  value={receivablesYear}
+                  onChange={e => setReceivablesYear(Number(e.target.value))}
+                  className="input-base w-full"
+                >
+                  {Array.from({ length: 4 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setIsReceivablesModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                loading={isGeneratingReceivables}
+                onClick={handleDownloadReceivables}
+                className="flex items-center gap-2"
+              >
+                {!isGeneratingReceivables && <FiDownload size={15} />}
+                {isGeneratingReceivables ? 'Gerando…' : 'Gerar PDF'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
