@@ -60,6 +60,15 @@ interface PaginatedResponse {
   totalPages: number;
 }
 
+interface InstallmentHistoryEvent {
+  tipo: 'baixa' | 'reversao';
+  userName: string | null;
+  dataHora: string;
+}
+interface InstallmentHistoryMap {
+  [installmentId: string]: InstallmentHistoryEvent[];
+}
+
 interface StatsResponse {
   overdue: { count: number; total: number };
   pendingToday: { count: number; total: number };
@@ -156,6 +165,16 @@ export const Installments: React.FC = () => {
     enabled: !!expandedCustomer,
   });
 
+  const { data: installmentHistory } = useQuery({
+    queryKey: ['installment-history', expandedCustomer?.id],
+    queryFn: async () => {
+      if (!expandedCustomer) return {} as InstallmentHistoryMap;
+      const res = await api.get(`/installments/customer/${expandedCustomer.id}/history`);
+      return res.data as InstallmentHistoryMap;
+    },
+    enabled: !!expandedCustomer,
+  });
+
   const { data: customerSuggestions } = useQuery({
     queryKey: ['report-customer-search', reportCustomerSearch],
     queryFn: async () => {
@@ -180,6 +199,7 @@ export const Installments: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['installments'] });
       queryClient.invalidateQueries({ queryKey: ['active-crediarios'] });
       queryClient.invalidateQueries({ queryKey: ['installments-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['installment-history'] });
       setIsPaymentModalOpen(false);
       setSelectedInstallment(null);
     },
@@ -209,6 +229,7 @@ export const Installments: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['installments'] });
       queryClient.invalidateQueries({ queryKey: ['active-crediarios'] });
       queryClient.invalidateQueries({ queryKey: ['installments-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['installment-history'] });
     },
   });
 
@@ -853,6 +874,23 @@ export const Installments: React.FC = () => {
                                     )}
                                   </div>
                                 </div>
+                                {(() => {
+                                  const events = installmentHistory?.[inst.id];
+                                  if (!events || events.length === 0) return null;
+                                  return (
+                                    <div className="mt-3 border-t border-gray-100 pt-2 space-y-1">
+                                      {events.map((ev, i) => (
+                                        <p key={i} className={`text-xs flex items-center gap-1 ${ev.tipo === 'baixa' ? 'text-green-600' : 'text-orange-600'}`}>
+                                          <FiClock size={10} className="flex-shrink-0" />
+                                          <span>{ev.tipo === 'baixa' ? 'Baixa:' : 'Reversão:'}</span>
+                                          <span className="font-medium">{ev.dataHora}</span>
+                                          <span>por</span>
+                                          <span className="font-medium">{ev.userName ?? 'Sistema'}</span>
+                                        </p>
+                                      ))}
+                                    </div>
+                                  );
+                                })()}
                               </Card>
                             );
                           })}

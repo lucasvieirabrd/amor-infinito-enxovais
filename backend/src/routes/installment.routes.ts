@@ -22,6 +22,7 @@ installmentRouter.get('/active', installmentController.listActiveCrediarios);
 installmentRouter.get('/overdue', installmentController.listOverdue);
 
 // Por cliente
+installmentRouter.get('/customer/:customerId/history', installmentController.getInstallmentHistory);
 installmentRouter.get('/customer/:customerId', installmentController.getByCustomer);
 
 // Edição em lote

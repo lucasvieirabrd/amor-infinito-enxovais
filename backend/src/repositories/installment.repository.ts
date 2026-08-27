@@ -340,6 +340,31 @@ export class InstallmentRepository {
     return result;
   }
 
+  async getInstallmentHistoryForCustomer(customerId: string) {
+    const result = await db.execute(sql`
+      SELECT
+        al.entity_id  AS installmentId,
+        al.action,
+        al.timestamp,
+        u.name        AS userName
+      FROM audit_logs al
+      LEFT JOIN users u ON u.id = al.user_id
+      WHERE al.entity_type = 'Installment'
+        AND al.action IN ('MARK_INSTALLMENT_PAID', 'REVERT_INSTALLMENT_PAYMENT')
+        AND al.entity_id IN (
+          SELECT id FROM installments
+          WHERE customer_id = ${customerId} AND deleted_at IS NULL
+        )
+      ORDER BY al.timestamp ASC
+    `);
+    return (result[0] as unknown as any[]).map(r => ({
+      installmentId: String(r.installmentId),
+      action: String(r.action),
+      timestamp: new Date(r.timestamp).toISOString(),
+      userName: r.userName ? String(r.userName) : null,
+    }));
+  }
+
   async softDelete(id: string) {
     await db.update(installments).set({ deletedAt: new Date() }).where(eq(installments.id, id));
   }

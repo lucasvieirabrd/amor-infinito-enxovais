@@ -43,7 +43,7 @@ export class InstallmentService {
     });
   }
 
-  async markAsPaid(id: string, data: { paymentDate: string; paidAmount: number }) {
+  async markAsPaid(id: string, data: { paymentDate: string; paidAmount: number }, userId?: string) {
     const installment = await installmentRepository.findById(id);
     if (!installment) {
       throw new AppError('Parcela não encontrada', 404);
@@ -64,6 +64,16 @@ export class InstallmentService {
       status: isFullyPaid ? 'paid' : 'partial',
     });
 
+    await db.insert(auditLogs).values({
+      id: uuidv4(),
+      userId: userId ?? 'SYSTEM',
+      action: 'MARK_INSTALLMENT_PAID',
+      entityType: 'Installment',
+      entityId: id,
+      oldValue: { status: installment.status, paidAmount: installment.paidAmount },
+      newValue: { status: isFullyPaid ? 'paid' : 'partial', paidAmount: newPaidTotal.toFixed(2), paymentDate: data.paymentDate },
+    });
+
     if (updated && isFullyPaid) {
       await billingService.handlePostPaymentMessages(updated.customerId, installment.saleId, newPaidTotal);
     }
@@ -71,7 +81,7 @@ export class InstallmentService {
     return updated;
   }
 
-  async revertPayment(id: string) {
+  async revertPayment(id: string, userId?: string) {
     const installment = await installmentRepository.findById(id);
     if (!installment) {
       throw new AppError('Parcela não encontrada', 404);
@@ -81,11 +91,23 @@ export class InstallmentService {
       throw new AppError('Apenas parcelas pagas ou parciais podem ser revertidas', 400);
     }
 
-    return installmentRepository.update(id, {
+    const result = await installmentRepository.update(id, {
       paymentDate: null,
       paidAmount: '0.00',
       status: 'pending',
     });
+
+    await db.insert(auditLogs).values({
+      id: uuidv4(),
+      userId: userId ?? 'SYSTEM',
+      action: 'REVERT_INSTALLMENT_PAYMENT',
+      entityType: 'Installment',
+      entityId: id,
+      oldValue: { status: installment.status, paidAmount: installment.paidAmount, paymentDate: installment.paymentDate },
+      newValue: { status: 'pending', paidAmount: '0.00', paymentDate: null },
+    });
+
+    return result;
   }
 
   async updateInstallment(id: string, data: { dueDate?: string; originalAmount?: number }, userId?: string) {
@@ -378,6 +400,24 @@ export class InstallmentService {
     });
 
     return newInstallment;
+  }
+
+  async getInstallmentHistory(customerId: string) {
+    const rows = await installmentRepository.getInstallmentHistoryForCustomer(customerId);
+    const grouped = new Map<string, { tipo: 'baixa' | 'reversao'; userName: string | null; dataHora: string }[]>();
+    for (const row of rows) {
+      if (!grouped.has(row.installmentId)) grouped.set(row.installmentId, []);
+      grouped.get(row.installmentId)!.push({
+        tipo: row.action === 'MARK_INSTALLMENT_PAID' ? 'baixa' : 'reversao',
+        userName: row.userName,
+        dataHora: new Date(row.timestamp).toLocaleString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        }),
+      });
+    }
+    return Object.fromEntries(grouped);
   }
 
   async sendManualBillingMessage(customerId: string, installmentId: string) {

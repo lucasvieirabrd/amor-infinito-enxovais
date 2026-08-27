@@ -21,14 +21,22 @@ export class InstallmentController {
     });
 
     const data = paidSchema.parse(req.body);
-    const result = await installmentService.markAsPaid(id, data);
+    const userId = (req as any).user?.id;
+    const result = await installmentService.markAsPaid(id, data, userId);
 
     return res.json(result);
   }
 
   async revertPayment(req: Request, res: Response) {
     const { id } = req.params;
-    const result = await installmentService.revertPayment(id);
+    const userId = (req as any).user?.id;
+    const result = await installmentService.revertPayment(id, userId);
+    return res.json(result);
+  }
+
+  async getInstallmentHistory(req: Request, res: Response) {
+    const { customerId } = req.params;
+    const result = await installmentService.getInstallmentHistory(customerId);
     return res.json(result);
   }
 
