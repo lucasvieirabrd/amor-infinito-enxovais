@@ -410,11 +410,7 @@ export class InstallmentService {
       grouped.get(row.installmentId)!.push({
         tipo: row.action === 'MARK_INSTALLMENT_PAID' ? 'baixa' : 'reversao',
         userName: row.userName,
-        dataHora: new Date(row.timestamp).toLocaleString('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          day: '2-digit', month: '2-digit', year: 'numeric',
-          hour: '2-digit', minute: '2-digit',
-        }),
+        dataHora: row.dataHora,
       });
     }
     return Object.fromEntries(grouped);

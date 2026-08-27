@@ -345,7 +345,7 @@ export class InstallmentRepository {
       SELECT
         al.entity_id  AS installmentId,
         al.action,
-        al.timestamp,
+        DATE_FORMAT(CONVERT_TZ(al.timestamp, '+00:00', '-03:00'), '%d/%m/%Y %H:%i') AS dataHora,
         u.name        AS userName
       FROM audit_logs al
       LEFT JOIN users u ON u.id = al.user_id
@@ -360,7 +360,7 @@ export class InstallmentRepository {
     return (result[0] as unknown as any[]).map(r => ({
       installmentId: String(r.installmentId),
       action: String(r.action),
-      timestamp: new Date(r.timestamp).toISOString(),
+      dataHora: String(r.dataHora),
       userName: r.userName ? String(r.userName) : null,
     }));
   }
