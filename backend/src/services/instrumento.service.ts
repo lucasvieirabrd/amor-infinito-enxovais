@@ -173,53 +173,53 @@ function buildInstrumentoHtml(data: Awaited<ReturnType<typeof getInstrumentoData
     : '<tr><td colspan="4" class="c" style="color:#888;">Nenhum item</td></tr>';
 
   const css = `
-    @page { size: A4; margin: 18mm 20mm 18mm 20mm; }
+    @page { size: A4; margin: 10mm 14mm 10mm 14mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 11pt;
+      font-size: 9.5pt;
       color: #111;
-      line-height: 1.65;
+      line-height: 1.35;
     }
     .title {
       text-align: center;
-      font-size: 13pt;
+      font-size: 11pt;
       font-weight: bold;
       letter-spacing: 1.5px;
       text-transform: uppercase;
       border-bottom: 2px solid #111;
-      padding-bottom: 4mm;
-      margin-bottom: 7mm;
+      padding-bottom: 2mm;
+      margin-bottom: 3mm;
     }
-    .party   { margin-bottom: 2.5mm; }
-    .spacer  { margin-bottom: 5mm; }
-    .body-text { text-align: justify; margin-bottom: 4.5mm; }
-    .payment-section { margin: 1mm 0 4.5mm; }
-    .payment-opt { margin: 2.5mm 0 2.5mm 3mm; }
+    .party   { margin-bottom: 1.5mm; }
+    .spacer  { margin-bottom: 2.5mm; }
+    .body-text { text-align: justify; margin-bottom: 2.5mm; }
+    .payment-section { margin: 0.5mm 0 2mm; }
+    .payment-opt { margin: 1mm 0 1mm 3mm; }
     .sig-wrap {
       display: flex;
       justify-content: space-around;
-      margin-top: 15mm;
+      margin-top: 5mm;
     }
     .sig-block { text-align: center; width: 40%; }
     .sig-line  {
       border-top: 1px solid #333;
-      padding-top: 3mm;
-      font-size: 10pt;
+      padding-top: 1.5mm;
+      font-size: 9pt;
       font-weight: bold;
       letter-spacing: 1px;
     }
-    .witnesses { margin-top: 8mm; }
-    .witness-row { display: flex; gap: 15mm; margin-top: 7mm; }
+    .witnesses { margin-top: 3mm; }
+    .witness-row { display: flex; gap: 8mm; margin-top: 3mm; }
     .witness-col { flex: 1; }
-    .blank { display: inline-block; border-bottom: 1px solid #444; width: 54mm; vertical-align: bottom; margin-left: 2mm; }
+    .blank { display: inline-block; border-bottom: 1px solid #444; width: 44mm; vertical-align: bottom; margin-left: 2mm; }
 
-    /* Annex — page 2 */
-    .page-break { page-break-before: always; padding-top: 5mm; }
-    .annex-title { font-size: 12pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5mm; }
-    table  { width: 100%; border-collapse: collapse; font-size: 10pt; }
-    th     { background: #ddd; padding: 5px 8px; border: 1px solid #888; font-weight: bold; }
-    td     { padding: 4px 8px; border: 1px solid #ccc; }
+    /* Relação de Produtos — mesma página, separada por linha */
+    .page-break { margin-top: 4mm; border-top: 1px solid #bbb; padding-top: 3mm; }
+    .annex-title { font-size: 9.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2mm; }
+    table  { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+    th     { background: #ddd; padding: 3px 6px; border: 1px solid #888; font-weight: bold; }
+    td     { padding: 2px 6px; border: 1px solid #ccc; }
     .r     { text-align: right; }
     .c     { text-align: center; }
     tfoot td { background: #eee; font-weight: bold; border: 1px solid #888; }
@@ -256,7 +256,7 @@ function buildInstrumentoHtml(data: Awaited<ReturnType<typeof getInstrumentoData
 
 <p class="body-text">O presente instrumento constitui t&#237;tulo executivo extrajudicial, conforme autoriza o art. 784, inciso III, do C&#243;digo de Processo Civil, est&#227;o as partes de comum acordo e cientes. Fica eleito o foro da comarca de Jaboticabal - SP, para dirimir qualquer lit&#237;gio.</p>
 
-<p style="margin-top:10mm;">Jaboticabal &#8211; SP, ${dataExtenso}.</p>
+<p style="margin-top:4mm;">Jaboticabal &#8211; SP, ${dataExtenso}.</p>
 
 <div class="sig-wrap">
   <div class="sig-block"><div class="sig-line">VENDEDOR</div></div>
