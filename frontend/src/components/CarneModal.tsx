@@ -58,14 +58,14 @@ export const CarneModal: React.FC<CarneModalProps> = ({
     }
   };
 
-  const handlePromissoria = async () => {
+  const handleInstrumento = async () => {
     setLoading('promissoria');
     try {
-      const response = await api.get(`/sales/${saleId}/promissoria`, { responseType: 'blob' });
+      const response = await api.get(`/sales/${saleId}/instrumento`, { responseType: 'blob' });
       const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       window.open(url, '_blank');
     } catch {
-      alert('Erro ao gerar promissória. Tente novamente.');
+      alert('Erro ao gerar instrumento. Tente novamente.');
     } finally {
       setLoading(null);
     }
@@ -119,11 +119,11 @@ export const CarneModal: React.FC<CarneModalProps> = ({
           </button>
 
           <button
-            onClick={handlePromissoria}
+            onClick={handleInstrumento}
             disabled={loading !== null}
             className="w-full py-2.5 rounded-lg border border-blue-300 hover:bg-blue-50 disabled:opacity-50 text-blue-700 font-semibold text-sm transition-colors"
           >
-            {loading === 'promissoria' ? 'Gerando...' : '📄 Imprimir Promissória'}
+            {loading === 'promissoria' ? 'Gerando...' : '📄 Imprimir Instrumento'}
           </button>
 
           <button

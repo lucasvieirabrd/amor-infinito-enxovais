@@ -1,4 +1,4 @@
-import { mysqlTable, varchar, datetime, int, decimal, mysqlEnum, text, json, boolean } from 'drizzle-orm/mysql-core';
+import { mysqlTable, varchar, datetime, int, decimal, mysqlEnum, text, json, boolean, date } from 'drizzle-orm/mysql-core';
 import { sql } from 'drizzle-orm';
 
 // Tabelas principais
@@ -42,6 +42,7 @@ export const customers = mysqlTable('customers', {
   photoMimetype: varchar('photo_mimetype', { length: 100 }),
   photoSize: int('photo_size'),
   photoUploadedAt: datetime('photo_uploaded_at'),
+  birthDate: date('birth_date'),
   inLegalProcess: boolean('in_legal_process').notNull().default(false),
   legalProcessAt: datetime('legal_process_at'),
   legalProcessBy: varchar('legal_process_by', { length: 36 }),

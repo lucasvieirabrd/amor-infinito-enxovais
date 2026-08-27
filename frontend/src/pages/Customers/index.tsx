@@ -31,6 +31,7 @@ interface Customer {
   ref3Name?: string;
   ref3Phone?: string;
   ref3Relationship?: string;
+  birthDate?: string;
   hasPhoto?: boolean;
   paymentStatus?: PaymentStatus;
   inLegalProcess?: boolean;
@@ -545,6 +546,20 @@ export const Customers: React.FC = () => {
               value={formData.email || ''}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             />
+
+            {/* Data de nascimento */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data de nascimento</label>
+                <input
+                  type="date"
+                  value={formData.birthDate || ''}
+                  onChange={(e) => setFormData({ ...formData, birthDate: e.target.value || undefined })}
+                  className="w-full h-[44px] px-3 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                />
+              </div>
+              <div />
+            </div>
 
             {/* CEP — metade da largura, auto-lookup ao 8º dígito */}
             <div className="grid grid-cols-2 gap-4">

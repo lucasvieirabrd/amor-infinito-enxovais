@@ -41,6 +41,7 @@ export class CustomerController {
       ref3Name: z.string().optional().or(z.literal('')),
       ref3Phone: z.string().optional().or(z.literal('')),
       ref3Relationship: z.string().optional().or(z.literal('')),
+      birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable().or(z.literal('').transform(() => null)),
     });
 
     const data = registerSchema.parse(body);
@@ -100,6 +101,7 @@ export class CustomerController {
       ref3Name: z.string().nullable().optional(),
       ref3Phone: z.string().nullable().optional(),
       ref3Relationship: z.string().nullable().optional(),
+      birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable().or(z.literal('').transform(() => null)),
     });
 
     const data = updateSchema.parse(body);

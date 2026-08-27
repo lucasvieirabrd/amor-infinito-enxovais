@@ -87,6 +87,7 @@ export class CustomerRepository {
         c.ref3_phone           AS ref3Phone,
         c.ref3_relationship    AS ref3Relationship,
         (c.photo_file IS NOT NULL) AS hasPhoto,
+        c.birth_date           AS birthDate,
         c.in_legal_process     AS inLegalProcess,
         c.legal_process_at     AS legalProcessAt,
         c.created_at           AS createdAt,

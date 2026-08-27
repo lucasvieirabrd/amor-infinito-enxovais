@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { SaleController } from '../controllers/sale.controller';
 import { CarneController } from '../controllers/carne.controller';
 import { PromissoriaController } from '../controllers/promissoria.controller';
+import { InstrumentoController } from '../controllers/instrumento.controller';
 import { OrdemController } from '../controllers/ordem.controller';
 import { InstallmentController } from '../controllers/installment.controller';
 import { ensureAuthenticated } from '../middlewares/ensureAuthenticated';
@@ -14,6 +15,7 @@ const saleRouter = Router();
 const saleController = new SaleController();
 const carneController = new CarneController();
 const promissoriaController = new PromissoriaController();
+const instrumentoController = new InstrumentoController();
 const ordemController = new OrdemController();
 const installmentController = new InstallmentController();
 
@@ -159,6 +161,7 @@ saleRouter.get('/diag-installments', ensureAuthorized(['admin']), async (req, re
 saleRouter.post('/:saleId/installments', ensureAuthorized(['admin']), installmentController.addToSale);
 saleRouter.get('/:saleId/carne', carneController.getCarne);
 saleRouter.get('/:saleId/promissoria', promissoriaController.getPromissoria);
+saleRouter.get('/:saleId/instrumento', instrumentoController.getInstrumento);
 saleRouter.get('/:saleId/ordem', ordemController.getOrdem);
 saleRouter.delete('/:id', saleController.cancel);
 saleRouter.get('/:id', saleController.getById);
