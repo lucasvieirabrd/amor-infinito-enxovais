@@ -436,6 +436,13 @@ export const Messages: React.FC = () => {
       return res.data.data as Message[];
     },
     enabled: !!contactPhone,
+    // Sort ASC (oldest → newest) so the most recent message appears at the bottom
+    select: (data) =>
+      [...data].sort((a, b) => {
+        const ta = parseDate(a.timestamp)?.getTime() ?? 0;
+        const tb = parseDate(b.timestamp)?.getTime() ?? 0;
+        return ta - tb;
+      }),
   });
 
   const { data: customerResults } = useQuery({
@@ -503,8 +510,15 @@ export const Messages: React.FC = () => {
     return () => { socket.disconnect(); };
   }, [queryClient]);
 
+  // Instant scroll when switching conversations (before messages load)
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    chatEndRef.current?.scrollIntoView({ behavior: 'instant' });
+  }, [contactPhone]);
+
+  // Smooth scroll when messages update (new message sent or received)
+  useEffect(() => {
+    if (messages && messages.length > 0)
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
