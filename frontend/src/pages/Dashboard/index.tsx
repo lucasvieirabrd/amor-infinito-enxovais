@@ -304,7 +304,7 @@ export const Dashboard: React.FC = () => {
       ) : (
         <>
           {/* ── Linha 1: Cards de Vendas ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
 
             <Card>
               <div className="flex items-start gap-3">
@@ -313,7 +313,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Total Vendido</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1 truncate">{brl(sales?.total ?? 0)}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1 break-words">{brl(sales?.total ?? 0)}</p>
                   <VarBadge current={sales?.total ?? 0} previous={comparison?.total} />
                 </div>
               </div>
@@ -326,7 +326,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 font-medium">À Vista</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1 truncate">{brl(sales?.cash.total ?? 0)}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1 break-words">{brl(sales?.cash.total ?? 0)}</p>
                   <p className="text-xs text-gray-400">{sales?.cash.count ?? 0} vendas</p>
                   <VarBadge current={sales?.cash.total ?? 0} previous={comparison?.cash.total} />
                 </div>
@@ -340,7 +340,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Cartão</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1 truncate">{brl(sales?.creditCard.total ?? 0)}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1 break-words">{brl(sales?.creditCard.total ?? 0)}</p>
                   <p className="text-xs text-gray-400">{sales?.creditCard.count ?? 0} vendas</p>
                   <VarBadge current={sales?.creditCard.total ?? 0} previous={comparison?.creditCard.total} />
                 </div>
@@ -354,7 +354,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Crediário</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1 truncate">{brl(sales?.installment.total ?? 0)}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1 break-words">{brl(sales?.installment.total ?? 0)}</p>
                   <p className="text-xs text-gray-400">{sales?.installment.count ?? 0} vendas</p>
                   <VarBadge current={sales?.installment.total ?? 0} previous={comparison?.installment.total} />
                 </div>
@@ -385,7 +385,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 font-medium">📥 Total a Receber</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1 truncate">
+                  <p className="text-xl font-bold text-gray-900 mt-1 break-words">
                     {brl(billing?.totalReceivable.total ?? 0)}
                   </p>
                   <p className="text-xs text-gray-400">{billing?.totalReceivable.count ?? 0} parcelas</p>
@@ -400,7 +400,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 font-medium">⚠️ Em Atraso</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1 truncate">
+                  <p className="text-xl font-bold text-gray-900 mt-1 break-words">
                     {brl(billing?.overdue.total ?? 0)}
                   </p>
                   <p className="text-xs text-red-400 font-medium">
@@ -417,7 +417,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 font-medium">✅ Recebido no Período</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1 truncate">
+                  <p className="text-xl font-bold text-gray-900 mt-1 break-words">
                     {brl(billing?.receivedThisMonth.total ?? 0)}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">

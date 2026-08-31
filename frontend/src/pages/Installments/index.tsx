@@ -656,8 +656,8 @@ export const Installments: React.FC = () => {
                   >
                     {/* Nome + telefone */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-gray-900 truncate">{customer.name}</p>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <p className="font-semibold text-gray-900 break-words min-w-0">{customer.name}</p>
                         {customer.inLegalProcess && (
                           <span className="flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200">
                             ⚖️ Processo
