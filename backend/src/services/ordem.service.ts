@@ -215,12 +215,21 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
     instCells.push(`<div class="inst-cell"><span class="inst-num">${num}</span><span class="inst-date">${d}</span><span class="inst-amt">${a}</span></div>`);
   }
 
+  // Split into 3 vertical columns: top-to-bottom fill within each column
+  const colSize = Math.ceil(instCells.length / 3);
+  const instCols = [
+    instCells.slice(0, colSize),
+    instCells.slice(colSize, colSize * 2),
+    instCells.slice(colSize * 2),
+  ];
+  const instGrid = `<div class="inst-cols">${instCols.map(c => `<div class="inst-col">${c.join('')}</div>`).join('')}</div>`;
+
   const installmentsSection = (sale.paymentMethod === 'installment' && instCells.length > 0)
     ? `
       <div class="section">
         <div class="section-title">PARCELAS</div>
         <div class="parc-info">${esc(parcelamentoInfo)}</div>
-        <div class="inst-list">${instCells.join('')}</div>
+        ${instGrid}
       </div>`
     : `
       <div class="section">
@@ -324,12 +333,18 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
     .total-label { font-size: 12px; font-weight: bold; color: #555; }
     .total-value { font-size: 22px; font-weight: 900; color: #be123c; }
 
-    /* ── Installments (3-column grid) ── */
+    /* ── Installments (3-column, vertical fill) ── */
     .parc-info { font-size: 11px; font-weight: bold; color: #374151; margin-bottom: 2mm; }
-    .inst-list {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 0.8mm 2mm;
+    .inst-cols {
+      display: flex;
+      gap: 3mm;
+      align-items: flex-start;
+    }
+    .inst-col {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
     }
     .inst-cell {
       display: flex;
