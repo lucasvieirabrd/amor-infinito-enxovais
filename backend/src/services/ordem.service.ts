@@ -19,6 +19,12 @@ function fmtDate(date: Date | string | null): string {
   return format(d, 'dd/MM/yyyy');
 }
 
+function fmtDateShort(date: Date | string | null): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return format(d, 'dd/MM/yy');
+}
+
 function fmtPhone(rawPhone: string | null): string {
   if (!rawPhone) return '';
   const digits = rawPhone.replace(/\D/g, '');
@@ -194,27 +200,27 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
     parcelamentoInfo = 'Cartão de crédito';
   }
 
-  const instLines: string[] = [];
+  const instCells: string[] = [];
 
   if (hasEntry) {
-    const ed = fmtDate(entryInstallment!.dueDate);
+    const ed = fmtDateShort(entryInstallment!.dueDate);
     const ea = brl(entryInstallment!.originalAmount);
-    instLines.push(`<div class="inst-row"><span class="inst-label">Entrada</span><span class="inst-date">${ed}</span><span class="inst-amt">${ea}</span></div>`);
+    instCells.push(`<div class="inst-cell entry"><span class="inst-num">Ent</span><span class="inst-date">${ed}</span><span class="inst-amt">${ea}</span></div>`);
   }
 
   for (const inst of regularInstallments) {
     const num = String(inst.installmentNumber).padStart(2, '0');
-    const d = fmtDate(inst.dueDate);
+    const d = fmtDateShort(inst.dueDate);
     const a = brl(inst.originalAmount);
-    instLines.push(`<div class="inst-row"><span class="inst-label">${num}</span><span class="inst-date">${d}</span><span class="inst-amt">${a}</span></div>`);
+    instCells.push(`<div class="inst-cell"><span class="inst-num">${num}</span><span class="inst-date">${d}</span><span class="inst-amt">${a}</span></div>`);
   }
 
-  const installmentsSection = (sale.paymentMethod === 'installment' && instLines.length > 0)
+  const installmentsSection = (sale.paymentMethod === 'installment' && instCells.length > 0)
     ? `
       <div class="section">
         <div class="section-title">PARCELAS</div>
         <div class="parc-info">${esc(parcelamentoInfo)}</div>
-        <div class="inst-list">${instLines.join('')}</div>
+        <div class="inst-list">${instCells.join('')}</div>
       </div>`
     : `
       <div class="section">
@@ -258,7 +264,7 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
     .doc-date { font-size: 9px; color: #777; margin-top: 4px; }
 
     /* ── Sections ── */
-    .section { margin-bottom: 5mm; }
+    .section { margin-bottom: 3mm; }
     .section-title {
       font-size: 9px;
       font-weight: bold;
@@ -266,20 +272,20 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
       color: #be123c;
       text-transform: uppercase;
       border-bottom: 1px solid #e5e7eb;
-      padding-bottom: 1.5mm;
-      margin-bottom: 3mm;
+      padding-bottom: 1mm;
+      margin-bottom: 2mm;
     }
 
     /* ── Client box ── */
     .client-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 2mm 8mm;
+      gap: 1.5mm 6mm;
       font-size: 10.5px;
-      line-height: 1.8;
+      line-height: 1.5;
     }
-    .client-field { display: flex; flex-direction: column; }
-    .client-label { font-size: 8.5px; color: #888; font-weight: bold; letter-spacing: 0.5px; line-height: 1; }
+    .client-field { display: flex; flex-direction: row; align-items: baseline; gap: 3px; }
+    .client-label { font-size: 8px; color: #888; font-weight: bold; letter-spacing: 0.3px; flex-shrink: 0; }
     .client-value { color: #1a1a1a; }
     .client-full { grid-column: 1 / -1; }
 
@@ -318,31 +324,40 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
     .total-label { font-size: 12px; font-weight: bold; color: #555; }
     .total-value { font-size: 22px; font-weight: 900; color: #be123c; }
 
-    /* ── Installments ── */
-    .parc-info { font-size: 11px; font-weight: bold; color: #374151; margin-bottom: 3mm; }
-    .inst-list { display: flex; flex-direction: column; gap: 1mm; }
-    .inst-row {
+    /* ── Installments (3-column grid) ── */
+    .parc-info { font-size: 11px; font-weight: bold; color: #374151; margin-bottom: 2mm; }
+    .inst-list {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.8mm 2mm;
+    }
+    .inst-cell {
       display: flex;
       align-items: baseline;
-      gap: 0;
-      font-size: 10.5px;
+      gap: 3px;
+      font-size: 9.5px;
       font-family: 'Courier New', Courier, monospace;
-      line-height: 1.7;
+      padding: 1px 2px;
       border-bottom: 1px dotted #e5e7eb;
     }
-    .inst-row:last-child { border-bottom: none; }
-    .inst-label { width: 52px; font-weight: bold; flex-shrink: 0; }
-    .inst-date { flex: 1; color: #555; }
-    .inst-amt { font-weight: bold; color: #1a1a1a; }
+    .inst-cell.entry {
+      background: #fef9c3;
+      border: 1px solid #fde68a;
+      border-radius: 2px;
+      font-weight: bold;
+    }
+    .inst-num { width: 22px; font-weight: bold; flex-shrink: 0; color: #be123c; }
+    .inst-date { flex: 1; color: #555; font-size: 9px; }
+    .inst-amt { font-weight: bold; color: #1a1a1a; white-space: nowrap; font-size: 9px; }
 
     /* ── References ── */
     .refs-list { display: flex; flex-direction: column; gap: 0; }
-    .ref-row { font-size: 10.5px; line-height: 1.8; border-bottom: 1px dotted #e5e7eb; }
+    .ref-row { font-size: 10px; line-height: 1.5; border-bottom: 1px dotted #e5e7eb; }
     .ref-row:last-child { border-bottom: none; }
 
     /* ── Footer ── */
     .footer {
-      margin-top: 8mm;
+      margin-top: 6mm;
       padding-top: 3mm;
       border-top: 1px solid #e5e7eb;
       display: flex;
@@ -389,25 +404,25 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
     <div class="section-title">Dados do Cliente</div>
     <div class="client-grid">
       <div class="client-field client-full">
-        <span class="client-label">NOME</span>
+        <span class="client-label">Nome:</span>
         <span class="client-value">${esc(sale.customerName ?? '')}</span>
       </div>
       <div class="client-field">
-        <span class="client-label">CPF</span>
+        <span class="client-label">CPF:</span>
         <span class="client-value">${esc(sale.customerCpf ?? '—')}</span>
       </div>
       <div class="client-field">
-        <span class="client-label">TELEFONE</span>
+        <span class="client-label">Tel.:</span>
         <span class="client-value">${esc(fmtPhone(sale.customerPhone))}</span>
       </div>
       ${addrLine1 ? `
       <div class="client-field client-full">
-        <span class="client-label">ENDEREÇO</span>
+        <span class="client-label">End.:</span>
         <span class="client-value">${esc(addrLine1)}</span>
       </div>` : ''}
       ${addrLine2 ? `
       <div class="client-field client-full">
-        <span class="client-label">CIDADE / CEP</span>
+        <span class="client-label">Cidade/CEP:</span>
         <span class="client-value">${esc(addrLine2)}</span>
       </div>` : ''}
     </div>
