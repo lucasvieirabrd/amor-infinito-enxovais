@@ -92,7 +92,7 @@ export const SalesHistory: React.FC = () => {
   const [saleToDelete, setSaleToDelete] = useState<string | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [carneLoading, setCarneLoading] = useState(false);
-  const [promissoriaLoading, setPromissoriaLoading] = useState(false);
+  const [instrumentoLoading, setInstrumentoLoading] = useState(false);
   const [ordemLoading, setOrdemLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editValues, setEditValues] = useState<Record<string, { amount: string; dueDate: string }>>({});
@@ -148,16 +148,16 @@ export const SalesHistory: React.FC = () => {
     }
   };
 
-  const handlePrintPromissoria = async (saleId: string) => {
-    setPromissoriaLoading(true);
+  const handlePrintInstrumento = async (saleId: string) => {
+    setInstrumentoLoading(true);
     try {
-      const response = await api.get(`/sales/${saleId}/promissoria`, { responseType: 'blob' });
+      const response = await api.get(`/sales/${saleId}/instrumento`, { responseType: 'blob' });
       const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       window.open(url, '_blank');
     } catch {
-      alert('Erro ao gerar promissória.');
+      alert('Erro ao gerar instrumento.');
     } finally {
-      setPromissoriaLoading(false);
+      setInstrumentoLoading(false);
     }
   };
 
@@ -1199,7 +1199,7 @@ export const SalesHistory: React.FC = () => {
                 <Button
                   variant="danger"
                   onClick={() => handleDownloadCarne(selectedSale.id, selectedSale.saleNumber)}
-                  disabled={carneLoading || promissoriaLoading || ordemLoading}
+                  disabled={carneLoading || instrumentoLoading || ordemLoading}
                   className="flex-1 flex items-center justify-center gap-2"
                 >
                   <FiDownload size={16} />
@@ -1209,18 +1209,18 @@ export const SalesHistory: React.FC = () => {
               {selectedSale.paymentMethod === 'installment' && (
                 <Button
                   variant="secondary"
-                  onClick={() => handlePrintPromissoria(selectedSale.id)}
-                  disabled={carneLoading || promissoriaLoading || ordemLoading}
+                  onClick={() => handlePrintInstrumento(selectedSale.id)}
+                  disabled={carneLoading || instrumentoLoading || ordemLoading}
                   className="flex-1 flex items-center justify-center gap-2"
                 >
                   <FiDownload size={16} />
-                  {promissoriaLoading ? 'Gerando...' : 'Promissória'}
+                  {instrumentoLoading ? 'Gerando...' : 'Instrumento'}
                 </Button>
               )}
               <Button
                 variant="secondary"
                 onClick={() => handlePrintOrdem(selectedSale.id)}
-                disabled={carneLoading || promissoriaLoading || ordemLoading}
+                disabled={carneLoading || instrumentoLoading || ordemLoading}
                 className="flex-1 flex items-center justify-center gap-2"
               >
                 <FiDownload size={16} />

@@ -24,7 +24,7 @@ export const CarneModal: React.FC<CarneModalProps> = ({
   installmentsCount,
   onClose,
 }) => {
-  const [loading, setLoading] = useState<'download' | 'print' | 'promissoria' | 'ordem' | null>(null);
+  const [loading, setLoading] = useState<'download' | 'print' | 'instrumento' | 'ordem' | null>(null);
 
   const handleDownload = async () => {
     setLoading('download');
@@ -59,7 +59,7 @@ export const CarneModal: React.FC<CarneModalProps> = ({
   };
 
   const handleInstrumento = async () => {
-    setLoading('promissoria');
+    setLoading('instrumento');
     try {
       const response = await api.get(`/sales/${saleId}/instrumento`, { responseType: 'blob' });
       const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
@@ -123,7 +123,7 @@ export const CarneModal: React.FC<CarneModalProps> = ({
             disabled={loading !== null}
             className="w-full py-2.5 rounded-lg border border-blue-300 hover:bg-blue-50 disabled:opacity-50 text-blue-700 font-semibold text-sm transition-colors"
           >
-            {loading === 'promissoria' ? 'Gerando...' : '📄 Imprimir Instrumento'}
+            {loading === 'instrumento' ? 'Gerando...' : '📄 Imprimir Instrumento'}
           </button>
 
           <button
