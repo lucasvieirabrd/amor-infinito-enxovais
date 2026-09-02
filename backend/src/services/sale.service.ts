@@ -59,13 +59,21 @@ export class SaleService {
 
     let hasFurniture = false;
 
+    // Sheets updates collected during the transaction, written AFTER commit
+    const sheetsUpdates: Array<{ sku: string; quantity: number }> = [];
+
     const result = await db.transaction(async (tx) => {
       let totalAmount = 0;
       // Map productId → catalog price for audit logging
       const catalogPrices: Record<string, number> = {};
 
       // 1. Não-kits — lock pessimista + decremento de estoque próprio
-      for (const item of items) {
+      // Sort by productId for deterministic lock order (prevents deadlock with concurrent sales)
+      const nonKitItems = items
+        .filter((item: any) => !productMap.get(item.productId)?.isKit)
+        .sort((a: any, b: any) => a.productId.localeCompare(b.productId));
+
+      for (const item of nonKitItems) {
         const productInfo = productMap.get(item.productId);
         if (productInfo?.isKit) continue;
 
@@ -86,7 +94,7 @@ export class SaleService {
         await productRepository.updateStock(tx, product.id, newQuantity);
 
         if (product.sku) {
-          await googleSheetsService.updateStockInSheet(product.sku, newQuantity);
+          sheetsUpdates.push({ sku: product.sku, quantity: newQuantity });
         }
 
         totalAmount += item.unitPrice * item.quantity;
@@ -108,8 +116,9 @@ export class SaleService {
         totalAmount += item.unitPrice * item.quantity;
       }
 
-      // 3. Decremento dos componentes — FOR UPDATE por componente único
-      for (const [componentId, totalQty] of componentNeeds) {
+      // 3. Decremento dos componentes — FOR UPDATE em ordem determinística por id (previne deadlock)
+      const sortedComponents = [...componentNeeds.entries()].sort(([a], [b]) => a.localeCompare(b));
+      for (const [componentId, totalQty] of sortedComponents) {
         const component = await productRepository.findByIdForUpdate(tx, componentId);
         if (!component) {
           throw new AppError(`Componente do kit não encontrado (ID: ${componentId})`, 404);
@@ -123,7 +132,7 @@ export class SaleService {
         const newQuantity = component.quantity - totalQty;
         await productRepository.updateStock(tx, component.id, newQuantity);
         if (component.sku) {
-          await googleSheetsService.updateStockInSheet(component.sku, newQuantity);
+          sheetsUpdates.push({ sku: component.sku, quantity: newQuantity });
         }
       }
 
@@ -234,6 +243,21 @@ export class SaleService {
       return { saleId, saleNumber, totalAmount };
     });
 
+    // Sync Google Sheets AFTER commit — Sheets is a copy, not the source of truth.
+    // Failures are logged but do not affect the sale result.
+    for (const { sku, quantity } of sheetsUpdates) {
+      try {
+        await googleSheetsService.updateStockInSheet(sku, quantity);
+      } catch (err: any) {
+        console.error('[sale.register] Falha ao sincronizar Google Sheets pós-commit:', {
+          sku,
+          expectedQuantity: quantity,
+          saleId: result.saleId,
+          error: err?.message,
+        });
+      }
+    }
+
     if (hasFurniture) {
       try {
         await deliveryRepository.create({ saleId: result.saleId, customerId });
@@ -273,7 +297,9 @@ export class SaleService {
   }
 
   async cancel(saleId: string) {
-    return await db.transaction(async (tx) => {
+    const cancelSheetsUpdates: Array<{ sku: string; quantity: number }> = [];
+
+    const result = await db.transaction(async (tx) => {
       // 1. Buscar a venda
       const sale = await saleRepository.findById(saleId);
       if (!sale) {
@@ -318,29 +344,31 @@ export class SaleService {
         }
       }
 
-      // Restore non-kit product stocks
-      for (const item of saleItems) {
-        const productInfo = cancelProductMap.get(item.productId);
-        if (productInfo?.isKit) continue;
+      // Restore non-kit product stocks — lock em ordem determinística por id
+      const nonKitSaleItems = saleItems
+        .filter((i: any) => !cancelProductMap.get(i.productId)?.isKit)
+        .sort((a: any, b: any) => a.productId.localeCompare(b.productId));
 
+      for (const item of nonKitSaleItems) {
         const product = await productRepository.findByIdForUpdate(tx, item.productId);
         if (product) {
           const newQuantity = product.quantity + item.quantity;
           await productRepository.updateStock(tx, product.id, newQuantity);
           if (product.sku) {
-            await googleSheetsService.updateStockInSheet(product.sku, newQuantity);
+            cancelSheetsUpdates.push({ sku: product.sku, quantity: newQuantity });
           }
         }
       }
 
-      // Restore component stocks for kit items
-      for (const [componentId, restoreQty] of componentRestorations) {
+      // Restore component stocks for kit items — lock em ordem determinística por id
+      const sortedRestorations = [...componentRestorations.entries()].sort(([a], [b]) => a.localeCompare(b));
+      for (const [componentId, restoreQty] of sortedRestorations) {
         const component = await productRepository.findByIdForUpdate(tx, componentId);
         if (component) {
           const newQuantity = component.quantity + restoreQty;
           await productRepository.updateStock(tx, component.id, newQuantity);
           if (component.sku) {
-            await googleSheetsService.updateStockInSheet(component.sku, newQuantity);
+            cancelSheetsUpdates.push({ sku: component.sku, quantity: newQuantity });
           }
         }
       }
@@ -353,6 +381,22 @@ export class SaleService {
 
       return { message: 'Venda cancelada com sucesso', saleId };
     });
+
+    // Sync Google Sheets AFTER commit — falha não desfaz o cancelamento
+    for (const { sku, quantity } of cancelSheetsUpdates) {
+      try {
+        await googleSheetsService.updateStockInSheet(sku, quantity);
+      } catch (err: any) {
+        console.error('[sale.cancel] Falha ao sincronizar Google Sheets pós-commit:', {
+          sku,
+          expectedQuantity: quantity,
+          saleId,
+          error: err?.message,
+        });
+      }
+    }
+
+    return result;
   }
 
   async getTotalSales() {
