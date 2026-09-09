@@ -148,9 +148,10 @@ export class PayableRepository {
           AND DATEDIFF(DATE(CONVERT_TZ(due_date, '+00:00', '-03:00')), DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))) BETWEEN 0 AND 3
           THEN 1 END) AS due_soon_count,
         SUM(CASE WHEN status = 'paid'
-          AND MONTH(CONVERT_TZ(paid_at, '+00:00', '-03:00')) = ${month}
-          AND YEAR(CONVERT_TZ(paid_at, '+00:00', '-03:00')) = ${year}
-          THEN COALESCE(paid_amount, 0) ELSE 0 END) AS paid_this_month
+          THEN COALESCE(amount, 0) ELSE 0 END) AS total_pago,
+        SUM(CASE WHEN status = 'paid'
+          AND DATE(CONVERT_TZ(paid_at, '+00:00', '-03:00')) > DATE(CONVERT_TZ(due_date, '+00:00', '-03:00'))
+          THEN COALESCE(amount, 0) ELSE 0 END) AS pago_em_atraso
       FROM payables
       WHERE deleted_at IS NULL
         AND MONTH(CONVERT_TZ(due_date, '+00:00', '-03:00')) = ${month}
@@ -162,7 +163,8 @@ export class PayableRepository {
       overdueCount: Number(r.overdue_count ?? 0),
       overdueAmount: parseFloat(r.overdue_amount ?? '0') || 0,
       dueSoonCount: Number(r.due_soon_count ?? 0),
-      paidThisMonth: parseFloat(r.paid_this_month ?? '0') || 0,
+      totalPago: parseFloat(r.total_pago ?? '0') || 0,
+      pagoEmAtraso: parseFloat(r.pago_em_atraso ?? '0') || 0,
     };
   }
 

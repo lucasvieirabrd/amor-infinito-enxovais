@@ -46,7 +46,8 @@ interface Summary {
   overdueCount: number;
   overdueAmount: number;
   dueSoonCount: number;
-  paidThisMonth: number;
+  totalPago: number;
+  pagoEmAtraso: number;
 }
 
 interface ParsedBoleto {
@@ -983,7 +984,10 @@ export const Payables: React.FC = () => {
             <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
               <FiCheckCircle size={12} className="text-green-600" /> Pago no mês
             </p>
-            <p className="text-xl font-bold text-green-700">{fmtBRL(summary.paidThisMonth)}</p>
+            <p className="text-xl font-bold text-green-700">{fmtBRL(summary.totalPago)}</p>
+            {summary.pagoEmAtraso > 0 && (
+              <p className="text-xs text-orange-500 mt-1">Pago em atraso: {fmtBRL(summary.pagoEmAtraso)}</p>
+            )}
           </div>
         </div>
       )}
