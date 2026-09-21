@@ -74,6 +74,20 @@ function daysDiffSP(dueDate: Date | string): number {
 }
 
 export class BillingService {
+  // ─── Dia da semana (SP) via MySQL ─────────────────────────────────────────────
+
+  /**
+   * Retorna o dia da semana em America/Sao_Paulo calculado pelo MySQL.
+   * MySQL DAYOFWEEK: 1=domingo, 2=segunda, ..., 7=sábado.
+   * NÃO usa toLocaleString/Intl (falha no Railway small-icu).
+   */
+  private async _getTodayDayOfWeekSP(): Promise<number> {
+    const result = await db.execute(sql`
+      SELECT DAYOFWEEK(DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))) AS dow
+    `);
+    return Number((result as any)[0]?.[0]?.dow ?? 0);
+  }
+
   // ─── Deduplicação ────────────────────────────────────────────────────────────
 
   /**
@@ -117,6 +131,19 @@ export class BillingService {
       notifiedCustomers: [] as string[],
       todayClients: 0, overdueClients: 0,
     };
+
+    // Verificar dia da semana em SP via MySQL (não usa toLocaleString — confiável no Railway)
+    // DAYOFWEEK: 1=domingo, 2=segunda, ..., 7=sábado
+    const dowSP = await this._getTodayDayOfWeekSP();
+    const isSunday = dowSP === 1;
+    const isMonday = dowSP === 2;
+
+    if (isSunday) {
+      // Cobranças ao cliente suspensas no domingo — serão retomadas na segunda-feira.
+      // Relatórios internos (sendDailySummary, sendDailyPdfReport) não passam por aqui.
+      console.log('[BillingService] _runBilling: hoje é domingo — cobranças ao cliente suspensas (retomam na segunda).');
+      return stats;
+    }
 
     // 1. Uma query única: parcelas pendentes/atrasadas/parciais até hoje (SP)
     const rows = await db
@@ -183,6 +210,16 @@ export class BillingService {
         clientDays = maxDays;
 
         if (shouldSendOnDay(clientDays)) {
+          // Régua normal: 3, 7, 15, 30, 60, 90...
+          templateName = 'cobranca_parcela';
+          targetInst = oldest;
+        } else if (isMonday && clientDays === 1) {
+          // Vencimento foi ontem (domingo) — envia lembrete que seria do domingo
+          templateName = 'lembrete_vencimento';
+          targetInst = oldest;
+          clientDays = 0;
+        } else if (isMonday && shouldSendOnDay(clientDays - 1)) {
+          // Marco da régua caiu no domingo (ex.: 3d→4d, 7d→8d, 30d→31d) — envia hoje
           templateName = 'cobranca_parcela';
           targetInst = oldest;
         } else {
