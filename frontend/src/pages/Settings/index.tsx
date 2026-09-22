@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   FiSave, FiAlertCircle, FiKey, FiDatabase, FiMail, FiClock, FiUser,
   FiPlus, FiEdit2, FiTrash2, FiCheck, FiX, FiPhone, FiSend, FiAlertTriangle,
-  FiUserPlus, FiShield, FiToggleLeft, FiToggleRight, FiLock,
+  FiUserPlus, FiShield, FiToggleLeft, FiToggleRight, FiLock, FiCalendar,
+  FiChevronLeft, FiChevronRight,
 } from 'react-icons/fi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -36,6 +37,14 @@ const ROLE_LABELS: Record<ContactRole, string> = {
 
 const ALL_ROLES: ContactRole[] = ['daily_pdf', 'daily_summary', 'payables_alert', 'delivery_assembly'];
 
+// ─── Holiday types ────────────────────────────────────────────────────────────
+
+interface Holiday {
+  id: string;
+  date: string;       // "YYYY-MM-DD"
+  description: string;
+}
+
 // ─── User types ───────────────────────────────────────────────────────────────
 
 interface SystemUser {
@@ -65,7 +74,7 @@ const TAB_OPTIONS = [
 export const Settings: React.FC = () => {
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers' | 'contacts' | 'usuarios'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers' | 'contacts' | 'usuarios' | 'feriados'>('general');
   const [loading, setLoading] = useState(false);
   const [pixLoading, setPixLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -257,6 +266,84 @@ export const Settings: React.FC = () => {
     toggleUserMutation.mutate({ id: u.id, active: !!u.deletedAt });
   };
 
+  // ─── Holidays state & mutations ───────────────────────────────────────────
+
+  const [holidayYear, setHolidayYear] = useState(new Date().getFullYear());
+  const [holidayModal, setHolidayModal] = useState<{ open: boolean; editing: Holiday | null }>({ open: false, editing: null });
+  const [holidayForm, setHolidayForm] = useState({ date: '', description: '' });
+
+  const { data: holidayList, isLoading: holidaysLoading } = useQuery<Holiday[]>({
+    queryKey: ['holidays', holidayYear],
+    queryFn: () => api.get(`/holidays?year=${holidayYear}`).then(r => r.data),
+    enabled: activeTab === 'feriados',
+  });
+
+  const createHolidayMutation = useMutation({
+    mutationFn: (data: { date: string; description: string }) => api.post('/holidays', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['holidays'] });
+      toast.success('Feriado adicionado!');
+      setHolidayModal({ open: false, editing: null });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error ?? 'Erro ao adicionar feriado'),
+  });
+
+  const updateHolidayMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { date: string; description: string } }) =>
+      api.put(`/holidays/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['holidays'] });
+      toast.success('Feriado atualizado!');
+      setHolidayModal({ open: false, editing: null });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error ?? 'Erro ao atualizar feriado'),
+  });
+
+  const deleteHolidayMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/holidays/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['holidays'] });
+      toast.success('Feriado removido!');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error ?? 'Erro ao remover feriado'),
+  });
+
+  const openCreateHoliday = () => {
+    setHolidayForm({ date: `${holidayYear}-01-01`, description: '' });
+    setHolidayModal({ open: true, editing: null });
+  };
+
+  const openEditHoliday = (h: Holiday) => {
+    setHolidayForm({ date: h.date, description: h.description });
+    setHolidayModal({ open: true, editing: h });
+  };
+
+  const handleHolidaySubmit = () => {
+    if (!holidayForm.date || !/^\d{4}-\d{2}-\d{2}$/.test(holidayForm.date)) {
+      toast.error('Data inválida (use YYYY-MM-DD)');
+      return;
+    }
+    if (!holidayForm.description.trim()) {
+      toast.error('Descrição é obrigatória');
+      return;
+    }
+    if (holidayModal.editing) {
+      updateHolidayMutation.mutate({ id: holidayModal.editing.id, data: holidayForm });
+    } else {
+      createHolidayMutation.mutate(holidayForm);
+    }
+  };
+
+  const handleDeleteHoliday = (h: Holiday) => {
+    if (!confirm(`Remover o feriado "${h.description}" (${fmtHolidayDate(h.date)})?`)) return;
+    deleteHolidayMutation.mutate(h.id);
+  };
+
+  const fmtHolidayDate = (iso: string) => {
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
   // ─── Sellers handlers ─────────────────────────────────────────────────────
 
   const loadSellers = async () => {
@@ -391,6 +478,7 @@ export const Settings: React.FC = () => {
             { key: 'sellers', label: 'Vendedores' },
             { key: 'contacts', label: 'Contatos' },
             { key: 'usuarios', label: 'Usuários' },
+            { key: 'feriados', label: 'Feriados' },
           ] as const
         ).map(tab => (
           <button
@@ -1045,6 +1133,143 @@ export const Settings: React.FC = () => {
               >
                 <FiCheck size={16} />
                 {userModal.editing ? 'Salvar alterações' : 'Criar usuário'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Feriados Tab ── */}
+      {activeTab === 'feriados' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Feriados</h3>
+              <p className="text-sm text-gray-500 mt-0.5">Dias em que cobranças ao cliente são suspensas automaticamente</p>
+            </div>
+            <Button variant="primary" size="sm" onClick={openCreateHoliday} className="flex items-center gap-2">
+              <FiPlus size={16} /> Adicionar Feriado
+            </Button>
+          </div>
+
+          {/* Year selector */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setHolidayYear(y => y - 1)}
+              className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              <FiChevronLeft size={16} />
+            </button>
+            <span className="font-semibold text-gray-900 w-12 text-center">{holidayYear}</span>
+            <button
+              onClick={() => setHolidayYear(y => y + 1)}
+              className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              <FiChevronRight size={16} />
+            </button>
+          </div>
+
+          <Card>
+            {holidaysLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (holidayList ?? []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                <FiCalendar size={32} className="mb-3" />
+                <p className="text-sm">Nenhum feriado cadastrado para {holidayYear}</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Data</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Descrição</th>
+                      <th className="text-right px-4 py-3 font-medium text-gray-600">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(holidayList ?? []).map(h => (
+                      <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 font-mono text-gray-700">{fmtHolidayDate(h.date)}</td>
+                        <td className="px-4 py-3 text-gray-700">{h.description}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => openEditHoliday(h)}
+                              className="p-1.5 rounded text-gray-400 hover:text-primary hover:bg-primary hover:bg-opacity-10 transition-colors"
+                              title="Editar"
+                            >
+                              <FiEdit2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteHoliday(h)}
+                              className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              title="Remover"
+                            >
+                              <FiTrash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* ── Holiday Modal ── */}
+      {holidayModal.open && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {holidayModal.editing ? 'Editar Feriado' : 'Adicionar Feriado'}
+              </h2>
+              <button
+                onClick={() => setHolidayModal({ open: false, editing: null })}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-400"
+              >
+                <FiX size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data</label>
+                <input
+                  type="date"
+                  value={holidayForm.date}
+                  onChange={e => setHolidayForm(f => ({ ...f, date: e.target.value }))}
+                  className="input-base w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                <Input
+                  value={holidayForm.description}
+                  onChange={e => setHolidayForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Ex: Natal"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end p-6 border-t border-gray-200">
+              <Button variant="secondary" onClick={() => setHolidayModal({ open: false, editing: null })}>
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                loading={createHolidayMutation.isPending || updateHolidayMutation.isPending}
+                onClick={handleHolidaySubmit}
+                className="flex items-center gap-2"
+              >
+                <FiCheck size={16} />
+                {holidayModal.editing ? 'Salvar alterações' : 'Adicionar'}
               </Button>
             </div>
           </div>

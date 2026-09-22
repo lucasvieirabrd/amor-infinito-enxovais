@@ -19,6 +19,7 @@ import { payableRouter } from './payable.routes';
 import { nfImportRouter } from './nf-import.routes';
 import { kitRouter } from './kit.routes';
 import { userRouter } from './user.routes';
+import { holidayRouter } from './holiday.routes';
 
 const routes = Router();
 
@@ -42,5 +43,6 @@ routes.use('/payables', payableRouter);
 routes.use('/nf-import', nfImportRouter);
 routes.use('/kits', kitRouter);
 routes.use('/users', userRouter);
+routes.use('/holidays', holidayRouter);
 
 export { routes };

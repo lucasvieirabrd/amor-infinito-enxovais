@@ -74,18 +74,63 @@ function daysDiffSP(dueDate: Date | string): number {
 }
 
 export class BillingService {
-  // ─── Dia da semana (SP) via MySQL ─────────────────────────────────────────────
+  // ─── Contexto de dia não-cobrável (SP) via MySQL ────────────────────────────
 
   /**
-   * Retorna o dia da semana em America/Sao_Paulo calculado pelo MySQL.
-   * MySQL DAYOFWEEK: 1=domingo, 2=segunda, ..., 7=sábado.
-   * NÃO usa toLocaleString/Intl (falha no Railway small-icu).
+   * Retorna se hoje é não-cobrável (domingo ou feriado) e quantos dias não-cobráveis
+   * existem consecutivamente imediatamente antes de hoje (makeupN).
+   * makeupN > 0 indica que há marcos a recuperar no próximo dia útil.
+   * Usa MySQL CONVERT_TZ — NÃO usa toLocaleString/Intl (falha no Railway small-icu).
    */
-  private async _getTodayDayOfWeekSP(): Promise<number> {
-    const result = await db.execute(sql`
-      SELECT DAYOFWEEK(DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))) AS dow
+  private async _getNonBillableContextSP(): Promise<{ isNonBillableToday: boolean; makeupN: number }> {
+    // 1. Data e dia da semana de hoje em SP (uma query só)
+    const todayResult = await db.execute(sql`
+      SELECT
+        DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')) AS today_sp,
+        DAYOFWEEK(DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))) AS dow
     `);
-    return Number((result as any)[0]?.[0]?.dow ?? 0);
+    const r0 = (todayResult as any)[0]?.[0] ?? {};
+    const todaySP: string = String(r0.today_sp ?? '');
+    const dow: number    = Number(r0.dow ?? 0);   // 1=domingo, 7=sábado
+
+    if (!todaySP) return { isNonBillableToday: false, makeupN: 0 };
+
+    // 2. Feriados dos últimos 7 dias (inclui hoje) em um Set para lookup O(1)
+    const hRows = await db.execute(sql`
+      SELECT DATE_FORMAT(date, '%Y-%m-%d') AS d
+      FROM holidays
+      WHERE deleted_at IS NULL
+        AND date >= DATE_SUB(${todaySP}, INTERVAL 7 DAY)
+        AND date <= ${todaySP}
+    `);
+    const holidaySet = new Set<string>(
+      ((hRows as any)[0] as any[]).map((h: any) => String(h.d))
+    );
+
+    const isNonBillableToday = dow === 1 || holidaySet.has(todaySP);
+
+    // 3. Calcular makeupN: caminha para trás a partir de ontem até encontrar dia útil
+    // Aritmética UTC sobre "YYYY-MM-DD" evita ambiguidade de fuso
+    const [y, m, d] = todaySP.split('-').map(Number);
+    const todayUTC = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+
+    let makeupN = 0;
+    for (let offset = 1; offset <= 7; offset++) {
+      const dt = new Date(Date.UTC(
+        todayUTC.getUTCFullYear(),
+        todayUTC.getUTCMonth(),
+        todayUTC.getUTCDate() - offset,
+        12, 0, 0,
+      ));
+      const ds = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+      if (dt.getUTCDay() === 0 || holidaySet.has(ds)) {
+        makeupN++;
+      } else {
+        break;
+      }
+    }
+
+    return { isNonBillableToday, makeupN };
   }
 
   // ─── Deduplicação ────────────────────────────────────────────────────────────
@@ -132,16 +177,13 @@ export class BillingService {
       todayClients: 0, overdueClients: 0,
     };
 
-    // Verificar dia da semana em SP via MySQL (não usa toLocaleString — confiável no Railway)
-    // DAYOFWEEK: 1=domingo, 2=segunda, ..., 7=sábado
-    const dowSP = await this._getTodayDayOfWeekSP();
-    const isSunday = dowSP === 1;
-    const isMonday = dowSP === 2;
+    // Verificar se hoje é dia não-cobrável (domingo ou feriado) e calcular makeupN
+    const { isNonBillableToday, makeupN } = await this._getNonBillableContextSP();
 
-    if (isSunday) {
-      // Cobranças ao cliente suspensas no domingo — serão retomadas na segunda-feira.
+    if (isNonBillableToday) {
+      // Cobranças ao cliente suspensas em domingos e feriados.
       // Relatórios internos (sendDailySummary, sendDailyPdfReport) não passam por aqui.
-      console.log('[BillingService] _runBilling: hoje é domingo — cobranças ao cliente suspensas (retomam na segunda).');
+      console.log('[BillingService] _runBilling: hoje é dia não-cobrável (domingo ou feriado) — cobranças suspensas.');
       return stats;
     }
 
@@ -210,18 +252,26 @@ export class BillingService {
         clientDays = maxDays;
 
         if (shouldSendOnDay(clientDays)) {
-          // Régua normal: 3, 7, 15, 30, 60, 90...
+          // Branch 1 — régua normal: 3, 7, 15, 30, 60, 90...
           templateName = 'cobranca_parcela';
           targetInst = oldest;
-        } else if (isMonday && clientDays === 1) {
-          // Vencimento foi ontem (domingo) — envia lembrete que seria do domingo
+        } else if (makeupN > 0 && clientDays <= makeupN) {
+          // Branch 2 — lembrete make-up: vencimento caiu num dia não-cobrável
           templateName = 'lembrete_vencimento';
           targetInst = oldest;
           clientDays = 0;
-        } else if (isMonday && shouldSendOnDay(clientDays - 1)) {
-          // Marco da régua caiu no domingo (ex.: 3d→4d, 7d→8d, 30d→31d) — envia hoje
-          templateName = 'cobranca_parcela';
-          targetInst = oldest;
+        } else if (makeupN > 0) {
+          // Branch 3 — cobrança make-up: marco da régua caiu num dia não-cobrável
+          for (let k = 1; k <= makeupN; k++) {
+            if (shouldSendOnDay(clientDays - k)) {
+              templateName = 'cobranca_parcela';
+              targetInst = oldest;
+              break;
+            }
+          }
+          if (!templateName) {
+            console.log(`[BillingService] ${customer.name}: ${clientDays}d de atraso — fora da régua, pulando`);
+          }
         } else {
           console.log(`[BillingService] ${customer.name}: ${clientDays}d de atraso — fora da régua, pulando`);
         }

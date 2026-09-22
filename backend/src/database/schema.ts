@@ -292,3 +292,12 @@ export const supplierProductMap = mysqlTable('supplier_product_map', {
   createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
 });
+
+export const holidays = mysqlTable('holidays', {
+  id:          varchar('id', { length: 36 }).primaryKey(),
+  date:        date('date').notNull().unique(),
+  description: varchar('description', { length: 100 }).notNull(),
+  createdAt:   datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt:   datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  deletedAt:   datetime('deleted_at'),
+});
