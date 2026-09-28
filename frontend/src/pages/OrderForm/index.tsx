@@ -76,18 +76,29 @@ function fmtDisplayDateLong(s: string): string {
 function getTimeSlots(dateStr: string, city: string): string[] {
   const dow = getDOW(dateStr);
   if (dow === 0) return [];
-  let endH: number;
-  if (dow === 6) endH = 12;
-  else if (dow === 5) endH = 18;
-  else endH = city === 'Jaboticabal' ? 17 : 16;
 
-  const slots: string[] = [];
-  for (let h = 9; h < endH; h++) {
-    for (const m of [0, 30]) {
-      slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-    }
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const slot = (h: number, m: number) => `${pad(h)}:${pad(m)}`;
+
+  if (dow === 6) {
+    // Sábado: 09:00–11:30 (sem almoço — encerra ao meio-dia)
+    const s: string[] = [];
+    for (let h = 9; h <= 11; h++) { s.push(slot(h, 0)); s.push(slot(h, 30)); }
+    return s;
   }
-  return slots;
+
+  // Dias úteis (seg–sex): manhã 09:00–11:30 + tarde 13:30–endH:00
+  // 12:00 / 12:30 / 13:00 removidos (almoço)
+  const endH = dow === 5 ? 18 : (city === 'Jaboticabal' ? 17 : 16);
+
+  const s: string[] = [];
+  for (let h = 9; h <= 11; h++) { s.push(slot(h, 0)); s.push(slot(h, 30)); }
+  s.push(slot(13, 30));
+  for (let h = 14; h <= endH; h++) {
+    s.push(slot(h, 0));
+    if (h < endH) s.push(slot(h, 30));
+  }
+  return s;
 }
 
 // ─── Mini Calendar ────────────────────────────────────────────────────────────
@@ -415,6 +426,9 @@ export const OrderForm: React.FC = () => {
     if (!form.deliveryDate)             e.deliveryDate      = 'Selecione a data';
     else if (form.deliveryDate <= todaySPStr()) e.deliveryDate = 'Data de entrega deve ser a partir de amanhã';
     if (!form.deliveryTime)             e.deliveryTime      = 'Selecione o horário';
+    else if (form.deliveryDate && form.city &&
+             !getTimeSlots(form.deliveryDate, form.city).includes(form.deliveryTime))
+                                        e.deliveryTime      = 'Horário inválido para este dia';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
