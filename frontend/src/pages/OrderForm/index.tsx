@@ -60,11 +60,6 @@ function todayStr(): string {
   return dateToStr(new Date(Date.now()));
 }
 
-function fmtDisplayDate(s: string): string {
-  const [y, m, d] = s.split('-');
-  return `${d}/${m}/${y}`;
-}
-
 function fmtDisplayDateLong(s: string): string {
   const days = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
   const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -104,7 +99,7 @@ const MiniCalendar: React.FC<CalendarProps> = ({ selected, onSelect, blockedDate
   const today = todayStr();
   const initDate = selected || today;
   const [year, setYear] = useState(() => Number(initDate.split('-')[0]));
-  const [month, setMonth] = useState(() => Number(initDate.split('-')[1]) - 1); // 0-based
+  const [month, setMonth] = useState(() => Number(initDate.split('-')[1]) - 1);
 
   const prevMonth = () => {
     if (month === 0) { setYear(y => y - 1); setMonth(11); }
@@ -115,7 +110,6 @@ const MiniCalendar: React.FC<CalendarProps> = ({ selected, onSelect, blockedDate
     else setMonth(m => m + 1);
   };
 
-  // Build grid
   const firstDay = new Date(Date.UTC(year, month, 1)).getUTCDay();
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
@@ -125,34 +119,22 @@ const MiniCalendar: React.FC<CalendarProps> = ({ selected, onSelect, blockedDate
 
   const isDisabled = (ds: string) => {
     if (ds < today) return true;
-    const dow = getDOW(ds);
-    if (dow === 0) return true; // domingo
+    if (getDOW(ds) === 0) return true;
     return blockedDates.has(ds);
   };
 
   return (
     <div className="select-none">
-      {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
-          ◀
-        </button>
+        <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">◀</button>
         <span className="font-semibold text-gray-900">{MONTH_NAMES[month]} {year}</span>
-        <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
-          ▶
-        </button>
+        <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">▶</button>
       </div>
-
-      {/* Day labels */}
       <div className="grid grid-cols-7 mb-1">
         {DOW_LABELS.map((l, i) => (
-          <div key={i} className={`text-center text-xs font-medium py-1 ${i === 0 ? 'text-red-400' : 'text-gray-500'}`}>
-            {l}
-          </div>
+          <div key={i} className={`text-center text-xs font-medium py-1 ${i === 0 ? 'text-red-400' : 'text-gray-500'}`}>{l}</div>
         ))}
       </div>
-
-      {/* Days */}
       <div className="grid grid-cols-7 gap-0.5">
         {cells.map((day, i) => {
           if (!day) return <div key={i} />;
@@ -161,21 +143,12 @@ const MiniCalendar: React.FC<CalendarProps> = ({ selected, onSelect, blockedDate
           const isSelected = ds === selected;
           const isToday = ds === today;
           return (
-            <button
-              key={i}
-              onClick={() => !disabled && onSelect(ds)}
-              disabled={disabled}
-              className={`
-                aspect-square flex items-center justify-center rounded-full text-sm font-medium transition-colors
-                ${isSelected
-                  ? 'bg-primary text-white'
-                  : disabled
-                    ? 'text-gray-300 cursor-not-allowed'
-                    : isToday
-                      ? 'border-2 border-primary text-primary hover:bg-primary hover:text-white'
-                      : 'text-gray-700 hover:bg-gray-100'
-                }
-              `}
+            <button key={i} onClick={() => !disabled && onSelect(ds)} disabled={disabled}
+              className={`aspect-square flex items-center justify-center rounded-full text-sm font-medium transition-colors
+                ${isSelected ? 'bg-primary text-white'
+                  : disabled ? 'text-gray-300 cursor-not-allowed'
+                  : isToday ? 'border-2 border-primary text-primary hover:bg-primary hover:text-white'
+                  : 'text-gray-700 hover:bg-gray-100'}`}
             >
               {day}
             </button>
@@ -199,6 +172,35 @@ function maskCPF(v: string) {
   return d.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4').replace(/-$/, '');
 }
 
+function maskCEP(v: string) {
+  const d = v.replace(/\D/g, '').slice(0, 8);
+  return d.replace(/(\d{5})(\d{0,3})/, '$1-$2').replace(/-$/, '');
+}
+
+/** Máscara dd/MM/aaaa para data de nascimento */
+function maskBirthDate(v: string) {
+  const d = v.replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+
+/** Valida dd/MM/aaaa: data completa, válida e no passado */
+function validateBirthDate(v: string): string | null {
+  if (!v || v.length < 10) return 'Data incompleta';
+  const [dd, mm, yyyy] = v.split('/').map(Number);
+  if (!dd || !mm || !yyyy || yyyy < 1900 || yyyy > 9999) return 'Data inválida';
+  const d = new Date(Date.UTC(yyyy, mm - 1, dd, 12));
+  if (d.getUTCDate() !== dd || d.getUTCMonth() !== mm - 1 || d.getUTCFullYear() !== yyyy) return 'Data inválida';
+  if (d >= new Date()) return 'Data deve ser no passado';
+  return null;
+}
+
+/** Formata dd/MM/aaaa para exibição no WhatsApp */
+function fmtBirthForMsg(v: string) {
+  return v; // já está em dd/MM/aaaa
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 interface Seller { id: string; name: string }
@@ -206,43 +208,54 @@ interface HolidayEntry { date: string; description: string }
 
 interface FormData {
   // Customer
-  customerName: string;
-  customerPhone: string;
-  customerCPF: string;
-  customerAddress: string;
+  customerName:      string;
+  customerPhone:     string;
+  customerCPF:       string;
+  customerBirthDate: string; // dd/MM/aaaa
+  customerCEP:       string; // 00000-000
+  customerStreet:    string;
+  customerNumber:    string;
+  customerNeighborhood: string;
+  customerCity:      string;
+  customerComplement: string;
   customerWorkplace: string;
   // Product
   product: string;
   // Payment
-  paymentType: 'avista' | 'cartao' | 'crediario' | '';
-  installments: string;
+  paymentType:    'avista' | 'cartao' | 'crediario' | '';
+  installments:   string;
   installmentValue: string;
   // Delivery
-  city: string;
+  city:         string;
   deliveryDate: string;
   deliveryTime: string;
 }
 
 const EMPTY_FORM: FormData = {
-  customerName: '', customerPhone: '', customerCPF: '', customerAddress: '', customerWorkplace: '',
+  customerName: '', customerPhone: '', customerCPF: '', customerBirthDate: '',
+  customerCEP: '', customerStreet: '', customerNumber: '', customerNeighborhood: '',
+  customerCity: '', customerComplement: '', customerWorkplace: '',
   product: '',
   paymentType: '', installments: '', installmentValue: '',
   city: '', deliveryDate: '', deliveryTime: '',
 };
 
 export const OrderForm: React.FC = () => {
-  const [code, setCode]         = useState('');
-  const [seller, setSeller]     = useState<Seller | null>(null);
-  const [codeError, setCodeError] = useState('');
+  const [code, setCode]               = useState('');
+  const [seller, setSeller]           = useState<Seller | null>(null);
+  const [codeError, setCodeError]     = useState('');
   const [codeLoading, setCodeLoading] = useState(false);
 
-  const [form, setForm] = useState<FormData>(EMPTY_FORM);
+  const [form, setForm]     = useState<FormData>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
-  const [holidays, setHolidays] = useState<Set<string>>(new Set());
-  const [holidayDesc, setHolidayDesc] = useState<Record<string, string>>({});
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError]     = useState('');
 
-  const [submitted, setSubmitted] = useState(false);
+  const [holidays, setHolidays]         = useState<Set<string>>(new Set());
+  const [holidayDesc, setHolidayDesc]   = useState<Record<string, string>>({});
+
+  const [submitted, setSubmitted]           = useState(false);
   const [photoInstructions, setPhotoInstructions] = useState(false);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -283,29 +296,72 @@ export const OrderForm: React.FC = () => {
     setErrors(e => ({ ...e, [field]: undefined }));
   };
 
+  // ViaCEP lookup — mesma lógica do cadastro de clientes
+  const handleCepChange = async (value: string) => {
+    const formatted = maskCEP(value);
+    set('customerCEP', formatted);
+    setCepError('');
+    const digits = formatted.replace(/\D/g, '');
+    if (digits.length === 8) {
+      setCepLoading(true);
+      try {
+        const res = await axios.get(`https://viacep.com.br/ws/${digits}/json/`);
+        if (!res.data.erro) {
+          setForm(f => ({
+            ...f,
+            customerCEP:          formatted,
+            customerStreet:       res.data.logradouro || f.customerStreet,
+            customerNeighborhood: res.data.bairro     || f.customerNeighborhood,
+            customerCity:         res.data.localidade || f.customerCity,
+          }));
+          setErrors(e => ({ ...e, customerCEP: undefined, customerStreet: undefined }));
+        } else {
+          setCepError('CEP não encontrado — preencha o endereço manualmente');
+        }
+      } catch {
+        setCepError('Erro ao consultar CEP — preencha o endereço manualmente');
+      } finally {
+        setCepLoading(false);
+      }
+    }
+  };
+
   const timeSlots = form.deliveryDate && form.city
     ? getTimeSlots(form.deliveryDate, form.city)
     : [];
 
-  const isHolidayDate = (d: string) => holidays.has(d);
-
   const validate = (): boolean => {
-    const e: typeof errors = {};
-    if (!form.customerName.trim())     e.customerName    = 'Obrigatório';
-    if (!form.customerPhone.trim())    e.customerPhone   = 'Obrigatório';
-    if (!form.customerCPF.trim())      e.customerCPF     = 'Obrigatório';
-    if (!form.customerAddress.trim())  e.customerAddress = 'Obrigatório';
-    if (!form.product.trim())          e.product         = 'Obrigatório';
-    if (!form.paymentType)             e.paymentType     = 'Selecione a forma de pagamento';
+    const e: Partial<Record<keyof FormData, string>> = {};
+    if (!form.customerName.trim())      e.customerName      = 'Obrigatório';
+    if (!form.customerPhone.trim())     e.customerPhone     = 'Obrigatório';
+    if (!form.customerCPF.trim())       e.customerCPF       = 'Obrigatório';
+    const bdErr = validateBirthDate(form.customerBirthDate);
+    if (bdErr)                          e.customerBirthDate = bdErr;
+    if (!form.customerStreet.trim())    e.customerStreet    = 'Obrigatório';
+    if (!form.product.trim())           e.product           = 'Obrigatório';
+    if (!form.paymentType)              e.paymentType       = 'Selecione a forma de pagamento';
     if (form.paymentType === 'crediario') {
-      if (!form.installments)          e.installments    = 'Informe o número de parcelas';
-      if (!form.installmentValue)      e.installmentValue = 'Informe o valor da parcela';
+      if (!form.installments)           e.installments      = 'Informe o número de parcelas';
+      if (!form.installmentValue)       e.installmentValue  = 'Informe o valor da parcela';
     }
-    if (!form.city)                    e.city            = 'Selecione a cidade';
-    if (!form.deliveryDate)            e.deliveryDate    = 'Selecione a data';
-    if (!form.deliveryTime)            e.deliveryTime    = 'Selecione o horário';
+    if (!form.city)                     e.city              = 'Selecione a cidade';
+    if (!form.deliveryDate)             e.deliveryDate      = 'Selecione a data';
+    if (!form.deliveryTime)             e.deliveryTime      = 'Selecione o horário';
     setErrors(e);
     return Object.keys(e).length === 0;
+  };
+
+  // Monta endereço completo a partir dos sub-campos
+  const fullAddress = () => {
+    const parts = [
+      form.customerStreet,
+      form.customerNumber,
+      form.customerComplement,
+      form.customerNeighborhood,
+      form.customerCity,
+    ].filter(Boolean);
+    const addr = parts.join(', ');
+    return form.customerCEP ? `${addr} — CEP ${form.customerCEP}` : addr;
   };
 
   const buildMessage = useCallback((): string => {
@@ -324,7 +380,8 @@ export const OrderForm: React.FC = () => {
       `Nome: ${form.customerName}`,
       `Telefone: ${form.customerPhone}`,
       `CPF: ${form.customerCPF}`,
-      `Endereço: ${form.customerAddress}`,
+      `Nascimento: ${fmtBirthForMsg(form.customerBirthDate)}`,
+      `Endereço: ${fullAddress()}`,
       form.customerWorkplace ? `Onde trabalha: ${form.customerWorkplace}` : null,
       ``,
       `─────────────────────`,
@@ -355,33 +412,27 @@ export const OrderForm: React.FC = () => {
   };
 
   const handleSendPhoto = async () => {
-    if (photoInputRef.current) {
-      // Try navigator.share with files (Chrome Android 100+)
-      const canShareFiles = typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
-      if (canShareFiles) {
-        photoInputRef.current.onchange = async (ev: Event) => {
-          const file = (ev.target as HTMLInputElement).files?.[0];
-          if (!file) return;
-          try {
-            if (navigator.canShare({ files: [file] })) {
-              await navigator.share({ files: [file], title: `Foto — ${form.customerName || 'cliente'}` });
-              return;
-            }
-          } catch { /* user cancelled or not supported */ }
-          setPhotoInstructions(true);
-        };
-        photoInputRef.current.click();
-      } else {
+    if (!photoInputRef.current) return;
+    const canShare = typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
+    if (canShare) {
+      photoInputRef.current.onchange = async (ev: Event) => {
+        const file = (ev.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        try {
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: `Foto — ${form.customerName || 'cliente'}` });
+            return;
+          }
+        } catch { /* user cancelled */ }
         setPhotoInstructions(true);
-      }
+      };
+      photoInputRef.current.click();
+    } else {
+      setPhotoInstructions(true);
     }
   };
 
-  const isDeliveryDateBlocked = (d: string) => {
-    if (!d) return false;
-    const dow = getDOW(d);
-    return dow === 0 || holidays.has(d);
-  };
+  const isDeliveryDateBlocked = (d: string) => !d ? false : getDOW(d) === 0 || holidays.has(d);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -452,16 +503,74 @@ export const OrderForm: React.FC = () => {
                   placeholder="(00) 00000-0000" inputMode="tel" />
               </Field>
 
-              <Field label="CPF" error={errors.customerCPF}>
-                <input className="input-base w-full" value={form.customerCPF}
-                  onChange={e => set('customerCPF', maskCPF(e.target.value))}
-                  placeholder="000.000.000-00" inputMode="numeric" />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="CPF" error={errors.customerCPF}>
+                  <input className="input-base w-full" value={form.customerCPF}
+                    onChange={e => set('customerCPF', maskCPF(e.target.value))}
+                    placeholder="000.000.000-00" inputMode="numeric" />
+                </Field>
+
+                <Field label="Data de Nascimento" error={errors.customerBirthDate}>
+                  <input
+                    className="input-base w-full"
+                    value={form.customerBirthDate}
+                    onChange={e => set('customerBirthDate', maskBirthDate(e.target.value))}
+                    placeholder="dd/MM/aaaa"
+                    inputMode="numeric"
+                    maxLength={10}
+                  />
+                </Field>
+              </div>
+
+              {/* CEP + auto-fill */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  CEP <span className="text-gray-400 font-normal text-xs">(preenchimento automático)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    className="input-base w-full pr-8"
+                    value={form.customerCEP}
+                    onChange={e => handleCepChange(e.target.value)}
+                    placeholder="00000-000"
+                    inputMode="numeric"
+                    maxLength={9}
+                  />
+                  {cepLoading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+                {cepError && <p className="text-xs text-amber-600 mt-1">⚠️ {cepError}</p>}
+              </div>
+
+              <Field label="Logradouro (rua/av.)" error={errors.customerStreet}>
+                <input className="input-base w-full" value={form.customerStreet}
+                  onChange={e => set('customerStreet', e.target.value)} placeholder="Rua / Avenida" />
               </Field>
 
-              <Field label="Endereço" error={errors.customerAddress}>
-                <input className="input-base w-full" value={form.customerAddress}
-                  onChange={e => set('customerAddress', e.target.value)} placeholder="Rua, número, bairro, cidade" />
-              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Número" required={false}>
+                  <input className="input-base w-full" value={form.customerNumber}
+                    onChange={e => set('customerNumber', e.target.value)} placeholder="Ex: 123" inputMode="numeric" />
+                </Field>
+                <Field label="Complemento" required={false}>
+                  <input className="input-base w-full" value={form.customerComplement}
+                    onChange={e => set('customerComplement', e.target.value)} placeholder="Apto, bloco..." />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Bairro" required={false}>
+                  <input className="input-base w-full" value={form.customerNeighborhood}
+                    onChange={e => set('customerNeighborhood', e.target.value)} placeholder="Bairro" />
+                </Field>
+                <Field label="Cidade" required={false}>
+                  <input className="input-base w-full" value={form.customerCity}
+                    onChange={e => set('customerCity', e.target.value)} placeholder="Cidade" />
+                </Field>
+              </div>
 
               <Field label="Onde trabalha" required={false}>
                 <input className="input-base w-full" value={form.customerWorkplace}
@@ -490,9 +599,7 @@ export const OrderForm: React.FC = () => {
                     <button key={pt}
                       onClick={() => { set('paymentType', pt); if (pt !== 'crediario') { set('installments', ''); set('installmentValue', ''); } }}
                       className={`py-3 rounded-xl border-2 text-sm font-medium transition-colors ${
-                        form.paymentType === pt
-                          ? 'border-primary bg-primary text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        form.paymentType === pt ? 'border-primary bg-primary text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'
                       }`}
                     >
                       {PAYMENT_LABELS[pt]}
@@ -523,8 +630,7 @@ export const OrderForm: React.FC = () => {
               <h2 className="font-semibold text-gray-900">🚚 Entrega</h2>
 
               <Field label="Cidade de entrega" error={errors.city}>
-                <select className="input-base w-full" value={form.city}
-                  onChange={e => set('city', e.target.value)}>
+                <select className="input-base w-full" value={form.city} onChange={e => set('city', e.target.value)}>
                   <option value="">Selecione a cidade</option>
                   {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -535,11 +641,7 @@ export const OrderForm: React.FC = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-700 mb-2">Data de entrega</p>
                     <div className="border border-gray-200 rounded-xl p-3">
-                      <MiniCalendar
-                        selected={form.deliveryDate}
-                        onSelect={d => set('deliveryDate', d)}
-                        blockedDates={holidays}
-                      />
+                      <MiniCalendar selected={form.deliveryDate} onSelect={d => set('deliveryDate', d)} blockedDates={holidays} />
                     </div>
                     {form.deliveryDate && isDeliveryDateBlocked(form.deliveryDate) && (
                       <p className="text-xs text-red-500 mt-1">Esta data é domingo ou feriado — selecione outro dia</p>
@@ -553,11 +655,9 @@ export const OrderForm: React.FC = () => {
                         {fmtDisplayDateLong(form.deliveryDate)} — {
                           form.city === 'Jaboticabal'
                             ? (getDOW(form.deliveryDate) >= 1 && getDOW(form.deliveryDate) <= 4 ? 'Jaboticabal: 09:00–17:00'
-                              : getDOW(form.deliveryDate) === 5 ? 'Sexta: 09:00–18:00'
-                              : 'Sábado: 09:00–12:00')
+                              : getDOW(form.deliveryDate) === 5 ? 'Sexta: 09:00–18:00' : 'Sábado: 09:00–12:00')
                             : (getDOW(form.deliveryDate) >= 1 && getDOW(form.deliveryDate) <= 4 ? 'Região: 09:00–16:00'
-                              : getDOW(form.deliveryDate) === 5 ? 'Sexta: 09:00–18:00'
-                              : 'Sábado: 09:00–12:00')
+                              : getDOW(form.deliveryDate) === 5 ? 'Sexta: 09:00–18:00' : 'Sábado: 09:00–12:00')
                         }
                       </p>
                     )}
@@ -568,12 +668,9 @@ export const OrderForm: React.FC = () => {
                       <p className="text-sm font-medium text-gray-700 mb-2">Horário de entrega</p>
                       <div className="flex flex-wrap gap-2">
                         {timeSlots.map(t => (
-                          <button key={t}
-                            onClick={() => set('deliveryTime', t)}
+                          <button key={t} onClick={() => set('deliveryTime', t)}
                             className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                              form.deliveryTime === t
-                                ? 'bg-primary border-primary text-white'
-                                : 'border-gray-200 text-gray-700 hover:border-primary hover:text-primary'
+                              form.deliveryTime === t ? 'bg-primary border-primary text-white' : 'border-gray-200 text-gray-700 hover:border-primary hover:text-primary'
                             }`}
                           >
                             {t}
@@ -628,7 +725,7 @@ export const OrderForm: React.FC = () => {
                 )}
 
                 <button
-                  onClick={() => { setForm(EMPTY_FORM); setSubmitted(false); setPhotoInstructions(false); }}
+                  onClick={() => { setForm(EMPTY_FORM); setSubmitted(false); setPhotoInstructions(false); setCepError(''); }}
                   className="w-full py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:border-gray-300 transition-colors"
                 >
                   Novo pedido
@@ -636,7 +733,6 @@ export const OrderForm: React.FC = () => {
               </div>
             )}
 
-            {/* Hidden file input for photo share */}
             <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" />
           </>
         )}
