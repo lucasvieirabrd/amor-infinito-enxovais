@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import axios from 'axios';
 
 // ─── API base (sem interceptor de 401→login) ────────────────────────────────
@@ -201,10 +201,16 @@ function fmtBirthForMsg(v: string) {
   return v; // já está em dd/MM/aaaa
 }
 
+function fmtPrice(v: number): string {
+  const [int, dec] = v.toFixed(2).split('.');
+  return `R$ ${int.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${dec}`;
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-interface Seller { id: string; name: string }
+interface Seller { id: string; name: string; code: string }
 interface HolidayEntry { date: string; description: string }
+interface ProductEntry { name: string; price: number }
 
 interface FormData {
   // Customer
@@ -257,6 +263,14 @@ export const OrderForm: React.FC = () => {
   const [holidays, setHolidays]         = useState<Set<string>>(new Set());
   const [holidayDesc, setHolidayDesc]   = useState<Record<string, string>>({});
 
+  const [allProducts, setAllProducts]         = useState<ProductEntry[]>([]);
+  const [productLoading, setProductLoading]   = useState(false);
+  const [productSearch, setProductSearch]     = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<ProductEntry | null>(null);
+  const [showProductList, setShowProductList] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [submitted, setSubmitted]           = useState(false);
   const [photoInstructions, setPhotoInstructions] = useState(false);
 
@@ -274,6 +288,28 @@ export const OrderForm: React.FC = () => {
     }).catch(() => {});
   }, [seller]);
 
+  // Load products when seller confirmed
+  useEffect(() => {
+    if (!seller) { setAllProducts([]); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); return; }
+    setProductLoading(true);
+    API.get<ProductEntry[]>(`/order-form/products?code=${encodeURIComponent(seller.code)}`)
+      .then(r => setAllProducts(r.data))
+      .catch(() => setAllProducts([]))
+      .finally(() => setProductLoading(false));
+  }, [seller]);
+
+  const filteredProducts = useMemo(() => {
+    if (!debouncedSearch.trim()) return allProducts;
+    const q = debouncedSearch.toLowerCase();
+    return allProducts.filter(p => p.name.toLowerCase().includes(q));
+  }, [allProducts, debouncedSearch]);
+
+  const handleProductSearch = (v: string) => {
+    setProductSearch(v);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(v), 300);
+  };
+
   // Reset time when date/city changes
   useEffect(() => {
     setForm(f => ({ ...f, deliveryTime: '' }));
@@ -284,8 +320,8 @@ export const OrderForm: React.FC = () => {
     setCodeLoading(true);
     setCodeError('');
     try {
-      const res = await API.get<Seller>(`/order-form/seller?code=${encodeURIComponent(code.toUpperCase())}`);
-      setSeller(res.data);
+      const res = await API.get<Omit<Seller, 'code'>>(`/order-form/seller?code=${encodeURIComponent(code.toUpperCase())}`);
+      setSeller({ ...res.data, code: code.toUpperCase() });
     } catch (e: any) {
       setCodeError(e.response?.data?.error ?? 'Código inválido');
     } finally {
@@ -393,7 +429,7 @@ export const OrderForm: React.FC = () => {
       ``,
       `─────────────────────`,
       `🛍️ *PRODUTO*`,
-      form.product,
+      selectedProduct ? `${form.product} — ${fmtPrice(selectedProduct.price)}` : form.product,
       ``,
       `─────────────────────`,
       `💳 *PAGAMENTO*`,
@@ -408,7 +444,7 @@ export const OrderForm: React.FC = () => {
       `─────────────────────`,
       `📅 Pedido gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
     ].filter(l => l !== null).join('\n');
-  }, [seller, form]);
+  }, [seller, form, selectedProduct]);
 
   const handleSendWhatsApp = () => {
     if (!validate()) return;
@@ -463,7 +499,7 @@ export const OrderForm: React.FC = () => {
                 <p className="text-xs text-green-600">Código validado</p>
               </div>
               <button
-                onClick={() => { setSeller(null); setCode(''); setForm(EMPTY_FORM); setSubmitted(false); }}
+                onClick={() => { setSeller(null); setCode(''); setForm(EMPTY_FORM); setSubmitted(false); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setAllProducts([]); setShowProductList(false); }}
                 className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline"
               >
                 Trocar
@@ -588,11 +624,65 @@ export const OrderForm: React.FC = () => {
             {/* Produto */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
               <h2 className="font-semibold text-gray-900">🛍️ Produto</h2>
-              <Field label="Descrição do produto" error={errors.product}>
-                <textarea className="input-base w-full min-h-[80px] resize-none" value={form.product}
-                  onChange={e => set('product', e.target.value)}
-                  placeholder="Ex: Jogo de cama casal padrão bordado, cor bege" />
-              </Field>
+              {productLoading ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  Carregando produtos...
+                </div>
+              ) : selectedProduct ? (
+                <div>
+                  <div className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                    <div>
+                      <p className="font-medium text-gray-900 text-sm">{selectedProduct.name}</p>
+                      <p className="text-xs text-primary font-semibold mt-0.5">{fmtPrice(selectedProduct.price)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedProduct(null); set('product', ''); setProductSearch(''); setDebouncedSearch(''); setShowProductList(false); }}
+                      className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-3 underline"
+                    >
+                      Trocar
+                    </button>
+                  </div>
+                  {errors.product && <p className="text-xs text-red-500 mt-1">{errors.product}</p>}
+                </div>
+              ) : (
+                <div className="relative">
+                  <Field label="Buscar produto" error={errors.product}>
+                    <input
+                      className="input-base w-full"
+                      value={productSearch}
+                      onChange={e => handleProductSearch(e.target.value)}
+                      onFocus={() => setShowProductList(true)}
+                      onBlur={() => setTimeout(() => setShowProductList(false), 150)}
+                      placeholder="Digite o nome do produto..."
+                      autoComplete="off"
+                    />
+                  </Field>
+                  {showProductList && (
+                    <div className="mt-1 border border-gray-200 rounded-xl overflow-hidden shadow-md max-h-60 overflow-y-auto z-10 relative bg-white">
+                      {filteredProducts.length === 0 ? (
+                        <p className="text-sm text-gray-400 text-center py-4">
+                          {debouncedSearch ? 'Nenhum produto encontrado' : 'Nenhum produto disponível'}
+                        </p>
+                      ) : (
+                        filteredProducts.map((p, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            className="w-full text-left px-4 py-3 hover:bg-primary/5 transition-colors border-b border-gray-100 last:border-0"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => { setSelectedProduct(p); set('product', p.name); setShowProductList(false); }}
+                          >
+                            <p className="text-sm font-medium text-gray-900">{p.name}</p>
+                            <p className="text-xs text-primary font-semibold mt-0.5">{fmtPrice(p.price)}</p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Pagamento */}
@@ -744,7 +834,7 @@ export const OrderForm: React.FC = () => {
                 )}
 
                 <button
-                  onClick={() => { setForm(EMPTY_FORM); setSubmitted(false); setPhotoInstructions(false); setCepError(''); }}
+                  onClick={() => { setForm(EMPTY_FORM); setSubmitted(false); setPhotoInstructions(false); setCepError(''); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setShowProductList(false); }}
                   className="w-full py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:border-gray-300 transition-colors"
                 >
                   Novo pedido

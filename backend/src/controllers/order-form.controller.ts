@@ -18,6 +18,29 @@ export class OrderFormController {
     res.json({ id: seller.id, name: seller.name });
   }
 
+  /** GET /api/order-form/products?code=XXXX — público, requer código válido */
+  async products(req: Request, res: Response) {
+    const { code } = req.query;
+    if (!code || typeof code !== 'string') {
+      throw new AppError('Código não informado', 400);
+    }
+    const seller = await sellerRepo.findByCode(code.toUpperCase());
+    if (!seller) throw new AppError('Código inválido ou vendedor inativo', 404);
+
+    const rows = await db.execute(sql`
+      SELECT name, price
+      FROM products
+      WHERE deleted_at IS NULL AND quantity > 0
+      ORDER BY name ASC
+    `);
+
+    const data = ((rows as any)[0] as any[]).map((r: any) => ({
+      name:  String(r.name),
+      price: parseFloat(String(r.price)) || 0,
+    }));
+    res.json(data);
+  }
+
   /**
    * GET /api/order-form/holidays?from=YYYY-MM-DD&to=YYYY-MM-DD — público
    * Retorna datas de feriados no intervalo para o calendário bloquear.
