@@ -60,6 +60,12 @@ function todayStr(): string {
   return dateToStr(new Date(Date.now()));
 }
 
+// "Hoje" no fuso de São Paulo (UTC−3) — sem toLocaleString com timezone
+function todaySPStr(): string {
+  const sp = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  return `${sp.getUTCFullYear()}-${String(sp.getUTCMonth() + 1).padStart(2, '0')}-${String(sp.getUTCDate()).padStart(2, '0')}`;
+}
+
 function fmtDisplayDateLong(s: string): string {
   const days = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
   const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -96,8 +102,8 @@ const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julh
 const DOW_LABELS = ['D','S','T','Q','Q','S','S'];
 
 const MiniCalendar: React.FC<CalendarProps> = ({ selected, onSelect, blockedDates }) => {
-  const today = todayStr();
-  const initDate = selected || today;
+  const todaySP = todaySPStr();
+  const initDate = selected || todaySP;
   const [year, setYear] = useState(() => Number(initDate.split('-')[0]));
   const [month, setMonth] = useState(() => Number(initDate.split('-')[1]) - 1);
 
@@ -118,7 +124,7 @@ const MiniCalendar: React.FC<CalendarProps> = ({ selected, onSelect, blockedDate
   const cellStr = (day: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
   const isDisabled = (ds: string) => {
-    if (ds < today) return true;
+    if (ds <= todaySP) return true;   // hoje e passado bloqueados — mínimo é amanhã SP
     if (getDOW(ds) === 0) return true;
     return blockedDates.has(ds);
   };
@@ -141,7 +147,7 @@ const MiniCalendar: React.FC<CalendarProps> = ({ selected, onSelect, blockedDate
           const ds = cellStr(day);
           const disabled = isDisabled(ds);
           const isSelected = ds === selected;
-          const isToday = ds === today;
+          const isToday = ds === todaySP;
           return (
             <button key={i} onClick={() => !disabled && onSelect(ds)} disabled={disabled}
               className={`aspect-square flex items-center justify-center rounded-full text-sm font-medium transition-colors
@@ -407,6 +413,7 @@ export const OrderForm: React.FC = () => {
     }
     if (!form.city)                     e.city              = 'Selecione a cidade';
     if (!form.deliveryDate)             e.deliveryDate      = 'Selecione a data';
+    else if (form.deliveryDate <= todaySPStr()) e.deliveryDate = 'Data de entrega deve ser a partir de amanhã';
     if (!form.deliveryTime)             e.deliveryTime      = 'Selecione o horário';
     setErrors(e);
     return Object.keys(e).length === 0;
