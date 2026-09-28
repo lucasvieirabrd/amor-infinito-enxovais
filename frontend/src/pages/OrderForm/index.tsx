@@ -210,7 +210,7 @@ function fmtPrice(v: number): string {
 
 interface Seller { id: string; name: string; code: string }
 interface HolidayEntry { date: string; description: string }
-interface ProductEntry { name: string; price: number }
+interface ProductEntry { name: string; price: number; description: string | null }
 
 interface FormData {
   // Customer
@@ -301,7 +301,10 @@ export const OrderForm: React.FC = () => {
   const filteredProducts = useMemo(() => {
     if (!debouncedSearch.trim()) return allProducts;
     const q = debouncedSearch.toLowerCase();
-    return allProducts.filter(p => p.name.toLowerCase().includes(q));
+    return allProducts.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      (p.description && p.description.toLowerCase().includes(q))
+    );
   }, [allProducts, debouncedSearch]);
 
   const handleProductSearch = (v: string) => {
@@ -429,7 +432,9 @@ export const OrderForm: React.FC = () => {
       ``,
       `─────────────────────`,
       `🛍️ *PRODUTO*`,
-      selectedProduct ? `${form.product} — ${fmtPrice(selectedProduct.price)}` : form.product,
+      selectedProduct
+        ? `${form.product}${selectedProduct.description ? ` (${selectedProduct.description})` : ''} — ${fmtPrice(selectedProduct.price)}`
+        : form.product,
       ``,
       `─────────────────────`,
       `💳 *PAGAMENTO*`,
@@ -634,6 +639,7 @@ export const OrderForm: React.FC = () => {
                   <div className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-xl">
                     <div>
                       <p className="font-medium text-gray-900 text-sm">{selectedProduct.name}</p>
+                      {selectedProduct.description && <p className="text-xs text-gray-500 mt-0.5">{selectedProduct.description}</p>}
                       <p className="text-xs text-primary font-semibold mt-0.5">{fmtPrice(selectedProduct.price)}</p>
                     </div>
                     <button
@@ -675,6 +681,7 @@ export const OrderForm: React.FC = () => {
                             onClick={() => { setSelectedProduct(p); set('product', p.name); setShowProductList(false); }}
                           >
                             <p className="text-sm font-medium text-gray-900">{p.name}</p>
+                            {p.description && <p className="text-xs text-gray-500">{p.description}</p>}
                             <p className="text-xs text-primary font-semibold mt-0.5">{fmtPrice(p.price)}</p>
                           </button>
                         ))

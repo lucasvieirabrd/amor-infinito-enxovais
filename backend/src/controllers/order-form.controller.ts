@@ -28,15 +28,16 @@ export class OrderFormController {
     if (!seller) throw new AppError('Código inválido ou vendedor inativo', 404);
 
     const rows = await db.execute(sql`
-      SELECT name, price
+      SELECT name, price, description
       FROM products
       WHERE deleted_at IS NULL AND quantity > 0
       ORDER BY name ASC
     `);
 
     const data = ((rows as any)[0] as any[]).map((r: any) => ({
-      name:  String(r.name),
-      price: parseFloat(String(r.price)) || 0,
+      name:        String(r.name),
+      price:       parseFloat(String(r.price)) || 0,
+      description: r.description ? String(r.description) : null,
     }));
     res.json(data);
   }
