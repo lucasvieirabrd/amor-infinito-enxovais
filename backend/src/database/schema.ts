@@ -311,3 +311,18 @@ export const externalSellers = mysqlTable('external_sellers', {
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt: datetime('deleted_at'),
 });
+
+export const deliverySchedule = mysqlTable('delivery_schedule', {
+  id:               varchar('id', { length: 36 }).primaryKey(),
+  date:             date('date').notNull(),
+  time:             varchar('time', { length: 5 }).notNull(),
+  externalSellerId: varchar('external_seller_id', { length: 36 }).notNull(),
+  customerName:     varchar('customer_name', { length: 255 }).notNull(),
+  city:             varchar('city', { length: 100 }).notNull(),
+  status:           mysqlEnum('status', ['reserved', 'released']).notNull().default('reserved'),
+  createdAt:        datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt:        datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  deletedAt:        datetime('deleted_at'),
+  // active_slot é coluna GERADA pelo MySQL (STORED) — não incluída aqui,
+  // pois é gerenciada pelo banco e nunca escrita diretamente pelo ORM
+});

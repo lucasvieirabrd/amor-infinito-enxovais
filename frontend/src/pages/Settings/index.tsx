@@ -45,6 +45,19 @@ interface Holiday {
   description: string;
 }
 
+// ─── Delivery schedule types ──────────────────────────────────────────────────
+
+interface DeliverySlot {
+  id: string;
+  date: string;
+  time: string;
+  seller_name: string | null;
+  seller_code: string | null;
+  customer_name: string;
+  city: string;
+  created_at: string;
+}
+
 // ─── User types ───────────────────────────────────────────────────────────────
 
 interface SystemUser {
@@ -74,7 +87,7 @@ const TAB_OPTIONS = [
 export const Settings: React.FC = () => {
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers' | 'contacts' | 'usuarios' | 'feriados' | 'vend-ext'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers' | 'contacts' | 'usuarios' | 'feriados' | 'vend-ext' | 'agenda'>('general');
   const [loading, setLoading] = useState(false);
   const [pixLoading, setPixLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -400,6 +413,47 @@ export const Settings: React.FC = () => {
     deleteExtSellerMutation.mutate(s.id);
   };
 
+  // ─── Agenda (delivery schedule) state & mutations ────────────────────────
+
+  const [agendaDate, setAgendaDate] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+
+  const { data: agendaSlots, isLoading: agendaLoading } = useQuery<DeliverySlot[]>({
+    queryKey: ['delivery-schedule', agendaDate],
+    queryFn: () => api.get(`/delivery-schedule?from=${agendaDate}&to=${agendaDate}`).then(r => r.data),
+    enabled: activeTab === 'agenda',
+  });
+
+  const releaseSlotMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/delivery-schedule/${id}/release`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery-schedule'] });
+      toast.success('Horário liberado!');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error ?? 'Erro ao liberar horário'),
+  });
+
+  const handleReleaseSlot = (slot: DeliverySlot) => {
+    if (!confirm(`Liberar o horário das ${slot.time} reservado para "${slot.customer_name}"?`)) return;
+    releaseSlotMutation.mutate(slot.id);
+  };
+
+  const agendaNavDay = (n: number) => {
+    setAgendaDate(prev => {
+      const [y, m, d] = prev.split('-').map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      dt.setUTCDate(dt.getUTCDate() + n);
+      return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+    });
+  };
+
+  const fmtAgendaDate = (iso: string) => {
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
   // ─── Sellers handlers ─────────────────────────────────────────────────────
 
   const loadSellers = async () => {
@@ -536,6 +590,7 @@ export const Settings: React.FC = () => {
             { key: 'usuarios', label: 'Usuários' },
             { key: 'feriados', label: 'Feriados' },
             { key: 'vend-ext', label: 'Vend. Externos' },
+            { key: 'agenda',   label: 'Agenda' },
           ] as const
         ).map(tab => (
           <button
@@ -1405,6 +1460,89 @@ export const Settings: React.FC = () => {
               <p className="mt-1 text-xs text-blue-500">Passe este link + o código ao vendedor. Funciona sem login.</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Agenda Tab ── */}
+      {activeTab === 'agenda' && (
+        <div className="space-y-6">
+          <Card title="Agenda de Entregas" subtitle="Horários reservados pelos vendedores externos">
+            <div className="flex items-center justify-between mb-6">
+              <button
+                onClick={() => agendaNavDay(-1)}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
+              >
+                <FiChevronLeft size={20} />
+              </button>
+              <div className="text-center">
+                <span className="text-lg font-semibold text-gray-900">{fmtAgendaDate(agendaDate)}</span>
+                <button
+                  onClick={() => setAgendaDate(() => {
+                    const d = new Date();
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  })}
+                  className="ml-3 text-xs text-primary hover:underline"
+                >
+                  Hoje
+                </button>
+              </div>
+              <button
+                onClick={() => agendaNavDay(1)}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
+              >
+                <FiChevronRight size={20} />
+              </button>
+            </div>
+
+            {agendaLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (agendaSlots ?? []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                <FiCalendar size={32} className="mb-3" />
+                <p className="text-sm">Nenhum horário reservado para este dia</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Horário</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Vendedor</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Cidade</th>
+                      <th className="text-right px-4 py-3 font-medium text-gray-600">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(agendaSlots ?? []).map(slot => (
+                      <tr key={slot.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 font-mono font-semibold text-primary">{slot.time}</td>
+                        <td className="px-4 py-3 text-gray-700">
+                          <div>{slot.seller_name ?? '—'}</div>
+                          {slot.seller_code && (
+                            <div className="text-xs text-gray-400 font-mono">{slot.seller_code}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">{slot.customer_name}</td>
+                        <td className="px-4 py-3 text-gray-500">{slot.city}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => handleReleaseSlot(slot)}
+                            disabled={releaseSlotMutation.isPending}
+                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
+                          >
+                            Liberar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
         </div>
       )}
 

@@ -271,6 +271,11 @@ export const OrderForm: React.FC = () => {
   const [showProductList, setShowProductList] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [bookedSlots, setBookedSlots]       = useState<Set<string>>(new Set());
+  const [slotsLoading, setSlotsLoading]     = useState(false);
+  const [reserving, setReserving]           = useState(false);
+  const [reserveError, setReserveError]     = useState('');
+
   const [submitted, setSubmitted]           = useState(false);
   const [photoInstructions, setPhotoInstructions] = useState(false);
 
@@ -312,6 +317,21 @@ export const OrderForm: React.FC = () => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => setDebouncedSearch(v), 300);
   };
+
+  // Load booked slots when date changes (recarrega p/ refletir reservas recentes)
+  useEffect(() => {
+    if (!seller || !form.deliveryDate) { setBookedSlots(new Set()); return; }
+    setSlotsLoading(true);
+    API.get<string[]>(`/order-form/booked-slots?date=${form.deliveryDate}&code=${encodeURIComponent(seller.code)}`)
+      .then(r => {
+        const s = new Set(r.data);
+        setBookedSlots(s);
+        // Se o horário já selecionado foi reservado por outro, limpa
+        setForm(f => s.has(f.deliveryTime) ? { ...f, deliveryTime: '' } : f);
+      })
+      .catch(() => setBookedSlots(new Set()))
+      .finally(() => setSlotsLoading(false));
+  }, [seller, form.deliveryDate]);
 
   // Reset time when date/city changes
   useEffect(() => {
@@ -451,12 +471,33 @@ export const OrderForm: React.FC = () => {
     ].filter(l => l !== null).join('\n');
   }, [seller, form, selectedProduct]);
 
-  const handleSendWhatsApp = () => {
+  const handleSendWhatsApp = async () => {
     if (!validate()) return;
-    const msg = buildMessage();
-    const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-    window.open(url, '_blank');
-    setSubmitted(true);
+    setReserving(true);
+    setReserveError('');
+    try {
+      await API.post('/order-form/reserve', {
+        code:         seller!.code,
+        date:         form.deliveryDate,
+        time:         form.deliveryTime,
+        customerName: form.customerName,
+        city:         form.city,
+      });
+      const msg = buildMessage();
+      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+      setSubmitted(true);
+    } catch (e: any) {
+      const status = e.response?.status;
+      setReserveError(e.response?.data?.error ?? 'Erro ao reservar horário. Tente novamente.');
+      if (status === 409 && seller && form.deliveryDate) {
+        API.get<string[]>(`/order-form/booked-slots?date=${form.deliveryDate}&code=${encodeURIComponent(seller.code)}`)
+          .then(r => setBookedSlots(new Set(r.data)))
+          .catch(() => {});
+        set('deliveryTime', '');
+      }
+    } finally {
+      setReserving(false);
+    }
   };
 
   const handleSendPhoto = async () => {
@@ -504,7 +545,7 @@ export const OrderForm: React.FC = () => {
                 <p className="text-xs text-green-600">Código validado</p>
               </div>
               <button
-                onClick={() => { setSeller(null); setCode(''); setForm(EMPTY_FORM); setSubmitted(false); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setAllProducts([]); setShowProductList(false); }}
+                onClick={() => { setSeller(null); setCode(''); setForm(EMPTY_FORM); setSubmitted(false); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setAllProducts([]); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
                 className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline"
               >
                 Trocar
@@ -781,17 +822,30 @@ export const OrderForm: React.FC = () => {
 
                   {form.deliveryDate && !isDeliveryDateBlocked(form.deliveryDate) && timeSlots.length > 0 && (
                     <div>
-                      <p className="text-sm font-medium text-gray-700 mb-2">Horário de entrega</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-sm font-medium text-gray-700">Horário de entrega</p>
+                        {slotsLoading && <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />}
+                      </div>
                       <div className="flex flex-wrap gap-2">
-                        {timeSlots.map(t => (
-                          <button key={t} onClick={() => set('deliveryTime', t)}
-                            className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                              form.deliveryTime === t ? 'bg-primary border-primary text-white' : 'border-gray-200 text-gray-700 hover:border-primary hover:text-primary'
-                            }`}
-                          >
-                            {t}
-                          </button>
-                        ))}
+                        {timeSlots.map(t => {
+                          const booked = bookedSlots.has(t);
+                          return (
+                            <button key={t}
+                              onClick={() => !booked && set('deliveryTime', t)}
+                              disabled={booked}
+                              title={booked ? 'Horário já reservado' : undefined}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                                booked
+                                  ? 'border-gray-100 text-gray-300 bg-gray-50 cursor-not-allowed line-through'
+                                  : form.deliveryTime === t
+                                    ? 'bg-primary border-primary text-white'
+                                    : 'border-gray-200 text-gray-700 hover:border-primary hover:text-primary'
+                              }`}
+                            >
+                              {t}
+                            </button>
+                          );
+                        })}
                       </div>
                       {errors.deliveryTime && <p className="text-xs text-red-500 mt-1">{errors.deliveryTime}</p>}
                     </div>
@@ -803,11 +857,20 @@ export const OrderForm: React.FC = () => {
             {/* Ações */}
             {!submitted ? (
               <div className="space-y-3">
+                {reserveError && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
+                    {reserveError}
+                  </div>
+                )}
                 <button
                   onClick={handleSendWhatsApp}
-                  className="w-full py-4 rounded-2xl bg-green-500 hover:bg-green-600 text-white font-bold text-lg shadow-lg transition-colors flex items-center justify-center gap-3"
+                  disabled={reserving}
+                  className="w-full py-4 rounded-2xl bg-green-500 hover:bg-green-600 text-white font-bold text-lg shadow-lg transition-colors flex items-center justify-center gap-3 disabled:opacity-60"
                 >
-                  <span className="text-2xl">📤</span> Enviar pedido pelo WhatsApp
+                  {reserving
+                    ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Reservando horário...</>
+                    : <><span className="text-2xl">📤</span> Enviar pedido pelo WhatsApp</>
+                  }
                 </button>
                 <p className="text-xs text-gray-400 text-center">
                   O WhatsApp abrirá com o texto do pedido — escolha o grupo e envie.
@@ -841,7 +904,7 @@ export const OrderForm: React.FC = () => {
                 )}
 
                 <button
-                  onClick={() => { setForm(EMPTY_FORM); setSubmitted(false); setPhotoInstructions(false); setCepError(''); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setShowProductList(false); }}
+                  onClick={() => { setForm(EMPTY_FORM); setSubmitted(false); setPhotoInstructions(false); setCepError(''); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
                   className="w-full py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:border-gray-300 transition-colors"
                 >
                   Novo pedido
