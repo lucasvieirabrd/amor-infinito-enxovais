@@ -20,6 +20,8 @@ import { nfImportRouter } from './nf-import.routes';
 import { kitRouter } from './kit.routes';
 import { userRouter } from './user.routes';
 import { holidayRouter } from './holiday.routes';
+import { externalSellerRouter } from './external-seller.routes';
+import { orderFormRouter } from './order-form.routes';
 
 const routes = Router();
 
@@ -44,5 +46,7 @@ routes.use('/nf-import', nfImportRouter);
 routes.use('/kits', kitRouter);
 routes.use('/users', userRouter);
 routes.use('/holidays', holidayRouter);
+routes.use('/external-sellers', externalSellerRouter);
+routes.use('/order-form', orderFormRouter);
 
 export { routes };

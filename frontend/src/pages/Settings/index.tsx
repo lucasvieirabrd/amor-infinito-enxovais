@@ -74,7 +74,7 @@ const TAB_OPTIONS = [
 export const Settings: React.FC = () => {
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers' | 'contacts' | 'usuarios' | 'feriados'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers' | 'contacts' | 'usuarios' | 'feriados' | 'vend-ext'>('general');
   const [loading, setLoading] = useState(false);
   const [pixLoading, setPixLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -344,6 +344,62 @@ export const Settings: React.FC = () => {
     return `${d}/${m}/${y}`;
   };
 
+  // ─── External sellers state & mutations ──────────────────────────────────
+
+  interface ExternalSeller { id: string; name: string; code: string; active: boolean }
+
+  const [extSellerModal, setExtSellerModal] = useState<{ open: boolean; editing: ExternalSeller | null }>({ open: false, editing: null });
+  const [extSellerForm, setExtSellerForm] = useState({ name: '', code: '', active: true });
+
+  const { data: extSellerList, isLoading: extSellersLoading } = useQuery<ExternalSeller[]>({
+    queryKey: ['external-sellers'],
+    queryFn: () => api.get('/external-sellers').then(r => r.data),
+    enabled: activeTab === 'vend-ext',
+  });
+
+  const createExtSellerMutation = useMutation({
+    mutationFn: (data: { name: string; code: string }) => api.post('/external-sellers', data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['external-sellers'] }); toast.success('Vendedor criado!'); setExtSellerModal({ open: false, editing: null }); },
+    onError: (err: any) => toast.error(err?.response?.data?.error ?? 'Erro ao criar vendedor'),
+  });
+
+  const updateExtSellerMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<typeof extSellerForm> }) => api.put(`/external-sellers/${id}`, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['external-sellers'] }); toast.success('Vendedor atualizado!'); setExtSellerModal({ open: false, editing: null }); },
+    onError: (err: any) => toast.error(err?.response?.data?.error ?? 'Erro ao atualizar vendedor'),
+  });
+
+  const deleteExtSellerMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/external-sellers/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['external-sellers'] }); toast.success('Vendedor removido!'); },
+    onError: (err: any) => toast.error(err?.response?.data?.error ?? 'Erro ao remover vendedor'),
+  });
+
+  const openCreateExtSeller = () => {
+    setExtSellerForm({ name: '', code: '', active: true });
+    setExtSellerModal({ open: true, editing: null });
+  };
+
+  const openEditExtSeller = (s: ExternalSeller) => {
+    setExtSellerForm({ name: s.name, code: s.code, active: s.active });
+    setExtSellerModal({ open: true, editing: s });
+  };
+
+  const handleExtSellerSubmit = () => {
+    if (!extSellerForm.name.trim() || !extSellerForm.code.trim()) { toast.error('Nome e código são obrigatórios'); return; }
+    if (!/^[A-Za-z0-9_-]+$/.test(extSellerForm.code)) { toast.error('Código: apenas letras, números, _ ou -'); return; }
+    if (extSellerModal.editing) {
+      updateExtSellerMutation.mutate({ id: extSellerModal.editing.id, data: extSellerForm });
+    } else {
+      createExtSellerMutation.mutate({ name: extSellerForm.name, code: extSellerForm.code.toUpperCase() });
+    }
+  };
+
+  const handleDeleteExtSeller = (s: ExternalSeller) => {
+    if (!confirm(`Remover o vendedor "${s.name}"?`)) return;
+    deleteExtSellerMutation.mutate(s.id);
+  };
+
   // ─── Sellers handlers ─────────────────────────────────────────────────────
 
   const loadSellers = async () => {
@@ -479,6 +535,7 @@ export const Settings: React.FC = () => {
             { key: 'contacts', label: 'Contatos' },
             { key: 'usuarios', label: 'Usuários' },
             { key: 'feriados', label: 'Feriados' },
+            { key: 'vend-ext', label: 'Vend. Externos' },
           ] as const
         ).map(tab => (
           <button
@@ -1270,6 +1327,141 @@ export const Settings: React.FC = () => {
               >
                 <FiCheck size={16} />
                 {holidayModal.editing ? 'Salvar alterações' : 'Adicionar'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Vendedores Externos Tab ── */}
+      {activeTab === 'vend-ext' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Vendedores Externos</h3>
+              <p className="text-sm text-gray-500 mt-0.5">Vendedores que usam o formulário público — cada um tem um código único</p>
+            </div>
+            <Button variant="primary" size="sm" onClick={openCreateExtSeller} className="flex items-center gap-2">
+              <FiPlus size={16} /> Adicionar
+            </Button>
+          </div>
+
+          <Card>
+            {extSellersLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (extSellerList ?? []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                <FiUser size={32} className="mb-3" />
+                <p className="text-sm">Nenhum vendedor externo cadastrado</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Código</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                      <th className="text-right px-4 py-3 font-medium text-gray-600">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(extSellerList ?? []).map(s => (
+                      <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 font-mono font-semibold text-primary">{s.code}</td>
+                        <td className="px-4 py-3 text-gray-700">{s.name}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {s.active ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex gap-2 justify-end">
+                            <button onClick={() => openEditExtSeller(s)}
+                              className="p-1.5 rounded text-gray-400 hover:text-primary hover:bg-primary hover:bg-opacity-10 transition-colors" title="Editar">
+                              <FiEdit2 size={14} />
+                            </button>
+                            <button onClick={() => handleDeleteExtSeller(s)}
+                              className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Remover">
+                              <FiTrash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-700 flex gap-3">
+            <span className="text-lg flex-shrink-0">🔗</span>
+            <div>
+              <p className="font-medium">Link do formulário público</p>
+              <p className="mt-0.5 font-mono text-xs break-all select-all">{window.location.origin}/pedido</p>
+              <p className="mt-1 text-xs text-blue-500">Passe este link + o código ao vendedor. Funciona sem login.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── External Seller Modal ── */}
+      {extSellerModal.open && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {extSellerModal.editing ? 'Editar Vendedor Externo' : 'Novo Vendedor Externo'}
+              </h2>
+              <button onClick={() => setExtSellerModal({ open: false, editing: null })}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-400">
+                <FiX size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome do vendedor</label>
+                <Input value={extSellerForm.name}
+                  onChange={e => setExtSellerForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Ex: Maria Silva" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Código de acesso
+                  <span className="ml-1 text-xs text-gray-400 font-normal">(letras, números, _ ou -)</span>
+                </label>
+                <Input value={extSellerForm.code}
+                  onChange={e => setExtSellerForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                  placeholder="Ex: MARIA01"
+                  className="font-mono tracking-widest" />
+              </div>
+              {extSellerModal.editing && (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setExtSellerForm(f => ({ ...f, active: !f.active }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${extSellerForm.active ? 'bg-primary' : 'bg-gray-200'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${extSellerForm.active ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                  <span className="text-sm text-gray-700">{extSellerForm.active ? 'Ativo' : 'Inativo'}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-end p-6 border-t border-gray-200">
+              <Button variant="secondary" onClick={() => setExtSellerModal({ open: false, editing: null })}>
+                Cancelar
+              </Button>
+              <Button variant="primary"
+                loading={createExtSellerMutation.isPending || updateExtSellerMutation.isPending}
+                onClick={handleExtSellerSubmit}
+                className="flex items-center gap-2">
+                <FiCheck size={16} />
+                {extSellerModal.editing ? 'Salvar' : 'Criar vendedor'}
               </Button>
             </div>
           </div>

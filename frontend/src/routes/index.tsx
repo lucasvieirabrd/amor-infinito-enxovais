@@ -17,6 +17,7 @@ import { Deliveries } from '../pages/Deliveries';
 import { Crediario } from '../pages/Crediario';
 import { Payables } from '../pages/Payables';
 import { Layout } from '../components/Layout';
+import { OrderForm } from '../pages/OrderForm';
 
 const Spinner = () => (
   <div className="flex items-center justify-center h-screen">
@@ -71,6 +72,7 @@ export const AppRoutes: React.FC = () => {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      <Route path="/pedido" element={<OrderForm />} />
 
       <Route
         path="/"

@@ -301,3 +301,13 @@ export const holidays = mysqlTable('holidays', {
   updatedAt:   datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   deletedAt:   datetime('deleted_at'),
 });
+
+export const externalSellers = mysqlTable('external_sellers', {
+  id:        varchar('id', { length: 36 }).primaryKey(),
+  name:      varchar('name', { length: 255 }).notNull(),
+  code:      varchar('code', { length: 20 }).notNull().unique(),
+  active:    boolean('active').notNull().default(true),
+  createdAt: datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  deletedAt: datetime('deleted_at'),
+});
