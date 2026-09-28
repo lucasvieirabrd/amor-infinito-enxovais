@@ -222,9 +222,11 @@ interface FormData {
   // Product
   product: string;
   // Payment
-  paymentType:    'avista' | 'cartao' | 'crediario' | '';
-  installments:   string;
+  paymentType:      'avista' | 'cartao' | 'crediario' | '';
+  installments:     string;
   installmentValue: string;
+  downPaymentDate:  string; // YYYY-MM-DD
+  firstDueDate:     string; // YYYY-MM-DD
   // Delivery
   city:         string;
   deliveryDate: string;
@@ -236,7 +238,7 @@ const EMPTY_FORM: FormData = {
   customerCEP: '', customerStreet: '', customerNumber: '', customerNeighborhood: '',
   customerCity: '', customerComplement: '', customerWorkplace: '',
   product: '',
-  paymentType: '', installments: '', installmentValue: '',
+  paymentType: '', installments: '', installmentValue: '', downPaymentDate: '', firstDueDate: '',
   city: '', deliveryDate: '', deliveryTime: '',
 };
 
@@ -367,8 +369,13 @@ export const OrderForm: React.FC = () => {
   const buildMessage = useCallback((): string => {
     if (!seller) return '';
     const payLabel = PAYMENT_LABELS[form.paymentType] || form.paymentType;
+    const fmtDate = (iso: string) => { const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
     const payExtra = form.paymentType === 'crediario'
-      ? `\n💳 Parcelamento: ${form.installments}x de R$ ${form.installmentValue}`
+      ? [
+          `\n💳 Parcelamento: ${form.installments}x de R$ ${form.installmentValue}`,
+          form.downPaymentDate ? `\nData da Entrada: ${fmtDate(form.downPaymentDate)}` : null,
+          form.firstDueDate    ? `\n1º Vencimento: ${fmtDate(form.firstDueDate)}`    : null,
+        ].filter(Boolean).join('')
       : '';
     return [
       `📦 *PEDIDO - Amor Infinito Enxovais*`,
@@ -610,17 +617,29 @@ export const OrderForm: React.FC = () => {
               </div>
 
               {form.paymentType === 'crediario' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Nº de parcelas" error={errors.installments}>
-                    <input className="input-base w-full" value={form.installments}
-                      onChange={e => set('installments', e.target.value.replace(/\D/g, ''))}
-                      placeholder="Ex: 12" inputMode="numeric" />
-                  </Field>
-                  <Field label="Valor da parcela" error={errors.installmentValue}>
-                    <input className="input-base w-full" value={form.installmentValue}
-                      onChange={e => set('installmentValue', e.target.value)}
-                      placeholder="Ex: 120,00" inputMode="decimal" />
-                  </Field>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Nº de parcelas" error={errors.installments}>
+                      <input className="input-base w-full" value={form.installments}
+                        onChange={e => set('installments', e.target.value.replace(/\D/g, ''))}
+                        placeholder="Ex: 12" inputMode="numeric" />
+                    </Field>
+                    <Field label="Valor da parcela" error={errors.installmentValue}>
+                      <input className="input-base w-full" value={form.installmentValue}
+                        onChange={e => set('installmentValue', e.target.value)}
+                        placeholder="Ex: 120,00" inputMode="decimal" />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Data da Entrada" required={false}>
+                      <input type="date" className="input-base w-full" value={form.downPaymentDate}
+                        onChange={e => set('downPaymentDate', e.target.value)} />
+                    </Field>
+                    <Field label="1º Vencimento" required={false}>
+                      <input type="date" className="input-base w-full" value={form.firstDueDate}
+                        onChange={e => set('firstDueDate', e.target.value)} />
+                    </Field>
+                  </div>
                 </div>
               )}
             </div>
