@@ -293,7 +293,8 @@ export const OrderForm: React.FC = () => {
   const [reserving, setReserving]           = useState(false);
   const [reserveError, setReserveError]     = useState('');
 
-  const [submitted, setSubmitted]           = useState(false);
+  const [waUrl, setWaUrl]                   = useState('');   // não-vazio = reserva ok
+  const [waSent, setWaSent]                 = useState(false); // true = vendedor tocou em "Abrir WA"
   const [photoInstructions, setPhotoInstructions] = useState(false);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -505,8 +506,7 @@ export const OrderForm: React.FC = () => {
         city:         form.city,
       });
       const msg = buildMessage();
-      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-      setSubmitted(true);
+      setWaUrl(`https://wa.me/?text=${encodeURIComponent(msg)}`);
     } catch (e: any) {
       const status = e.response?.status;
       setReserveError(e.response?.data?.error ?? 'Erro ao reservar horário. Tente novamente.');
@@ -566,7 +566,7 @@ export const OrderForm: React.FC = () => {
                 <p className="text-xs text-green-600">Código validado</p>
               </div>
               <button
-                onClick={() => { setSeller(null); setCode(''); setForm(EMPTY_FORM); setSubmitted(false); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setAllProducts([]); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
+                onClick={() => { setSeller(null); setCode(''); setForm(EMPTY_FORM); setWaUrl(''); setWaSent(false); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setAllProducts([]); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
                 className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline"
               >
                 Trocar
@@ -876,7 +876,8 @@ export const OrderForm: React.FC = () => {
             </div>
 
             {/* Ações */}
-            {!submitted ? (
+            {waUrl === '' ? (
+              /* ── Passo 1: botão de envio ── */
               <div className="space-y-3">
                 {reserveError && (
                   <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
@@ -894,14 +895,45 @@ export const OrderForm: React.FC = () => {
                   }
                 </button>
                 <p className="text-xs text-gray-400 text-center">
-                  O WhatsApp abrirá com o texto do pedido — escolha o grupo e envie.
+                  Reserva o horário e abre o WhatsApp com o texto pronto.
+                </p>
+              </div>
+            ) : !waSent ? (
+              /* ── Passo 2: horário reservado — vendedor deve abrir o WA ── */
+              <div className="space-y-3">
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-4 text-center">
+                  <p className="text-3xl mb-1">✅</p>
+                  <p className="font-semibold text-green-800">Horário reservado!</p>
+                  <p className="text-sm text-green-700 mt-1">
+                    Toque no botão abaixo para abrir o WhatsApp e enviar o pedido no grupo.
+                  </p>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800 flex gap-2">
+                  <span className="flex-shrink-0">⚠️</span>
+                  <span>O pedido <strong>só chega no grupo</strong> quando você abrir o WhatsApp e enviar a mensagem.</span>
+                </div>
+
+                <a
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setWaSent(true)}
+                  className="w-full py-4 rounded-2xl bg-green-500 hover:bg-green-600 text-white font-bold text-lg shadow-lg transition-colors flex items-center justify-center gap-3"
+                >
+                  <span className="text-2xl">📱</span> Abrir WhatsApp e enviar pedido
+                </a>
+
+                <p className="text-xs text-gray-400 text-center">
+                  Escolha o grupo de pedidos e envie a mensagem.
                 </p>
               </div>
             ) : (
+              /* ── Passo 3: pedido enviado — foto do cliente ── */
               <div className="space-y-3">
                 <div className="bg-green-50 border border-green-200 rounded-2xl p-4 text-center">
-                  <p className="text-2xl mb-1">✅</p>
-                  <p className="font-semibold text-green-800">Pedido enviado!</p>
+                  <p className="text-3xl mb-1">🎉</p>
+                  <p className="font-semibold text-green-800">Pedido enviado no WhatsApp!</p>
                   <p className="text-sm text-green-600 mt-1">Agora envie a foto do cliente no mesmo grupo.</p>
                 </div>
 
@@ -925,7 +957,7 @@ export const OrderForm: React.FC = () => {
                 )}
 
                 <button
-                  onClick={() => { setForm(EMPTY_FORM); setSubmitted(false); setPhotoInstructions(false); setCepError(''); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
+                  onClick={() => { setForm(EMPTY_FORM); setWaUrl(''); setWaSent(false); setPhotoInstructions(false); setCepError(''); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
                   className="w-full py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:border-gray-300 transition-colors"
                 >
                   Novo pedido
