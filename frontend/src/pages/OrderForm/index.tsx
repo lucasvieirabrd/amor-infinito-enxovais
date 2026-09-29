@@ -965,7 +965,7 @@ export const OrderForm: React.FC = () => {
               </div>
             )}
 
-            <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" />
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" />
           </>
         )}
       </div>
