@@ -241,7 +241,11 @@ interface FormData {
   customerNeighborhood: string;
   customerCity:      string;
   customerComplement: string;
-  customerWorkplace: string;
+  customerWorkplace:  string;
+  customerEmail:      string;
+  customerRefPhone1:  string;
+  customerRefPhone2:  string;
+  customerRefPhone3:  string;
   // Product
   product: string;
   // Payment
@@ -260,6 +264,7 @@ const EMPTY_FORM: FormData = {
   customerName: '', customerPhone: '', customerCPF: '', customerBirthDate: '',
   customerCEP: '', customerStreet: '', customerNumber: '', customerNeighborhood: '',
   customerCity: '', customerComplement: '', customerWorkplace: '',
+  customerEmail: '', customerRefPhone1: '', customerRefPhone2: '', customerRefPhone3: '',
   product: '',
   paymentType: '', installments: '', installmentValue: '', downPaymentDate: '', firstDueDate: '',
   city: '', deliveryDate: '', deliveryTime: '',
@@ -420,6 +425,8 @@ export const OrderForm: React.FC = () => {
       if (!form.installments)           e.installments      = 'Informe o número de parcelas';
       if (!form.installmentValue)       e.installmentValue  = 'Informe o valor da parcela';
     }
+    if (form.customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customerEmail.trim()))
+                                        e.customerEmail     = 'E-mail inválido';
     if (!form.city)                     e.city              = 'Selecione a cidade';
     if (!form.deliveryDate)             e.deliveryDate      = 'Selecione a data';
     else if (form.deliveryDate <= todaySPStr()) e.deliveryDate = 'Data de entrega deve ser a partir de amanhã';
@@ -467,7 +474,11 @@ export const OrderForm: React.FC = () => {
       `CPF: ${form.customerCPF}`,
       `Nascimento: ${fmtBirthForMsg(form.customerBirthDate)}`,
       `Endereço: ${fullAddress()}`,
-      form.customerWorkplace ? `Onde trabalha: ${form.customerWorkplace}` : null,
+      form.customerWorkplace  ? `Onde trabalha: ${form.customerWorkplace}`    : null,
+      form.customerEmail.trim()      ? `E-mail: ${form.customerEmail.trim()}`           : null,
+      form.customerRefPhone1.trim()  ? `Tel. referência 1: ${form.customerRefPhone1}`   : null,
+      form.customerRefPhone2.trim()  ? `Tel. referência 2: ${form.customerRefPhone2}`   : null,
+      form.customerRefPhone3.trim()  ? `Tel. referência 3: ${form.customerRefPhone3}`   : null,
       ``,
       `─────────────────────`,
       `🛍️ *PRODUTO*`,
@@ -661,6 +672,34 @@ export const OrderForm: React.FC = () => {
               <Field label="Onde trabalha" required={false}>
                 <input className="input-base w-full" value={form.customerWorkplace}
                   onChange={e => set('customerWorkplace', e.target.value)} placeholder="Empresa / cargo (opcional)" />
+              </Field>
+
+              <Field label="E-mail" required={false} error={errors.customerEmail}>
+                <input className="input-base w-full" type="email" inputMode="email" autoComplete="email"
+                  value={form.customerEmail}
+                  onChange={e => set('customerEmail', e.target.value)}
+                  placeholder="exemplo@email.com (opcional)" />
+              </Field>
+
+              <Field label="Telefone de referência 1" required={false}>
+                <input className="input-base w-full" type="tel" inputMode="tel"
+                  value={form.customerRefPhone1}
+                  onChange={e => set('customerRefPhone1', maskPhone(e.target.value))}
+                  placeholder="(00) 00000-0000 (opcional)" />
+              </Field>
+
+              <Field label="Telefone de referência 2" required={false}>
+                <input className="input-base w-full" type="tel" inputMode="tel"
+                  value={form.customerRefPhone2}
+                  onChange={e => set('customerRefPhone2', maskPhone(e.target.value))}
+                  placeholder="(00) 00000-0000 (opcional)" />
+              </Field>
+
+              <Field label="Telefone de referência 3" required={false}>
+                <input className="input-base w-full" type="tel" inputMode="tel"
+                  value={form.customerRefPhone3}
+                  onChange={e => set('customerRefPhone3', maskPhone(e.target.value))}
+                  placeholder="(00) 00000-0000 (opcional)" />
               </Field>
             </div>
 
