@@ -295,9 +295,6 @@ export const OrderForm: React.FC = () => {
 
   const [waUrl, setWaUrl]                   = useState('');   // não-vazio = reserva ok
   const [waSent, setWaSent]                 = useState(false); // true = vendedor tocou em "Abrir WA"
-  const [photoInstructions, setPhotoInstructions] = useState(false);
-
-  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Load holidays when seller confirmed
   useEffect(() => {
@@ -518,27 +515,6 @@ export const OrderForm: React.FC = () => {
       }
     } finally {
       setReserving(false);
-    }
-  };
-
-  const handleSendPhoto = async () => {
-    if (!photoInputRef.current) return;
-    const canShare = typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
-    if (canShare) {
-      photoInputRef.current.onchange = async (ev: Event) => {
-        const file = (ev.target as HTMLInputElement).files?.[0];
-        if (!file) return;
-        try {
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({ files: [file], title: `Foto — ${form.customerName || 'cliente'}` });
-            return;
-          }
-        } catch { /* user cancelled */ }
-        setPhotoInstructions(true);
-      };
-      photoInputRef.current.click();
-    } else {
-      setPhotoInstructions(true);
     }
   };
 
@@ -929,43 +905,26 @@ export const OrderForm: React.FC = () => {
                 </p>
               </div>
             ) : (
-              /* ── Passo 3: pedido enviado — foto do cliente ── */
+              /* ── Passo 3: pedido enviado ── */
               <div className="space-y-3">
                 <div className="bg-green-50 border border-green-200 rounded-2xl p-4 text-center">
-                  <p className="text-3xl mb-1">🎉</p>
-                  <p className="font-semibold text-green-800">Pedido enviado no WhatsApp!</p>
-                  <p className="text-sm text-green-600 mt-1">Agora envie a foto do cliente no mesmo grupo.</p>
+                  <p className="text-3xl mb-2">🎉</p>
+                  <p className="font-semibold text-green-800">Pedido enviado!</p>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 flex gap-2">
+                  <span className="flex-shrink-0 text-base">📸</span>
+                  <span>Não esqueça de mandar a <strong>foto do cliente</strong> e o <strong>comprovante de trabalho</strong> no grupo.</span>
                 </div>
 
                 <button
-                  onClick={handleSendPhoto}
-                  className="w-full py-4 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-lg shadow-lg transition-colors flex items-center justify-center gap-3"
-                >
-                  <span className="text-2xl">📷</span> Enviar foto do cliente
-                </button>
-
-                {photoInstructions && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                    <p className="font-semibold mb-1">Como enviar a foto:</p>
-                    <ol className="list-decimal list-inside space-y-1">
-                      <li>Abra o grupo de WhatsApp onde enviou o pedido</li>
-                      <li>Toque no ícone de <strong>anexo (📎)</strong></li>
-                      <li>Selecione ou tire a foto do cliente</li>
-                      <li>Envie no grupo</li>
-                    </ol>
-                  </div>
-                )}
-
-                <button
-                  onClick={() => { setForm(EMPTY_FORM); setWaUrl(''); setWaSent(false); setPhotoInstructions(false); setCepError(''); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
+                  onClick={() => { setForm(EMPTY_FORM); setWaUrl(''); setWaSent(false); setCepError(''); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
                   className="w-full py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:border-gray-300 transition-colors"
                 >
                   Novo pedido
                 </button>
               </div>
             )}
-
-            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" />
           </>
         )}
       </div>
