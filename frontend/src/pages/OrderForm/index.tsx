@@ -228,6 +228,7 @@ function fmtPrice(v: number): string {
 interface Seller { id: string; name: string; code: string }
 interface HolidayEntry { date: string; description: string }
 interface ProductEntry { name: string; price: number; description: string | null }
+interface CartItem { product: ProductEntry; qty: number }
 
 interface FormData {
   // Customer
@@ -246,8 +247,6 @@ interface FormData {
   customerRefPhone1:  string;
   customerRefPhone2:  string;
   customerRefPhone3:  string;
-  // Product
-  product: string;
   // Payment
   paymentType:      'avista' | 'cartao' | 'crediario' | '';
   installments:     string;
@@ -265,7 +264,6 @@ const EMPTY_FORM: FormData = {
   customerCEP: '', customerStreet: '', customerNumber: '', customerNeighborhood: '',
   customerCity: '', customerComplement: '', customerWorkplace: '',
   customerEmail: '', customerRefPhone1: '', customerRefPhone2: '', customerRefPhone3: '',
-  product: '',
   paymentType: '', installments: '', installmentValue: '', downPaymentDate: '', firstDueDate: '',
   city: '', deliveryDate: '', deliveryTime: '',
 };
@@ -289,9 +287,11 @@ export const OrderForm: React.FC = () => {
   const [productLoading, setProductLoading]   = useState(false);
   const [productSearch, setProductSearch]     = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState<ProductEntry | null>(null);
   const [showProductList, setShowProductList] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [cartItems, setCartItems]   = useState<CartItem[]>([]);
+  const [cartError, setCartError]   = useState('');
 
   const [bookedSlots, setBookedSlots]       = useState<Set<string>>(new Set());
   const [slotsLoading, setSlotsLoading]     = useState(false);
@@ -315,7 +315,7 @@ export const OrderForm: React.FC = () => {
 
   // Load products when seller confirmed
   useEffect(() => {
-    if (!seller) { setAllProducts([]); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); return; }
+    if (!seller) { setAllProducts([]); setCartItems([]); setCartError(''); setProductSearch(''); setDebouncedSearch(''); return; }
     setProductLoading(true);
     API.get<ProductEntry[]>(`/order-form/products?code=${encodeURIComponent(seller.code)}`)
       .then(r => setAllProducts(r.data))
@@ -331,6 +331,36 @@ export const OrderForm: React.FC = () => {
       (p.description && p.description.toLowerCase().includes(q))
     );
   }, [allProducts, debouncedSearch]);
+
+  const cartTotal = useMemo(
+    () => cartItems.reduce((s, i) => s + i.product.price * i.qty, 0),
+    [cartItems],
+  );
+
+  const addToCart = (p: ProductEntry) => {
+    setCartItems(prev => {
+      const idx = prev.findIndex(i => i.product.name === p.name && i.product.price === p.price);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], qty: next[idx].qty + 1 };
+        return next;
+      }
+      return [...prev, { product: p, qty: 1 }];
+    });
+    setCartError('');
+    setProductSearch('');
+    setDebouncedSearch('');
+    setShowProductList(false);
+  };
+
+  const updateQty = (idx: number, qty: number) => {
+    if (qty < 1) return;
+    setCartItems(prev => prev.map((it, i) => i === idx ? { ...it, qty } : it));
+  };
+
+  const removeFromCart = (idx: number) => {
+    setCartItems(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const handleProductSearch = (v: string) => {
     setProductSearch(v);
@@ -419,7 +449,6 @@ export const OrderForm: React.FC = () => {
     const bdErr = validateBirthDate(form.customerBirthDate);
     if (bdErr)                          e.customerBirthDate = bdErr;
     if (!form.customerStreet.trim())    e.customerStreet    = 'Obrigatório';
-    if (!form.product.trim())           e.product           = 'Obrigatório';
     if (!form.paymentType)              e.paymentType       = 'Selecione a forma de pagamento';
     if (form.paymentType === 'crediario') {
       if (!form.installments)           e.installments      = 'Informe o número de parcelas';
@@ -434,8 +463,11 @@ export const OrderForm: React.FC = () => {
     else if (form.deliveryDate && form.city &&
              !getTimeSlots(form.deliveryDate, form.city).includes(form.deliveryTime))
                                         e.deliveryTime      = 'Horário inválido para este dia';
+    const cartOk = cartItems.length > 0;
+    if (!cartOk) setCartError('Adicione pelo menos 1 produto');
+    else setCartError('');
     setErrors(e);
-    return Object.keys(e).length === 0;
+    return Object.keys(e).length === 0 && cartOk;
   };
 
   // Monta endereço completo a partir dos sub-campos
@@ -481,10 +513,11 @@ export const OrderForm: React.FC = () => {
       form.customerRefPhone3.trim()  ? `Tel. referência 3: ${form.customerRefPhone3}`   : null,
       ``,
       `─────────────────────`,
-      `🛍️ *PRODUTO*`,
-      selectedProduct
-        ? `${form.product}${selectedProduct.description ? ` (${selectedProduct.description})` : ''} — ${fmtPrice(selectedProduct.price)}`
-        : form.product,
+      `🛍️ *PRODUTOS*`,
+      ...cartItems.map(({ product: p, qty }) =>
+        `• ${p.name}${p.description ? ` (${p.description})` : ''} — ${qty} x ${fmtPrice(p.price)} = ${fmtPrice(p.price * qty)}`
+      ),
+      `TOTAL: ${fmtPrice(cartTotal)}`,
       ``,
       `─────────────────────`,
       `💳 *PAGAMENTO*`,
@@ -499,7 +532,7 @@ export const OrderForm: React.FC = () => {
       `─────────────────────`,
       `📅 Pedido gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
     ].filter(l => l !== null).join('\n');
-  }, [seller, form, selectedProduct]);
+  }, [seller, form, cartItems, cartTotal]);
 
   const handleSendWhatsApp = async () => {
     if (!validate()) return;
@@ -553,7 +586,7 @@ export const OrderForm: React.FC = () => {
                 <p className="text-xs text-green-600">Código validado</p>
               </div>
               <button
-                onClick={() => { setSeller(null); setCode(''); setForm(EMPTY_FORM); setWaUrl(''); setWaSent(false); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setAllProducts([]); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
+                onClick={() => { setSeller(null); setCode(''); setForm(EMPTY_FORM); setWaUrl(''); setWaSent(false); setCartItems([]); setCartError(''); setProductSearch(''); setDebouncedSearch(''); setAllProducts([]); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
                 className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline"
               >
                 Trocar
@@ -703,45 +736,27 @@ export const OrderForm: React.FC = () => {
               </Field>
             </div>
 
-            {/* Produto */}
+            {/* Produtos */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
-              <h2 className="font-semibold text-gray-900">🛍️ Produto</h2>
+              <h2 className="font-semibold text-gray-900">🛍️ Produtos</h2>
+
+              {/* Search / add */}
               {productLoading ? (
                 <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
                   <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                   Carregando produtos...
                 </div>
-              ) : selectedProduct ? (
-                <div>
-                  <div className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-xl">
-                    <div>
-                      <p className="font-medium text-gray-900 text-sm">{selectedProduct.name}</p>
-                      {selectedProduct.description && <p className="text-xs text-gray-500 mt-0.5">{selectedProduct.description}</p>}
-                      <p className="text-xs text-primary font-semibold mt-0.5">{fmtPrice(selectedProduct.price)}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedProduct(null); set('product', ''); setProductSearch(''); setDebouncedSearch(''); setShowProductList(false); }}
-                      className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-3 underline"
-                    >
-                      Trocar
-                    </button>
-                  </div>
-                  {errors.product && <p className="text-xs text-red-500 mt-1">{errors.product}</p>}
-                </div>
               ) : (
                 <div className="relative">
-                  <Field label="Buscar produto" error={errors.product}>
-                    <input
-                      className="input-base w-full"
-                      value={productSearch}
-                      onChange={e => handleProductSearch(e.target.value)}
-                      onFocus={() => setShowProductList(true)}
-                      onBlur={() => setTimeout(() => setShowProductList(false), 150)}
-                      placeholder="Digite o nome do produto..."
-                      autoComplete="off"
-                    />
-                  </Field>
+                  <input
+                    className="input-base w-full"
+                    value={productSearch}
+                    onChange={e => handleProductSearch(e.target.value)}
+                    onFocus={() => setShowProductList(true)}
+                    onBlur={() => setTimeout(() => setShowProductList(false), 150)}
+                    placeholder="Buscar e adicionar produto..."
+                    autoComplete="off"
+                  />
                   {showProductList && (
                     <div className="mt-1 border border-gray-200 rounded-xl overflow-hidden shadow-md max-h-60 overflow-y-auto z-10 relative bg-white">
                       {filteredProducts.length === 0 ? (
@@ -755,7 +770,7 @@ export const OrderForm: React.FC = () => {
                             type="button"
                             className="w-full text-left px-4 py-3 hover:bg-primary/5 transition-colors border-b border-gray-100 last:border-0"
                             onMouseDown={e => e.preventDefault()}
-                            onClick={() => { setSelectedProduct(p); set('product', p.name); setShowProductList(false); }}
+                            onClick={() => addToCart(p)}
                           >
                             <p className="text-sm font-medium text-gray-900">{p.name}</p>
                             {p.description && <p className="text-xs text-gray-500">{p.description}</p>}
@@ -767,6 +782,54 @@ export const OrderForm: React.FC = () => {
                   )}
                 </div>
               )}
+
+              {/* Cart list */}
+              {cartItems.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  {cartItems.map((item, idx) => (
+                    <div key={idx} className="flex gap-2 items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{item.product.name}</p>
+                        {item.product.description && (
+                          <p className="text-xs text-gray-500 truncate">{item.product.description}</p>
+                        )}
+                        <p className="text-xs text-primary font-semibold">{fmtPrice(item.product.price)}</p>
+                      </div>
+                      {/* Qty */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => updateQty(idx, item.qty - 1)}
+                          className="w-7 h-7 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 flex items-center justify-center text-base font-bold leading-none"
+                        >−</button>
+                        <span className="w-6 text-center text-sm font-semibold">{item.qty}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateQty(idx, item.qty + 1)}
+                          className="w-7 h-7 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 flex items-center justify-center text-base font-bold leading-none"
+                        >+</button>
+                      </div>
+                      {/* Subtotal + remove */}
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-semibold text-gray-900">{fmtPrice(item.product.price * item.qty)}</p>
+                        <button
+                          type="button"
+                          onClick={() => removeFromCart(idx)}
+                          className="text-xs text-red-400 hover:text-red-600"
+                        >remover</button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Total */}
+                  <div className="flex justify-between items-center pt-2 px-1 border-t border-gray-200">
+                    <span className="font-semibold text-gray-700 text-sm">Total do pedido</span>
+                    <span className="font-bold text-lg text-primary">{fmtPrice(cartTotal)}</span>
+                  </div>
+                </div>
+              )}
+
+              {cartError && <p className="text-xs text-red-500">{cartError}</p>}
             </div>
 
             {/* Pagamento */}
@@ -792,6 +855,11 @@ export const OrderForm: React.FC = () => {
 
               {form.paymentType === 'crediario' && (
                 <div className="space-y-3">
+                  {cartItems.length > 0 && (
+                    <p className="text-xs text-gray-500">
+                      Total do pedido: <span className="font-semibold text-gray-700">{fmtPrice(cartTotal)}</span> — ajuste o valor da parcela conforme negociado.
+                    </p>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Nº de parcelas" error={errors.installments}>
                       <input className="input-base w-full" value={form.installments}
@@ -957,7 +1025,7 @@ export const OrderForm: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => { setForm(EMPTY_FORM); setWaUrl(''); setWaSent(false); setCepError(''); setSelectedProduct(null); setProductSearch(''); setDebouncedSearch(''); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
+                  onClick={() => { setForm(EMPTY_FORM); setWaUrl(''); setWaSent(false); setCepError(''); setCartItems([]); setCartError(''); setProductSearch(''); setDebouncedSearch(''); setShowProductList(false); setBookedSlots(new Set()); setReserveError(''); }}
                   className="w-full py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:border-gray-300 transition-colors"
                 >
                   Novo pedido
