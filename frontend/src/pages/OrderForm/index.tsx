@@ -244,9 +244,15 @@ interface FormData {
   customerComplement: string;
   customerWorkplace:  string;
   customerEmail:      string;
-  customerRefPhone1:  string;
-  customerRefPhone2:  string;
-  customerRefPhone3:  string;
+  customerRef1Name:   string;
+  customerRef1Phone:  string;
+  customerRef1Rel:    string;
+  customerRef2Name:   string;
+  customerRef2Phone:  string;
+  customerRef2Rel:    string;
+  customerRef3Name:   string;
+  customerRef3Phone:  string;
+  customerRef3Rel:    string;
   // Payment
   paymentType:      'avista' | 'cartao' | 'crediario' | '';
   installments:     string;
@@ -263,7 +269,10 @@ const EMPTY_FORM: FormData = {
   customerName: '', customerPhone: '', customerCPF: '', customerBirthDate: '',
   customerCEP: '', customerStreet: '', customerNumber: '', customerNeighborhood: '',
   customerCity: '', customerComplement: '', customerWorkplace: '',
-  customerEmail: '', customerRefPhone1: '', customerRefPhone2: '', customerRefPhone3: '',
+  customerEmail: '',
+  customerRef1Name: '', customerRef1Phone: '', customerRef1Rel: '',
+  customerRef2Name: '', customerRef2Phone: '', customerRef2Rel: '',
+  customerRef3Name: '', customerRef3Phone: '', customerRef3Rel: '',
   paymentType: '', installments: '', installmentValue: '', downPaymentDate: '', firstDueDate: '',
   city: '', deliveryDate: '', deliveryTime: '',
 };
@@ -508,9 +517,14 @@ export const OrderForm: React.FC = () => {
       `Endereço: ${fullAddress()}`,
       form.customerWorkplace  ? `Onde trabalha: ${form.customerWorkplace}`    : null,
       form.customerEmail.trim()      ? `E-mail: ${form.customerEmail.trim()}`           : null,
-      form.customerRefPhone1.trim()  ? `Tel. referência 1: ${form.customerRefPhone1}`   : null,
-      form.customerRefPhone2.trim()  ? `Tel. referência 2: ${form.customerRefPhone2}`   : null,
-      form.customerRefPhone3.trim()  ? `Tel. referência 3: ${form.customerRefPhone3}`   : null,
+      ...[1, 2, 3].map(n => {
+        const name  = (form as any)[`customerRef${n}Name`].trim();
+        const phone = (form as any)[`customerRef${n}Phone`].trim();
+        const rel   = (form as any)[`customerRef${n}Rel`].trim();
+        if (!name && !phone) return null;
+        const parts = [name, rel ? `(${rel})` : null, phone ? `— ${phone}` : null].filter(Boolean).join(' ');
+        return `Referência ${n}: ${parts}`;
+      }),
       ``,
       `─────────────────────`,
       `🛍️ *PRODUTOS*`,
@@ -714,26 +728,29 @@ export const OrderForm: React.FC = () => {
                   placeholder="exemplo@email.com (opcional)" />
               </Field>
 
-              <Field label="Telefone de referência 1" required={false}>
-                <input className="input-base w-full" type="tel" inputMode="tel"
-                  value={form.customerRefPhone1}
-                  onChange={e => set('customerRefPhone1', maskPhone(e.target.value))}
-                  placeholder="(00) 00000-0000 (opcional)" />
-              </Field>
-
-              <Field label="Telefone de referência 2" required={false}>
-                <input className="input-base w-full" type="tel" inputMode="tel"
-                  value={form.customerRefPhone2}
-                  onChange={e => set('customerRefPhone2', maskPhone(e.target.value))}
-                  placeholder="(00) 00000-0000 (opcional)" />
-              </Field>
-
-              <Field label="Telefone de referência 3" required={false}>
-                <input className="input-base w-full" type="tel" inputMode="tel"
-                  value={form.customerRefPhone3}
-                  onChange={e => set('customerRefPhone3', maskPhone(e.target.value))}
-                  placeholder="(00) 00000-0000 (opcional)" />
-              </Field>
+              {[1, 2, 3].map(n => (
+                <div key={n} className="border border-gray-200 rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-medium text-gray-500">Referência {n} (opcional)</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input className="input-base w-full" type="text"
+                      value={(form as any)[`customerRef${n}Name`]}
+                      onChange={e => set(`customerRef${n}Name` as keyof FormData, e.target.value)}
+                      placeholder="Nome" />
+                    <select className="input-base w-full"
+                      value={(form as any)[`customerRef${n}Rel`]}
+                      onChange={e => set(`customerRef${n}Rel` as keyof FormData, e.target.value)}>
+                      <option value="">Parentesco</option>
+                      {['Mãe','Pai','Irmão(ã)','Cônjuge','Filho(a)','Amigo(a)','Vizinho(a)','Colega de trabalho','Outro'].map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <input className="input-base w-full" type="tel" inputMode="tel"
+                    value={(form as any)[`customerRef${n}Phone`]}
+                    onChange={e => set(`customerRef${n}Phone` as keyof FormData, maskPhone(e.target.value))}
+                    placeholder="(00) 00000-0000" />
+                </div>
+              ))}
             </div>
 
             {/* Produtos */}
