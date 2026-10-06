@@ -75,6 +75,11 @@ export class InstallmentRepository {
       ? sql`AND (c.name LIKE ${'%' + search + '%'} OR c.phone LIKE ${'%' + search + '%'})`
       : sql``;
 
+    // Clientes em processo jurídico ficam em filtro próprio; excluídos dos demais
+    const legalCond = filter === 'legal'
+      ? sql`AND c.in_legal_process = 1`
+      : sql`AND c.in_legal_process = 0`;
+
     // HAVING usa os mesmos critérios das colunas computadas overdueCount/todayCount
     const filterHaving = filter === 'overdue'
       ? sql`HAVING overdueCount > 0`
@@ -132,6 +137,7 @@ export class InstallmentRepository {
       WHERE (i.status IN ('pending', 'overdue', 'partial'))
         AND i.deleted_at IS NULL
         AND c.deleted_at IS NULL
+        ${legalCond}
         ${searchCond}
       GROUP BY c.id, c.name, c.phone, c.in_legal_process, dca.lastDateChangeAt, dca.dateChangeCount
       ${filterHaving}
@@ -156,6 +162,7 @@ export class InstallmentRepository {
         WHERE (i.status IN ('pending', 'overdue', 'partial'))
           AND i.deleted_at IS NULL
           AND c.deleted_at IS NULL
+          ${legalCond}
           ${searchCond}
         GROUP BY c.id
         ${filterHaving}
@@ -222,27 +229,36 @@ export class InstallmentRepository {
   async getStats() {
     const [overdueResult, todayResult, inDayResult, receivableResult, receivedResult, customersResult] = await Promise.all([
       db.execute(sql`
-        SELECT COUNT(*) as count, SUM(original_amount) as total
-        FROM installments
+        SELECT COUNT(*) as count, SUM(i.original_amount) as total
+        FROM installments i
+        JOIN customers c ON c.id = i.customer_id
         WHERE (
-          status = 'overdue'
-          OR (status = 'pending' AND DATE(CONVERT_TZ(due_date, '+00:00', '-03:00')) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')))
+          i.status = 'overdue'
+          OR (i.status = 'pending' AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')))
         )
-          AND deleted_at IS NULL
+          AND i.deleted_at IS NULL
+          AND c.deleted_at IS NULL
+          AND c.in_legal_process = 0
       `),
       db.execute(sql`
-        SELECT COUNT(*) as count, SUM(original_amount) as total
-        FROM installments
-        WHERE status = 'pending'
-          AND DATE(due_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
-          AND deleted_at IS NULL
+        SELECT COUNT(*) as count, SUM(i.original_amount) as total
+        FROM installments i
+        JOIN customers c ON c.id = i.customer_id
+        WHERE i.status = 'pending'
+          AND DATE(i.due_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+          AND i.deleted_at IS NULL
+          AND c.deleted_at IS NULL
+          AND c.in_legal_process = 0
       `),
       db.execute(sql`
-        SELECT COUNT(*) as count, SUM(original_amount) as total
-        FROM installments
-        WHERE status = 'pending'
-          AND DATE(due_date) > DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
-          AND deleted_at IS NULL
+        SELECT COUNT(*) as count, SUM(i.original_amount) as total
+        FROM installments i
+        JOIN customers c ON c.id = i.customer_id
+        WHERE i.status = 'pending'
+          AND DATE(i.due_date) > DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
+          AND i.deleted_at IS NULL
+          AND c.deleted_at IS NULL
+          AND c.in_legal_process = 0
       `),
       db.execute(sql`
         SELECT COUNT(*) as count, COALESCE(SUM(original_amount - COALESCE(paid_amount, 0)), 0) as total

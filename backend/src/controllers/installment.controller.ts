@@ -110,7 +110,7 @@ export class InstallmentController {
       page: z.string().optional().transform(v => Number(v) || 1),
       limit: z.string().optional().transform(v => Number(v) || 15),
       search: z.string().optional(),
-      filter: z.enum(['all', 'overdue', 'today', 'current']).optional().default('all'),
+      filter: z.enum(['all', 'overdue', 'today', 'current', 'legal']).optional().default('all'),
     });
 
     const { page, limit, search, filter } = listSchema.parse(req.query);

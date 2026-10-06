@@ -79,7 +79,7 @@ export const Installments: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'today' | 'current'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'today' | 'current' | 'legal'>('all');
 
   // Accordion — qual cliente está expandido
   const [expandedCustomer, setExpandedCustomer] = useState<CustomerCrediario | null>(null);
@@ -599,6 +599,12 @@ export const Installments: React.FC = () => {
           >
             <FiCheckCircle size={12} />
             Em Dia
+          </button>
+          <button
+            onClick={() => { setStatusFilter('legal'); setPage(1); }}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${statusFilter === 'legal' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            ⚖️ Em Processo
           </button>
         </div>
 
