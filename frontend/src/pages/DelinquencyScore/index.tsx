@@ -46,7 +46,7 @@ const RISK_CLASSES: Record<RiskLevel, string> = {
 export const DelinquencyScore: React.FC = () => {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
-  const [riskFilter, setRiskFilter] = useState<RiskLevel | ''>('');
+  const [riskFilter, setRiskFilter] = useState<RiskLevel | 'legal' | ''>('');
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
   const limit = 20;
@@ -76,7 +76,7 @@ export const DelinquencyScore: React.FC = () => {
   };
 
   const handleRiskChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setRiskFilter(e.target.value as RiskLevel | '');
+    setRiskFilter(e.target.value as RiskLevel | 'legal' | '');
     setPage(1);
   };
 
@@ -166,22 +166,31 @@ export const DelinquencyScore: React.FC = () => {
           <option value="high_risk">🔴 Alto risco (&gt;80)</option>
           <option value="attention">🟡 Atenção (31–80)</option>
           <option value="good">🟢 Bom pagador (0–30)</option>
+          <option value="legal">⚖️ Em Processo Jurídico</option>
         </select>
       </div>
 
       {/* Summary counts */}
       {data && (
         <div className="flex flex-wrap gap-3 mb-4 text-sm">
-          <span className="bg-red-50 text-red-700 px-3 py-1 rounded-full">
-            🔴 Alto risco: {countByRisk('high_risk')}
-          </span>
-          <span className="bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full">
-            🟡 Atenção: {countByRisk('attention')}
-          </span>
-          <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full">
-            🟢 Bom pagador: {countByRisk('good')}
-          </span>
-          <span className="text-gray-500 ml-auto">{data.total} cliente(s) com histórico de crediário</span>
+          {riskFilter === 'legal' ? (
+            <span className="px-3 py-1 rounded-full font-medium" style={{ background: '#f3e8ff', color: '#7c3aed' }}>
+              ⚖️ Em Processo: {data.total}
+            </span>
+          ) : (
+            <>
+              <span className="bg-red-50 text-red-700 px-3 py-1 rounded-full">
+                🔴 Alto risco: {countByRisk('high_risk')}
+              </span>
+              <span className="bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full">
+                🟡 Atenção: {countByRisk('attention')}
+              </span>
+              <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full">
+                🟢 Bom pagador: {countByRisk('good')}
+              </span>
+            </>
+          )}
+          <span className="text-gray-500 ml-auto">{data.total} cliente(s)</span>
         </div>
       )}
 

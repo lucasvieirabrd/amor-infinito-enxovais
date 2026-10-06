@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 
 export type RiskLevel = 'good' | 'attention' | 'high_risk';
+export type RiskFilterParam = RiskLevel | 'legal';
 
 export interface DelinquencyScoreRow {
   id: string;
@@ -27,7 +28,7 @@ export interface DelinquencyScoreParams {
   page?: number;
   limit?: number;
   search?: string;
-  riskFilter?: RiskLevel;
+  riskFilter?: RiskFilterParam;
 }
 
 function calcRisk(score: number): RiskLevel {
@@ -232,7 +233,9 @@ export async function getDelinquencyScoreData(params: DelinquencyScoreParams) {
   const { page = 1, limit = 20, search, riskFilter } = params;
 
   const allRows = await fetchAllScores(search);
-  const filtered = riskFilter ? allRows.filter(r => r.risk === riskFilter) : allRows;
+  const filtered = riskFilter === 'legal'
+    ? allRows.filter(r => r.in_legal_process)
+    : allRows.filter(r => !r.in_legal_process && (riskFilter ? r.risk === riskFilter : true));
 
   const total = filtered.length;
   const offset = (page - 1) * limit;
