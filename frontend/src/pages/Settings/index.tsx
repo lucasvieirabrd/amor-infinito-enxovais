@@ -359,10 +359,10 @@ export const Settings: React.FC = () => {
 
   // ─── External sellers state & mutations ──────────────────────────────────
 
-  interface ExternalSeller { id: string; name: string; code: string; active: boolean }
+  interface ExternalSeller { id: string; name: string; code: string; active: boolean; canScheduleSameDay: boolean }
 
   const [extSellerModal, setExtSellerModal] = useState<{ open: boolean; editing: ExternalSeller | null }>({ open: false, editing: null });
-  const [extSellerForm, setExtSellerForm] = useState({ name: '', code: '', active: true });
+  const [extSellerForm, setExtSellerForm] = useState({ name: '', code: '', active: true, canScheduleSameDay: false });
 
   const { data: extSellerList, isLoading: extSellersLoading } = useQuery<ExternalSeller[]>({
     queryKey: ['external-sellers'],
@@ -371,7 +371,7 @@ export const Settings: React.FC = () => {
   });
 
   const createExtSellerMutation = useMutation({
-    mutationFn: (data: { name: string; code: string }) => api.post('/external-sellers', data),
+    mutationFn: (data: { name: string; code: string; canScheduleSameDay?: boolean }) => api.post('/external-sellers', data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['external-sellers'] }); toast.success('Vendedor criado!'); setExtSellerModal({ open: false, editing: null }); },
     onError: (err: any) => toast.error(err?.response?.data?.error ?? 'Erro ao criar vendedor'),
   });
@@ -389,12 +389,12 @@ export const Settings: React.FC = () => {
   });
 
   const openCreateExtSeller = () => {
-    setExtSellerForm({ name: '', code: '', active: true });
+    setExtSellerForm({ name: '', code: '', active: true, canScheduleSameDay: false });
     setExtSellerModal({ open: true, editing: null });
   };
 
   const openEditExtSeller = (s: ExternalSeller) => {
-    setExtSellerForm({ name: s.name, code: s.code, active: s.active });
+    setExtSellerForm({ name: s.name, code: s.code, active: s.active, canScheduleSameDay: s.canScheduleSameDay ?? false });
     setExtSellerModal({ open: true, editing: s });
   };
 
@@ -404,7 +404,7 @@ export const Settings: React.FC = () => {
     if (extSellerModal.editing) {
       updateExtSellerMutation.mutate({ id: extSellerModal.editing.id, data: extSellerForm });
     } else {
-      createExtSellerMutation.mutate({ name: extSellerForm.name, code: extSellerForm.code.toUpperCase() });
+      createExtSellerMutation.mutate({ name: extSellerForm.name, code: extSellerForm.code.toUpperCase(), canScheduleSameDay: extSellerForm.canScheduleSameDay });
     }
   };
 
@@ -1428,9 +1428,16 @@ export const Settings: React.FC = () => {
                         <td className="px-4 py-3 font-mono font-semibold text-primary">{s.code}</td>
                         <td className="px-4 py-3 text-gray-700">{s.name}</td>
                         <td className="px-4 py-3">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {s.active ? 'Ativo' : 'Inativo'}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                              {s.active ? 'Ativo' : 'Inativo'}
+                            </span>
+                            {s.canScheduleSameDay && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700" title="Pode agendar entrega para o mesmo dia">
+                                ⚡ Mesmo dia
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex gap-2 justify-end">
@@ -1588,6 +1595,17 @@ export const Settings: React.FC = () => {
                   <span className="text-sm text-gray-700">{extSellerForm.active ? 'Ativo' : 'Inativo'}</span>
                 </div>
               )}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setExtSellerForm(f => ({ ...f, canScheduleSameDay: !f.canScheduleSameDay }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${extSellerForm.canScheduleSameDay ? 'bg-purple-600' : 'bg-gray-200'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${extSellerForm.canScheduleSameDay ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+                <span className="text-sm text-gray-700">
+                  {extSellerForm.canScheduleSameDay ? '⚡ Pode agendar para hoje' : 'Agendamento a partir de amanhã (padrão)'}
+                </span>
+              </div>
             </div>
 
             <div className="flex gap-3 justify-end p-6 border-t border-gray-200">

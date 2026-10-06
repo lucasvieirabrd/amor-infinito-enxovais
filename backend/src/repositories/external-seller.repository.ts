@@ -48,13 +48,13 @@ export class ExternalSellerRepository {
     return ((rows as any)[0] as any[])[0] ?? null;
   }
 
-  async create(name: string, code: string) {
+  async create(name: string, code: string, canScheduleSameDay = false) {
     const id = uuidv4();
-    await db.insert(externalSellers).values({ id, name, code });
+    await db.insert(externalSellers).values({ id, name, code, canScheduleSameDay });
     return this.findById(id);
   }
 
-  async update(id: string, data: { name?: string; code?: string; active?: boolean }) {
+  async update(id: string, data: { name?: string; code?: string; active?: boolean; canScheduleSameDay?: boolean }) {
     await db.update(externalSellers).set({ ...data, updatedAt: new Date() }).where(eq(externalSellers.id, id));
     return this.findById(id);
   }

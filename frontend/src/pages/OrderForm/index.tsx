@@ -107,12 +107,13 @@ interface CalendarProps {
   selected: string;
   onSelect: (d: string) => void;
   blockedDates: Set<string>;
+  canScheduleSameDay?: boolean;
 }
 
 const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const DOW_LABELS = ['D','S','T','Q','Q','S','S'];
 
-const MiniCalendar: React.FC<CalendarProps> = ({ selected, onSelect, blockedDates }) => {
+const MiniCalendar: React.FC<CalendarProps> = ({ selected, onSelect, blockedDates, canScheduleSameDay }) => {
   const todaySP = todaySPStr();
   const initDate = selected || todaySP;
   const [year, setYear] = useState(() => Number(initDate.split('-')[0]));
@@ -135,7 +136,8 @@ const MiniCalendar: React.FC<CalendarProps> = ({ selected, onSelect, blockedDate
   const cellStr = (day: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
   const isDisabled = (ds: string) => {
-    if (ds <= todaySP) return true;   // hoje e passado bloqueados — mínimo é amanhã SP
+    // past always blocked; today blocked unless vendor has canScheduleSameDay
+    if (canScheduleSameDay ? ds < todaySP : ds <= todaySP) return true;
     if (getDOW(ds) === 0) return true;
     return blockedDates.has(ds);
   };
@@ -225,7 +227,7 @@ function fmtPrice(v: number): string {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-interface Seller { id: string; name: string; code: string }
+interface Seller { id: string; name: string; code: string; canScheduleSameDay?: boolean }
 interface HolidayEntry { date: string; description: string }
 interface ProductEntry { name: string; price: number; description: string | null }
 interface CartItem { product: ProductEntry; qty: number }
@@ -403,7 +405,7 @@ export const OrderForm: React.FC = () => {
     setCodeError('');
     try {
       const res = await API.get<Omit<Seller, 'code'>>(`/order-form/seller?code=${encodeURIComponent(code.toUpperCase())}`);
-      setSeller({ ...res.data, code: code.toUpperCase() });
+      setSeller({ ...res.data, code: code.toUpperCase(), canScheduleSameDay: Boolean(res.data.canScheduleSameDay) });
     } catch (e: any) {
       setCodeError(e.response?.data?.error ?? 'Código inválido');
     } finally {
@@ -467,7 +469,10 @@ export const OrderForm: React.FC = () => {
                                         e.customerEmail     = 'E-mail inválido';
     if (!form.city)                     e.city              = 'Selecione a cidade';
     if (!form.deliveryDate)             e.deliveryDate      = 'Selecione a data';
-    else if (form.deliveryDate <= todaySPStr()) e.deliveryDate = 'Data de entrega deve ser a partir de amanhã';
+    else if (seller?.canScheduleSameDay ? form.deliveryDate < todaySPStr() : form.deliveryDate <= todaySPStr())
+                                        e.deliveryDate      = seller?.canScheduleSameDay
+                                          ? 'Data de entrega não pode ser no passado'
+                                          : 'Data de entrega deve ser a partir de amanhã';
     if (!form.deliveryTime)             e.deliveryTime      = 'Selecione o horário';
     else if (form.deliveryDate && form.city &&
              !getTimeSlots(form.deliveryDate, form.city).includes(form.deliveryTime))
@@ -919,7 +924,7 @@ export const OrderForm: React.FC = () => {
                   <div>
                     <p className="text-sm font-medium text-gray-700 mb-2">Data de entrega</p>
                     <div className="border border-gray-200 rounded-xl p-3">
-                      <MiniCalendar selected={form.deliveryDate} onSelect={d => set('deliveryDate', d)} blockedDates={holidays} />
+                      <MiniCalendar selected={form.deliveryDate} onSelect={d => set('deliveryDate', d)} blockedDates={holidays} canScheduleSameDay={seller?.canScheduleSameDay} />
                     </div>
                     {form.deliveryDate && isDeliveryDateBlocked(form.deliveryDate) && (
                       <p className="text-xs text-red-500 mt-1">Esta data é domingo ou feriado — selecione outro dia</p>

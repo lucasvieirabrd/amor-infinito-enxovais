@@ -9,6 +9,21 @@ import { sql } from 'drizzle-orm';
 const sellerRepo   = new ExternalSellerRepository();
 const scheduleService = new DeliveryScheduleService();
 
+// Helpers — UTC puro, sem toLocaleString com timezone (Railway)
+function todaySP(): string {
+  const sp = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  return `${sp.getUTCFullYear()}-${String(sp.getUTCMonth()+1).padStart(2,'0')}-${String(sp.getUTCDate()).padStart(2,'0')}`;
+}
+function addOneDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + 1, 12));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')}`;
+}
+function getDOW(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+}
+
 export class OrderFormController {
   /** GET /api/order-form/seller?code=XXXX — público, valida código */
   async validateSeller(req: Request, res: Response) {
@@ -18,7 +33,7 @@ export class OrderFormController {
     }
     const seller = await sellerRepo.findByCode(code.toUpperCase());
     if (!seller) throw new AppError('Código inválido ou vendedor inativo', 404);
-    res.json({ id: seller.id, name: seller.name });
+    res.json({ id: seller.id, name: seller.name, canScheduleSameDay: Boolean(seller.canScheduleSameDay) });
   }
 
   /** GET /api/order-form/products?code=XXXX — público, requer código válido */
@@ -72,6 +87,27 @@ export class OrderFormController {
 
     const seller = await sellerRepo.findByCode(data.code.toUpperCase());
     if (!seller) throw new AppError('Código inválido ou vendedor inativo', 404);
+
+    // Validação de data no backend — não confiar só no frontend
+    const today = todaySP();
+    const minDate = seller.canScheduleSameDay ? today : addOneDay(today);
+    if (data.date < minDate) {
+      throw new AppError(
+        seller.canScheduleSameDay
+          ? 'Data de entrega não pode ser no passado'
+          : 'Data de entrega deve ser a partir de amanhã',
+        422,
+      );
+    }
+    if (getDOW(data.date) === 0) throw new AppError('Entrega não disponível aos domingos', 422);
+    const holidayCheck = await db.execute(sql`
+      SELECT id FROM holidays
+      WHERE deleted_at IS NULL AND DATE_FORMAT(date, '%Y-%m-%d') = ${data.date}
+      LIMIT 1
+    `);
+    if (((holidayCheck as any)[0] as any[]).length > 0) {
+      throw new AppError('Data de entrega não disponível (feriado)', 422);
+    }
 
     const id = await scheduleService.reserve({
       date:             data.date,
