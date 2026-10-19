@@ -1,9 +1,9 @@
 FROM node:22-slim
 
-# Install Chromium + explicit runtime libs required for headless Chrome on Debian 12 Bookworm
+# Install runtime libs required for headless Chrome on Debian 12 Bookworm
 # Package names WITHOUT t64 suffix (t64 is Ubuntu 24.04/Debian trixie only)
+# Note: 'chromium' binary NOT installed here — puppeteer downloads its own tested Chrome
 RUN apt-get update && apt-get install -y \
-    chromium \
     ca-certificates \
     fonts-liberation \
     libasound2 \
@@ -31,15 +31,15 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Use the system Chromium; skip puppeteer's own download
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+# Fix Chrome download path so it is consistent between build and runtime
+# Must be set BEFORE npm install so puppeteer downloads Chrome here
+ENV PUPPETEER_CACHE_DIR=/app/.cache/puppeteer
 
 WORKDIR /app
 
-# O contexto agora é a raiz do projeto, então os arquivos estão em ./backend
 COPY backend/package*.json ./
 
+# npm install downloads puppeteer's own Chrome into /app/.cache/puppeteer
 RUN npm install
 
 COPY backend/ .
