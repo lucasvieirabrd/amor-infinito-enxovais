@@ -14,6 +14,6 @@ export async function launchBrowser(): Promise<Browser> {
   return puppeteer.launch({
     headless: true,
     args: CHROMIUM_ARGS,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
   });
 }

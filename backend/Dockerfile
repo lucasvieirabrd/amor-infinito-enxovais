@@ -1,9 +1,9 @@
 FROM node:22-slim
 
-# Install Chromium with ALL its recommended dependencies (no --no-install-recommends)
-# This ensures all required system libs (libdbus, libgbm, libatk, etc.) are present
+# Install Chromium and required system libraries for headless PDF generation
 RUN apt-get update && apt-get install -y \
     chromium \
+    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Use the system Chromium; skip puppeteer's own download
