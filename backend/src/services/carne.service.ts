@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import { launchBrowser } from '../utils/puppeteerLaunch';
 import QRCode from 'qrcode';
 import { format } from 'date-fns';
 import { eq, and, isNull, inArray, asc } from 'drizzle-orm';
@@ -337,19 +337,7 @@ export async function generateCarnePdf(saleId: string): Promise<Buffer> {
   const data = await getCarneData(saleId);
   const html = await buildCarneHtml(data);
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-    ],
-  });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();

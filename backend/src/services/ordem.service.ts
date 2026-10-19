@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import { launchBrowser } from '../utils/puppeteerLaunch';
 import { format } from 'date-fns';
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { db } from '../database';
@@ -498,19 +498,7 @@ export async function generateOrdemPdf(saleId: string): Promise<Buffer> {
   const data = await getOrdemData(saleId);
   const html = buildOrdemHtml(data);
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-    ],
-  });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();

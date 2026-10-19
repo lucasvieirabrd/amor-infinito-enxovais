@@ -1,6 +1,6 @@
 import { db } from '../database';
 import { sql } from 'drizzle-orm';
-import puppeteer from 'puppeteer';
+import { launchBrowser } from '../utils/puppeteerLaunch';
 
 const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -233,7 +233,7 @@ export async function generateSalesItemsReportPdf(month: number, year: number): 
 </body>
 </html>`;
 
-  const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });

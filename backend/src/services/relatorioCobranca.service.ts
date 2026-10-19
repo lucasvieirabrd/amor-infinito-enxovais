@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import { launchBrowser } from '../utils/puppeteerLaunch';
 import { format, differenceInDays } from 'date-fns';
 import { inArray } from 'drizzle-orm';
 import fs from 'fs';
@@ -347,11 +347,7 @@ export async function generateRelatorioCobrancaPdf(): Promise<Buffer> {
   const data = await fetchReportData();
   const html = buildHtml(data);
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-  });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();

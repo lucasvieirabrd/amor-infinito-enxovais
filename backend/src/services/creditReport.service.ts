@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import { launchBrowser } from '../utils/puppeteerLaunch';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { db } from '../database';
@@ -449,7 +449,7 @@ export async function generateCreditReportPdf(params: ReportParams): Promise<Buf
   </div>
 </body></html>`;
 
-  const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });

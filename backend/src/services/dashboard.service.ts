@@ -1,7 +1,7 @@
 import { db } from '../database';
 import { sql } from 'drizzle-orm';
 import { differenceInDays, subDays, subYears, format } from 'date-fns';
-import puppeteer from 'puppeteer';
+import { launchBrowser } from '../utils/puppeteerLaunch';
 
 type CompareTo = 'previous' | 'year_ago' | 'none';
 
@@ -481,7 +481,7 @@ export async function generateDashboardReportPdf(data: ReportData): Promise<Buff
 </body>
 </html>`;
 
-  const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
