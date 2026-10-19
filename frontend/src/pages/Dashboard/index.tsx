@@ -97,24 +97,25 @@ export const Dashboard: React.FC = () => {
   const [period, setPeriod]     = useState(() => getPresetDates('month'));
   const [compareTo, setCompareTo] = useState<CompareTo>('none');
 
-  // ── Relatório PDF ──────────────────────────────────────
+  // ── Relatório Geral PDF ────────────────────────────────
   const nowForReport = new Date();
   const [showReportModal, setShowReportModal] = useState(false);
-  const [reportStart, setReportStart]         = useState(format(startOfMonth(nowForReport), 'yyyy-MM-dd'));
-  const [reportEnd, setReportEnd]             = useState(format(endOfMonth(nowForReport),   'yyyy-MM-dd'));
+  const [reportMonth, setReportMonth]         = useState(nowForReport.getMonth() + 1);
+  const [reportYear,  setReportYear]          = useState(nowForReport.getFullYear());
   const [reportLoading, setReportLoading]     = useState(false);
 
   const handleDownloadReport = async () => {
     setReportLoading(true);
     try {
-      const res = await api.get('/dashboard/report/pdf', {
-        params: { startDate: reportStart, endDate: reportEnd },
+      const res = await api.get('/reports/monthly-summary/pdf', {
+        params: { month: reportMonth, year: reportYear },
         responseType: 'blob',
       });
+      const mm   = reportMonth.toString().padStart(2, '0');
       const url  = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
       const link = document.createElement('a');
       link.href  = url;
-      link.download = `relatorio-dashboard-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      link.download = `relatorio-geral-${reportYear}-${mm}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
       setShowReportModal(false);
@@ -224,29 +225,34 @@ export const Dashboard: React.FC = () => {
         )}
       </div>
 
-      {/* ── Modal Exportar Relatório ── */}
+      {/* ── Modal Exportar Relatório Geral ── */}
       {showReportModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-1">Exportar Relatório Financeiro</h2>
-            <p className="text-sm text-gray-500 mb-5">Selecione o período para o relatório em PDF.</p>
+            <h2 className="text-lg font-bold text-gray-900 mb-1">Exportar Relatório Geral</h2>
+            <p className="text-sm text-gray-500 mb-5">Selecione o mês e ano para gerar o relatório completo em PDF.</p>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Data inicial</label>
-                <input
-                  type="date"
-                  value={reportStart}
-                  onChange={e => setReportStart(e.target.value)}
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mês</label>
+                <select
+                  value={reportMonth}
+                  onChange={e => setReportMonth(Number(e.target.value))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+                >
+                  {['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((m, i) => (
+                    <option key={i + 1} value={i + 1}>{m}</option>
+                  ))}
+                </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Data final</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Ano</label>
                 <input
-                  type="date"
-                  value={reportEnd}
-                  onChange={e => setReportEnd(e.target.value)}
+                  type="number"
+                  value={reportYear}
+                  onChange={e => setReportYear(Number(e.target.value))}
+                  min={2020}
+                  max={2100}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -262,7 +268,7 @@ export const Dashboard: React.FC = () => {
               </button>
               <button
                 onClick={handleDownloadReport}
-                disabled={reportLoading || !reportStart || !reportEnd}
+                disabled={reportLoading}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-dark rounded-lg transition-colors disabled:opacity-50"
               >
                 <FiDownload size={15} />

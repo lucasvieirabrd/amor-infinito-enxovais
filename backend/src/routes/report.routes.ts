@@ -13,5 +13,6 @@ reportRouter.get('/credit', ensureTabAccess('crediario'), reportController.getCr
 reportRouter.get('/sellers', ensureAuthorized(['admin']), reportController.getSellerReport);
 reportRouter.get('/delinquency-score', ensureAuthorized(['admin']), reportController.getDelinquencyScore);
 reportRouter.get('/items-report/pdf', ensureAuthorized(['admin']), reportController.getItemsReport);
+reportRouter.get('/monthly-summary/pdf', ensureAuthorized(['admin']), reportController.getMonthlySummary);
 
 export { reportRouter };
