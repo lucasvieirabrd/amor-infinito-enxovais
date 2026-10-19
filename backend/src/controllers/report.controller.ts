@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { generateCreditReportPdf, generateCreditReportExcel, ReportParams } from '../services/creditReport.service';
 import { generateSellerReportPdf, generateSellerReportExcel } from '../services/sellerReport.service';
 import { getDelinquencyScoreData, generateDelinquencyScorePdf, generateDelinquencyScoreExcel } from '../services/delinquencyScore.service';
+import { generateSalesItemsReportPdf } from '../services/salesItemsReport.service';
 
 export class ReportController {
   async getCreditReport(req: Request, res: Response) {
@@ -107,5 +108,22 @@ export class ReportController {
       riskFilter: parsed.riskFilter,
     });
     return res.json(result);
+  }
+
+  async getItemsReport(req: Request, res: Response) {
+    const spNow = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const schema = z.object({
+      month: z.coerce.number().int().min(1).max(12).default(spNow.getUTCMonth() + 1),
+      year:  z.coerce.number().int().min(2020).max(2100).default(spNow.getUTCFullYear()),
+    });
+
+    const parsed = schema.parse(req.query);
+    const mm = parsed.month.toString().padStart(2, '0');
+    const filename = `itens-vendidos-${parsed.year}-${mm}.pdf`;
+
+    const buffer = await generateSalesItemsReportPdf(parsed.month, parsed.year);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(buffer);
   }
 }

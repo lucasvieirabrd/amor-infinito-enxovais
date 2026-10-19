@@ -125,6 +125,35 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  // ── Relatório Itens Vendidos ────────────────────────────
+  const nowForItems = new Date();
+  const [showItemsModal, setShowItemsModal] = useState(false);
+  const [itemsMonth, setItemsMonth]         = useState(nowForItems.getMonth() + 1);
+  const [itemsYear,  setItemsYear]          = useState(nowForItems.getFullYear());
+  const [itemsLoading, setItemsLoading]     = useState(false);
+
+  const handleDownloadItemsReport = async () => {
+    setItemsLoading(true);
+    try {
+      const res = await api.get('/reports/items-report/pdf', {
+        params: { month: itemsMonth, year: itemsYear },
+        responseType: 'blob',
+      });
+      const mm   = itemsMonth.toString().padStart(2, '0');
+      const url  = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href  = url;
+      link.download = `itens-vendidos-${itemsYear}-${mm}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setShowItemsModal(false);
+    } catch {
+      toast.error('Erro ao gerar o relatório de itens. Tente novamente.');
+    } finally {
+      setItemsLoading(false);
+    }
+  };
+
   const applyPreset = (p: Preset) => {
     setPreset(p);
     if (p !== 'custom') setPeriod(getPresetDates(p));
@@ -176,13 +205,22 @@ export const Dashboard: React.FC = () => {
           <p className="text-white text-opacity-90">Hoje é {today}. Aqui está um resumo do seu negócio.</p>
         </div>
         {isAdmin && (
-          <button
-            onClick={() => setShowReportModal(true)}
-            className="flex items-center gap-2 bg-white bg-opacity-20 hover:bg-opacity-30 transition-colors text-white text-sm font-medium px-4 py-2 rounded-lg shrink-0"
-          >
-            <FiDownload size={16} />
-            Exportar Relatório
-          </button>
+          <div className="flex flex-col gap-2 shrink-0">
+            <button
+              onClick={() => setShowReportModal(true)}
+              className="flex items-center gap-2 bg-white bg-opacity-20 hover:bg-opacity-30 transition-colors text-white text-sm font-medium px-4 py-2 rounded-lg"
+            >
+              <FiDownload size={16} />
+              Exportar Relatório
+            </button>
+            <button
+              onClick={() => setShowItemsModal(true)}
+              className="flex items-center gap-2 bg-white bg-opacity-20 hover:bg-opacity-30 transition-colors text-white text-sm font-medium px-4 py-2 rounded-lg"
+            >
+              <FiShoppingCart size={16} />
+              Itens do Mês
+            </button>
+          </div>
         )}
       </div>
 
@@ -229,6 +267,60 @@ export const Dashboard: React.FC = () => {
               >
                 <FiDownload size={15} />
                 {reportLoading ? 'Gerando…' : 'Baixar PDF'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Itens Vendidos ── */}
+      {showItemsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-1">Itens Vendidos no Mês</h2>
+            <p className="text-sm text-gray-500 mb-5">Selecione o mês e ano para gerar o relatório em PDF.</p>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mês</label>
+                <select
+                  value={itemsMonth}
+                  onChange={e => setItemsMonth(Number(e.target.value))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((m, i) => (
+                    <option key={i + 1} value={i + 1}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Ano</label>
+                <input
+                  type="number"
+                  value={itemsYear}
+                  onChange={e => setItemsYear(Number(e.target.value))}
+                  min={2020}
+                  max={2100}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowItemsModal(false)}
+                disabled={itemsLoading}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDownloadItemsReport}
+                disabled={itemsLoading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-dark rounded-lg transition-colors disabled:opacity-50"
+              >
+                <FiDownload size={15} />
+                {itemsLoading ? 'Gerando…' : 'Gerar PDF'}
               </button>
             </div>
           </div>
