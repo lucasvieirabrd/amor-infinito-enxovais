@@ -263,7 +263,7 @@ export class InstallmentService {
         customerId: row.customer.id,
         customerName: row.customer.name,
         customerPhone: row.customer.phone,
-        inLegalProcess: row.customer.inLegalProcess,
+        customerStatus: row.customer.customerStatus,
         installmentNumber: row.installment.installmentNumber,
         originalAmount: Number(row.installment.originalAmount),
         paidAmount: row.installment.paidAmount ? Number(row.installment.paidAmount) : null,

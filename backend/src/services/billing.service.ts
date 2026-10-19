@@ -198,7 +198,7 @@ export class BillingService {
           sql`DATE(CONVERT_TZ(${installments.dueDate}, '+00:00', '-03:00')) <= DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))`,
           isNull(installments.deletedAt),
           isNull(customers.deletedAt),
-          sql`${customers.inLegalProcess} = 0`,
+          sql`${customers.customerStatus} IN ('normal', 'agreement')`,
         )
       );
 
@@ -655,7 +655,7 @@ export class BillingService {
     const customer = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
     if (!customer[0]) throw new AppError('Cliente não encontrado', 404);
 
-    if (customer[0].inLegalProcess) {
+    if (customer[0].customerStatus === 'legal_process') {
       throw new AppError('Cliente em processo jurídico não pode receber cobrança automática', 400);
     }
 

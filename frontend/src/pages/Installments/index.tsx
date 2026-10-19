@@ -42,7 +42,7 @@ interface CustomerCrediario {
   id: string;
   name: string;
   phone: string;
-  inLegalProcess?: boolean;
+  customerStatus?: string;
   installmentCount: number;
   totalPending: number;
   overdueCount: number;
@@ -79,7 +79,7 @@ export const Installments: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'today' | 'current' | 'legal'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'today' | 'current' | 'legal' | 'agreement'>('all');
 
   // Accordion — qual cliente está expandido
   const [expandedCustomer, setExpandedCustomer] = useState<CustomerCrediario | null>(null);
@@ -247,14 +247,14 @@ export const Installments: React.FC = () => {
     },
   });
 
-  const toggleLegalProcessMutation = useMutation({
-    mutationFn: ({ id, inLegalProcess }: { id: string; inLegalProcess: boolean }) =>
-      api.patch(`/customers/${id}/legal-process`, { inLegalProcess }),
+  const setCustomerStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      api.patch(`/customers/${id}/legal-process`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['active-crediarios'] });
     },
     onError: (err: any) => {
-      alert(err.response?.data?.message || 'Erro ao atualizar status jurídico');
+      alert(err.response?.data?.message || 'Erro ao atualizar status do cliente');
     },
   });
 
@@ -606,6 +606,12 @@ export const Installments: React.FC = () => {
           >
             ⚖️ Em Processo
           </button>
+          <button
+            onClick={() => { setStatusFilter('agreement'); setPage(1); }}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${statusFilter === 'agreement' ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            🤝 Em Acordo
+          </button>
         </div>
 
         {/* Barra de busca + paginação */}
@@ -664,9 +670,14 @@ export const Installments: React.FC = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <p className="font-semibold text-gray-900 break-words min-w-0">{customer.name}</p>
-                        {customer.inLegalProcess && (
+                        {customer.customerStatus === 'legal_process' && (
                           <span className="flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200">
                             ⚖️ Processo
+                          </span>
+                        )}
+                        {customer.customerStatus === 'agreement' && (
+                          <span className="flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 border border-teal-200">
+                            🤝 Acordo
                           </span>
                         )}
                       </div>
@@ -717,28 +728,54 @@ export const Installments: React.FC = () => {
                       <span className="text-[10px] text-gray-400 mt-0.5">alt. data</span>
                     </div>
 
-                    {/* Botão marcar/desmarcar processo jurídico (admin only) */}
-                    {isAdmin && (
+                    {/* Botões de status jurídico (admin only) */}
+                    {isAdmin && customer.customerStatus !== 'legal_process' && customer.customerStatus !== 'agreement' && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const next = !customer.inLegalProcess;
-                          const msg = next
-                            ? `Marcar ${customer.name} como em processo jurídico?\nEsta ação irá removê-lo de toda cobrança automática.`
-                            : `Retirar ${customer.name} do processo jurídico?`;
-                          if (window.confirm(msg)) {
-                            toggleLegalProcessMutation.mutate({ id: customer.id, inLegalProcess: next });
+                          if (window.confirm(`Marcar ${customer.name} como em processo jurídico?\nEsta ação irá removê-lo da cobrança automática.`)) {
+                            setCustomerStatusMutation.mutate({ id: customer.id, status: 'legal_process' });
                           }
                         }}
-                        className={`flex-shrink-0 p-1.5 rounded transition text-sm ${
-                          customer.inLegalProcess
-                            ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                            : 'text-gray-400 hover:bg-orange-50 hover:text-orange-600'
-                        }`}
-                        title={customer.inLegalProcess ? 'Retirar do processo jurídico' : 'Marcar como em processo jurídico'}
-                      >
-                        ⚖️
-                      </button>
+                        className="flex-shrink-0 p-1.5 rounded transition text-sm text-gray-400 hover:bg-orange-50 hover:text-orange-600"
+                        title="Marcar como em processo jurídico"
+                      >⚖️</button>
+                    )}
+                    {isAdmin && customer.customerStatus === 'legal_process' && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Fechar acordo com ${customer.name}?\nO cliente voltará a receber cobrança automática.`)) {
+                              setCustomerStatusMutation.mutate({ id: customer.id, status: 'agreement' });
+                            }
+                          }}
+                          className="flex-shrink-0 px-2 py-1 rounded transition text-xs font-medium bg-teal-100 text-teal-700 hover:bg-teal-200"
+                          title="Fechar acordo"
+                        >✅ Acordo</button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Retirar ${customer.name} do processo jurídico?`)) {
+                              setCustomerStatusMutation.mutate({ id: customer.id, status: 'normal' });
+                            }
+                          }}
+                          className="flex-shrink-0 p-1.5 rounded transition text-sm bg-orange-100 text-orange-700 hover:bg-orange-200"
+                          title="Retirar do processo"
+                        >🔙</button>
+                      </>
+                    )}
+                    {isAdmin && customer.customerStatus === 'agreement' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Normalizar status de ${customer.name}? O acordo será encerrado.`)) {
+                            setCustomerStatusMutation.mutate({ id: customer.id, status: 'normal' });
+                          }
+                        }}
+                        className="flex-shrink-0 px-2 py-1 rounded transition text-xs font-medium bg-teal-100 text-teal-700 hover:bg-teal-200"
+                        title="Encerrar acordo e normalizar"
+                      >🔙 Encerrar</button>
                     )}
 
                     {/* Chevron */}

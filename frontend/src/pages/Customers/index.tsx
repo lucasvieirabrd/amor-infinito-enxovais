@@ -7,7 +7,7 @@ import axios from 'axios';
 import { useAuth } from '../../hooks/useAuth';
 import { MergeCustomersModal } from './MergeCustomersModal';
 
-type PaymentStatus = 'devendo' | 'quitado' | 'sem_crediario' | 'sem_compras' | 'em_processo';
+type PaymentStatus = 'devendo' | 'quitado' | 'sem_crediario' | 'sem_compras' | 'em_processo' | 'em_acordo';
 
 interface Customer {
   id: string;
@@ -34,7 +34,7 @@ interface Customer {
   birthDate?: string;
   hasPhoto?: boolean;
   paymentStatus?: PaymentStatus;
-  inLegalProcess?: boolean;
+  customerStatus?: string;
 }
 
 interface PaginatedResponse {
@@ -163,14 +163,14 @@ export const Customers: React.FC = () => {
     },
   });
 
-  const toggleLegalProcessMutation = useMutation({
-    mutationFn: ({ id, inLegalProcess }: { id: string; inLegalProcess: boolean }) =>
-      api.patch(`/customers/${id}/legal-process`, { inLegalProcess }),
+  const setCustomerStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      api.patch(`/customers/${id}/legal-process`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     },
     onError: (error: any) => {
-      alert(error.response?.data?.message || 'Erro ao atualizar status jurídico');
+      alert(error.response?.data?.message || 'Erro ao atualizar status do cliente');
     },
   });
 
@@ -293,9 +293,14 @@ export const Customers: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <p className="font-medium text-gray-900">{value}</p>
-              {item.inLegalProcess && (
+              {item.customerStatus === 'legal_process' && (
                 <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title="Cliente em processo jurídico">
                   ⚖️ Processo
+                </span>
+              )}
+              {item.customerStatus === 'agreement' && (
+                <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 border border-teal-200" title="Cliente em acordo">
+                  🤝 Acordo
                 </span>
               )}
             </div>
@@ -326,6 +331,7 @@ export const Customers: React.FC = () => {
           sem_crediario: { label: 'Sem crediário', cls: 'bg-gray-100 text-gray-600' },
           sem_compras:   { label: 'Sem compras',   cls: 'bg-gray-100 text-gray-500' },
           em_processo:   { label: 'Em processo',   cls: 'bg-orange-100 text-orange-700' },
+          em_acordo:     { label: 'Em acordo',     cls: 'bg-teal-100 text-teal-700' },
         };
         const s = map[value] ?? map.sem_compras;
         return (
@@ -353,26 +359,49 @@ export const Customers: React.FC = () => {
           >
             Vender
           </button>
-          {isAdmin && (
+          {isAdmin && item.customerStatus !== 'legal_process' && item.customerStatus !== 'agreement' && (
             <button
               onClick={() => {
-                const next = !item.inLegalProcess;
-                const msg = next
-                  ? `Marcar ${item.name} como em processo jurídico? Esta ação irá removê-lo de toda cobrança automática.`
-                  : `Retirar ${item.name} do processo jurídico?`;
-                if (window.confirm(msg)) {
-                  toggleLegalProcessMutation.mutate({ id: item.id, inLegalProcess: next });
+                if (window.confirm(`Marcar ${item.name} como em processo jurídico?`)) {
+                  setCustomerStatusMutation.mutate({ id: item.id, status: 'legal_process' });
                 }
               }}
-              className={`p-1.5 rounded transition text-xs font-medium ${
-                item.inLegalProcess
-                  ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                  : 'hover:bg-orange-50 text-orange-500'
-              }`}
-              title={item.inLegalProcess ? 'Retirar do processo jurídico' : 'Marcar como em processo jurídico'}
-            >
-              ⚖️
-            </button>
+              className="p-1.5 rounded transition text-xs font-medium hover:bg-orange-50 text-orange-500"
+              title="Marcar como em processo jurídico"
+            >⚖️</button>
+          )}
+          {isAdmin && item.customerStatus === 'legal_process' && (
+            <>
+              <button
+                onClick={() => {
+                  if (window.confirm(`Fechar acordo com ${item.name}?`)) {
+                    setCustomerStatusMutation.mutate({ id: item.id, status: 'agreement' });
+                  }
+                }}
+                className="p-1.5 rounded transition text-xs font-medium bg-teal-100 text-teal-700 hover:bg-teal-200"
+                title="Fechar acordo"
+              >🤝</button>
+              <button
+                onClick={() => {
+                  if (window.confirm(`Retirar ${item.name} do processo jurídico?`)) {
+                    setCustomerStatusMutation.mutate({ id: item.id, status: 'normal' });
+                  }
+                }}
+                className="p-1.5 rounded transition text-xs font-medium bg-orange-100 text-orange-700 hover:bg-orange-200"
+                title="Retirar do processo"
+              >🔙</button>
+            </>
+          )}
+          {isAdmin && item.customerStatus === 'agreement' && (
+            <button
+              onClick={() => {
+                if (window.confirm(`Normalizar status de ${item.name}?`)) {
+                  setCustomerStatusMutation.mutate({ id: item.id, status: 'normal' });
+                }
+              }}
+              className="p-1.5 rounded transition text-xs font-medium bg-teal-100 text-teal-700 hover:bg-teal-200"
+              title="Encerrar acordo"
+            >🔙</button>
           )}
           <button
             onClick={() => handleDelete(item.id)}
@@ -452,6 +481,7 @@ export const Customers: React.FC = () => {
               <option value="sem_crediario">⚪ Sem crediário</option>
               <option value="sem_compras">⚪ Sem compras</option>
               <option value="em_processo">⚖️ Em processo</option>
+              <option value="em_acordo">🤝 Em acordo</option>
             </select>
           </div>
         </Card>

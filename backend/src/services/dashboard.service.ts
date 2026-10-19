@@ -94,7 +94,7 @@ export class DashboardService {
   }
 
   private async queryBillingData(start: string, end: string) {
-    const [receivableResult, overdueResult, overdueInProcessResult, receivedResult] = await Promise.all([
+    const [receivableResult, overdueResult, overdueInProcessResult, overdueInAgreementResult, receivedResult] = await Promise.all([
       db.execute(sql`
         SELECT COUNT(*) AS count,
                COALESCE(SUM(original_amount - COALESCE(paid_amount, 0)), 0) AS total
@@ -114,7 +114,7 @@ export class DashboardService {
         )
           AND i.deleted_at IS NULL
           AND c.deleted_at IS NULL
-          AND c.in_legal_process = 0
+          AND c.customer_status = 'normal'
       `),
       db.execute(sql`
         SELECT COUNT(*) AS count,
@@ -128,7 +128,21 @@ export class DashboardService {
         )
           AND i.deleted_at IS NULL
           AND c.deleted_at IS NULL
-          AND c.in_legal_process = 1
+          AND c.customer_status = 'legal_process'
+      `),
+      db.execute(sql`
+        SELECT COUNT(*) AS count,
+               COALESCE(SUM(i.original_amount), 0) AS total
+        FROM installments i
+        JOIN customers c ON c.id = i.customer_id
+        WHERE (
+          i.status = 'overdue'
+          OR (i.status = 'pending'
+              AND DATE(CONVERT_TZ(i.due_date, '+00:00', '-03:00')) < DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00')))
+        )
+          AND i.deleted_at IS NULL
+          AND c.deleted_at IS NULL
+          AND c.customer_status = 'agreement'
       `),
       db.execute(sql`
         SELECT
@@ -146,15 +160,17 @@ export class DashboardService {
     const toF = (v: any) => parseFloat(v?.toString() ?? '0') || 0;
     const toN = (v: any) => parseInt(v?.toString() ?? '0')   || 0;
 
-    const rec = (receivableResult[0]        as any[])[0];
-    const ovd = (overdueResult[0]           as any[])[0];
-    const ovl = (overdueInProcessResult[0]  as any[])[0];
-    const rcv = (receivedResult[0]          as any[])[0];
+    const rec = (receivableResult[0]           as any[])[0];
+    const ovd = (overdueResult[0]              as any[])[0];
+    const ovl = (overdueInProcessResult[0]     as any[])[0];
+    const ova = (overdueInAgreementResult[0]   as any[])[0];
+    const rcv = (receivedResult[0]             as any[])[0];
 
     return {
-      totalReceivable:   { total: toF(rec?.total), count: toN(rec?.count) },
-      overdue:           { total: toF(ovd?.total), count: toN(ovd?.count) },
-      overdueInProcess:  { total: toF(ovl?.total), count: toN(ovl?.count) },
+      totalReceivable:    { total: toF(rec?.total), count: toN(rec?.count) },
+      overdue:            { total: toF(ovd?.total), count: toN(ovd?.count) },
+      overdueInProcess:   { total: toF(ovl?.total), count: toN(ovl?.count) },
+      overdueInAgreement: { total: toF(ova?.total), count: toN(ova?.count) },
       receivedThisMonth: {
         total:              toF(rcv?.total),
         installmentsTotal:  toF(rcv?.installments_total),

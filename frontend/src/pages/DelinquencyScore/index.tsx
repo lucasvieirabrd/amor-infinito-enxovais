@@ -12,7 +12,7 @@ interface ScoreRow {
   name: string;
   cpf: string;
   phone: string;
-  in_legal_process?: boolean;
+  customer_status?: string;
   renegotiations_count: number;
   has_renegotiation: boolean;
   late_payments: number;
@@ -46,7 +46,7 @@ const RISK_CLASSES: Record<RiskLevel, string> = {
 export const DelinquencyScore: React.FC = () => {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
-  const [riskFilter, setRiskFilter] = useState<RiskLevel | 'legal' | ''>('');
+  const [riskFilter, setRiskFilter] = useState<RiskLevel | 'legal' | 'agreement' | ''>('');
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
   const limit = 20;
@@ -76,7 +76,7 @@ export const DelinquencyScore: React.FC = () => {
   };
 
   const handleRiskChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setRiskFilter(e.target.value as RiskLevel | 'legal' | '');
+    setRiskFilter(e.target.value as RiskLevel | 'legal' | 'agreement' | '');
     setPage(1);
   };
 
@@ -167,6 +167,7 @@ export const DelinquencyScore: React.FC = () => {
           <option value="attention">🟡 Atenção (31–80)</option>
           <option value="good">🟢 Bom pagador (0–30)</option>
           <option value="legal">⚖️ Em Processo Jurídico</option>
+          <option value="agreement">🤝 Em Acordo</option>
         </select>
       </div>
 
@@ -176,6 +177,10 @@ export const DelinquencyScore: React.FC = () => {
           {riskFilter === 'legal' ? (
             <span className="px-3 py-1 rounded-full font-medium" style={{ background: '#f3e8ff', color: '#7c3aed' }}>
               ⚖️ Em Processo: {data.total}
+            </span>
+          ) : riskFilter === 'agreement' ? (
+            <span className="px-3 py-1 rounded-full font-medium bg-teal-50 text-teal-700">
+              🤝 Em Acordo: {data.total}
             </span>
           ) : (
             <>
@@ -229,14 +234,19 @@ export const DelinquencyScore: React.FC = () => {
               rows.map((row, idx) => {
                 const rank = (page - 1) * limit + idx + 1;
                 return (
-                  <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${row.in_legal_process ? 'bg-orange-50' : ''}`}>
+                  <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${row.customer_status === 'legal_process' ? 'bg-orange-50' : row.customer_status === 'agreement' ? 'bg-teal-50' : ''}`}>
                     <td className="px-4 py-3 text-gray-400 font-mono text-xs">{rank}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-gray-800">{row.name}</span>
-                        {row.in_legal_process && (
-                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title="Cliente em processo jurídico — excluído de toda cobrança automática">
+                        {row.customer_status === 'legal_process' && (
+                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title="Cliente em processo jurídico — excluído de cobrança automática">
                             ⚖️ Processo
+                          </span>
+                        )}
+                        {row.customer_status === 'agreement' && (
+                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 border border-teal-200" title="Cliente em acordo — incluído na cobrança automática">
+                            🤝 Acordo
                           </span>
                         )}
                         {row.has_renegotiation && (

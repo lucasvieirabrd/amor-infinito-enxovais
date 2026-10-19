@@ -157,10 +157,16 @@ export class CustomerController {
 
   async setLegalProcess(req: Request, res: Response) {
     const { id } = req.params;
-    const schema = z.object({ inLegalProcess: z.boolean() });
-    const { inLegalProcess } = schema.parse(req.body);
+    const schema = z.object({
+      status: z.enum(['normal', 'legal_process', 'agreement']).optional(),
+      inLegalProcess: z.boolean().optional(),
+    });
+    const body = schema.parse(req.body);
     const userId = (req as any).user!.id;
-    const result = await customerService.toggleLegalProcess(id, inLegalProcess, userId);
+    const status = body.status
+      ?? (body.inLegalProcess !== undefined ? (body.inLegalProcess ? 'legal_process' : 'normal') : undefined);
+    if (!status) throw new Error('status ou inLegalProcess obrigatório');
+    const result = await customerService.setCustomerStatus(id, status as any, userId);
     return res.json(result);
   }
 

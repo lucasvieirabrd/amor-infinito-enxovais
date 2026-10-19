@@ -6,14 +6,14 @@ import path from 'path';
 import fs from 'fs';
 
 export type RiskLevel = 'good' | 'attention' | 'high_risk';
-export type RiskFilterParam = RiskLevel | 'legal';
+export type RiskFilterParam = RiskLevel | 'legal' | 'agreement';
 
 export interface DelinquencyScoreRow {
   id: string;
   name: string;
   phone: string;
   cpf: string;
-  in_legal_process: boolean;
+  customer_status: string;
   renegotiations_count: number;
   has_renegotiation: boolean;
   late_payments: number;
@@ -88,7 +88,7 @@ async function fetchAllScores(search?: string): Promise<DelinquencyScoreRow[]> {
       c.name,
       c.phone,
       c.cpf,
-      c.in_legal_process,
+      c.customer_status,
       COALESCE(ren.ren_count, 0)  AS renegotiations_count,
       ren.latest_ren_id,
 
@@ -187,7 +187,7 @@ async function fetchAllScores(search?: string): Promise<DelinquencyScoreRow[]> {
       AND EXISTS (SELECT 1 FROM installments WHERE customer_id = c.id AND deleted_at IS NULL)
       ${searchCond}
     GROUP BY
-      c.id, c.name, c.phone, c.cpf, c.in_legal_process,
+      c.id, c.name, c.phone, c.cpf, c.customer_status,
       ren.ren_count, ren.latest_ren_id,
       norendc.dc_count, rendc.dc_count
   `) as any;
@@ -213,7 +213,7 @@ async function fetchAllScores(search?: string): Promise<DelinquencyScoreRow[]> {
       name: row.name,
       phone: row.phone,
       cpf: row.cpf,
-      in_legal_process: Boolean(row.in_legal_process),
+      customer_status: String(row.customer_status ?? 'normal'),
       renegotiations_count: Number(row.renegotiations_count),
       has_renegotiation: hasRen,
       // Expose the metrics that actually drove the score
@@ -234,8 +234,10 @@ export async function getDelinquencyScoreData(params: DelinquencyScoreParams) {
 
   const allRows = await fetchAllScores(search);
   const filtered = riskFilter === 'legal'
-    ? allRows.filter(r => r.in_legal_process)
-    : allRows.filter(r => !r.in_legal_process && (riskFilter ? r.risk === riskFilter : true));
+    ? allRows.filter(r => r.customer_status === 'legal_process')
+    : riskFilter === 'agreement'
+    ? allRows.filter(r => r.customer_status === 'agreement')
+    : allRows.filter(r => r.customer_status === 'normal' && (riskFilter ? r.risk === riskFilter : true));
 
   const total = filtered.length;
   const offset = (page - 1) * limit;

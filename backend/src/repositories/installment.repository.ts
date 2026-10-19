@@ -75,10 +75,12 @@ export class InstallmentRepository {
       ? sql`AND (c.name LIKE ${'%' + search + '%'} OR c.phone LIKE ${'%' + search + '%'})`
       : sql``;
 
-    // Clientes em processo jurídico ficam em filtro próprio; excluídos dos demais
+    // Particionamento por status: cada filtro mostra apenas o grupo correspondente
     const legalCond = filter === 'legal'
-      ? sql`AND c.in_legal_process = 1`
-      : sql`AND c.in_legal_process = 0`;
+      ? sql`AND c.customer_status = 'legal_process'`
+      : filter === 'agreement'
+      ? sql`AND c.customer_status = 'agreement'`
+      : sql`AND c.customer_status = 'normal'`;
 
     // HAVING usa os mesmos critérios das colunas computadas overdueCount/todayCount
     const filterHaving = filter === 'overdue'
@@ -94,7 +96,7 @@ export class InstallmentRepository {
         c.id,
         c.name,
         c.phone,
-        c.in_legal_process AS inLegalProcess,
+        c.customer_status AS customerStatus,
         COUNT(i.id) AS installmentCount,
         COALESCE(SUM(i.original_amount - COALESCE(i.paid_amount, 0)), 0) AS totalPending,
         SUM(CASE
@@ -139,7 +141,7 @@ export class InstallmentRepository {
         AND c.deleted_at IS NULL
         ${legalCond}
         ${searchCond}
-      GROUP BY c.id, c.name, c.phone, c.in_legal_process, dca.lastDateChangeAt, dca.dateChangeCount
+      GROUP BY c.id, c.name, c.phone, c.customer_status, dca.lastDateChangeAt, dca.dateChangeCount
       ${filterHaving}
       ORDER BY worstOverdueDays DESC, c.name ASC
       LIMIT ${limit} OFFSET ${offset}
@@ -178,7 +180,7 @@ export class InstallmentRepository {
         id: String(r.id),
         name: String(r.name),
         phone: String(r.phone),
-        inLegalProcess: Boolean(r.inLegalProcess),
+        customerStatus: String(r.customerStatus ?? 'normal'),
         installmentCount: Number(r.installmentCount),
         totalPending: parseFloat(r.totalPending?.toString() ?? '0'),
         overdueCount: Number(r.overdueCount),
@@ -238,7 +240,7 @@ export class InstallmentRepository {
         )
           AND i.deleted_at IS NULL
           AND c.deleted_at IS NULL
-          AND c.in_legal_process = 0
+          AND c.customer_status = 'normal'
       `),
       db.execute(sql`
         SELECT COUNT(*) as count, SUM(i.original_amount) as total
@@ -248,7 +250,7 @@ export class InstallmentRepository {
           AND DATE(i.due_date) = DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
           AND i.deleted_at IS NULL
           AND c.deleted_at IS NULL
-          AND c.in_legal_process = 0
+          AND c.customer_status = 'normal'
       `),
       db.execute(sql`
         SELECT COUNT(*) as count, SUM(i.original_amount) as total
@@ -258,7 +260,7 @@ export class InstallmentRepository {
           AND DATE(i.due_date) > DATE(CONVERT_TZ(NOW(), '+00:00', '-03:00'))
           AND i.deleted_at IS NULL
           AND c.deleted_at IS NULL
-          AND c.in_legal_process = 0
+          AND c.customer_status = 'normal'
       `),
       db.execute(sql`
         SELECT COUNT(*) as count, COALESCE(SUM(original_amount - COALESCE(paid_amount, 0)), 0) as total

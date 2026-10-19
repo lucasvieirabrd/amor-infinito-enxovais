@@ -40,6 +40,7 @@ interface SalesMetrics {
     totalReceivable: SalesSegment;
     overdue: SalesSegment;
     overdueInProcess: SalesSegment;
+    overdueInAgreement: SalesSegment;
     receivedThisMonth: { total: number; installmentsTotal: number; entriesTotal: number };
   };
   salesByDay: Array<{ day: string; total: number }>;
@@ -377,7 +378,7 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* ── Linha 2: Cards de Cobrança ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
 
             <Card>
               <div className="flex items-start gap-3">
@@ -423,6 +424,23 @@ export const Dashboard: React.FC = () => {
                   </p>
                   <p className="text-xs font-medium" style={{ color: '#7c3aed' }}>
                     {billing?.overdueInProcess.count ?? 0} parcelas vencidas
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg shrink-0" style={{ background: '#ccfbf1', color: '#0f766e' }}>
+                  🤝
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500 font-medium">🤝 Em Acordo</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1 break-words">
+                    {brl(billing?.overdueInAgreement?.total ?? 0)}
+                  </p>
+                  <p className="text-xs font-medium" style={{ color: '#0f766e' }}>
+                    {billing?.overdueInAgreement?.count ?? 0} parcelas vencidas
                   </p>
                 </div>
               </div>

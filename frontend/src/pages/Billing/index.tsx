@@ -26,7 +26,7 @@ interface BillingRecord {
   customerId: string;
   customerName: string;
   customerPhone: string;
-  inLegalProcess?: boolean;
+  customerStatus?: string;
   installmentNumber: number;
   dueDate: string;
   originalAmount: number;
@@ -43,7 +43,7 @@ interface CustomerGroup {
   customerId: string;
   customerName: string;
   customerPhone: string;
-  inLegalProcess?: boolean;
+  customerStatus?: string;
   installments: BillingRecord[];
   overdueCount: number;
   totalOverdue: number;
@@ -245,7 +245,7 @@ export const Billing: React.FC = () => {
           customerId: rec.customerId,
           customerName: rec.customerName,
           customerPhone: rec.customerPhone,
-          inLegalProcess: rec.inLegalProcess,
+          customerStatus: rec.customerStatus,
           installments: [],
           overdueCount: 0,
           totalOverdue: 0,
@@ -479,9 +479,14 @@ export const Billing: React.FC = () => {
                           <div>
                             <div className="flex items-center gap-2">
                               <h3 className="text-lg font-semibold text-gray-900">{group.customerName}</h3>
-                              {group.inLegalProcess && (
+                              {group.customerStatus === 'legal_process' && (
                                 <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title="Cliente em processo jurídico — cobrança automática bloqueada">
                                   ⚖️ Processo
+                                </span>
+                              )}
+                              {group.customerStatus === 'agreement' && (
+                                <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 border border-teal-200" title="Cliente em acordo — cobrança automática ativa">
+                                  🤝 Acordo
                                 </span>
                               )}
                             </div>

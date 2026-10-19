@@ -43,6 +43,7 @@ export const customers = mysqlTable('customers', {
   photoSize: int('photo_size'),
   photoUploadedAt: datetime('photo_uploaded_at'),
   birthDate: date('birth_date'),
+  customerStatus: varchar('customer_status', { length: 20 }).notNull().default('normal'),
   inLegalProcess: boolean('in_legal_process').notNull().default(false),
   legalProcessAt: datetime('legal_process_at'),
   legalProcessBy: varchar('legal_process_by', { length: 36 }),

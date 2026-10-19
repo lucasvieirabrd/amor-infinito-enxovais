@@ -180,27 +180,35 @@ export class CustomerService {
     return customerRepository.countMergeableRecords(duplicateId);
   }
 
-  async toggleLegalProcess(id: string, inLegalProcess: boolean, userId: string) {
+  async setCustomerStatus(id: string, status: 'normal' | 'legal_process' | 'agreement', userId: string) {
     const customer = await customerRepository.findById(id);
     if (!customer) throw new AppError('Cliente não encontrado', 404);
 
+    const oldStatus = (customer as any).customerStatus ?? (customer.inLegalProcess ? 'legal_process' : 'normal');
+
     const result = await customerRepository.update(id, {
-      inLegalProcess,
-      legalProcessAt: inLegalProcess ? new Date() : null,
-      legalProcessBy: inLegalProcess ? userId : null,
+      customerStatus: status,
+      // Keep in_legal_process in sync for backward compat until column is dropped
+      inLegalProcess: status === 'legal_process',
+      legalProcessAt: status !== 'normal' ? new Date() : null,
+      legalProcessBy: status !== 'normal' ? userId : null,
     });
 
     await db.insert(auditLogs).values({
       id: uuidv4(),
       userId,
-      action: inLegalProcess ? 'MARK_LEGAL_PROCESS' : 'UNMARK_LEGAL_PROCESS',
+      action: 'SET_CUSTOMER_STATUS',
       entityType: 'Customer',
       entityId: id,
-      oldValue: { inLegalProcess: !inLegalProcess },
-      newValue: { inLegalProcess },
+      oldValue: { customerStatus: oldStatus },
+      newValue: { customerStatus: status },
     });
 
     return result;
+  }
+
+  async toggleLegalProcess(id: string, inLegalProcess: boolean, userId: string) {
+    return this.setCustomerStatus(id, inLegalProcess ? 'legal_process' : 'normal', userId);
   }
 
   async mergeCustomers(primaryId: string, duplicateId: string, mergedData: any, userId: string) {
