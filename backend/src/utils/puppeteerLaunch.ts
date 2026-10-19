@@ -13,7 +13,6 @@ const CHROMIUM_ARGS = [
 export async function launchBrowser(): Promise<Browser> {
   return puppeteer.launch({
     headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
     args: CHROMIUM_ARGS,
   });
 }
