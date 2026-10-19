@@ -8,11 +8,12 @@ const CHROMIUM_ARGS = [
   '--no-first-run',
   '--no-zygote',
   '--single-process',
+  '--disable-dbus',
 ];
 
 export async function launchBrowser(): Promise<Browser> {
   return puppeteer.launch({
-    headless: true,
+    headless: 'shell',
     args: CHROMIUM_ARGS,
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
   });
