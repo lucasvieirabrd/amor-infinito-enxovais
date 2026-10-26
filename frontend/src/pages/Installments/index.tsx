@@ -118,6 +118,29 @@ export const Installments: React.FC = () => {
   const [receivablesYear,  setReceivablesYear]  = useState(nowForModal.getFullYear());
   const [isGeneratingReceivables, setIsGeneratingReceivables] = useState(false);
 
+  // Recibo de pagamento — set de ids carregando
+  const [receiptLoading, setReceiptLoading] = useState<Set<string>>(new Set());
+
+  const handleDownloadReceipt = async (instId: string) => {
+    setReceiptLoading(prev => new Set(prev).add(instId));
+    try {
+      const response = await api.get(`/installments/${instId}/receipt/pdf`, { responseType: 'blob' });
+      const disposition = response.headers['content-disposition'] ?? '';
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      const filename = match?.[1] ?? `recibo-${instId}.pdf`;
+      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Erro ao gerar recibo. Tente novamente.');
+    } finally {
+      setReceiptLoading(prev => { const s = new Set(prev); s.delete(instId); return s; });
+    }
+  };
+
   // Modal: renegociação de dívida
   const [isRenModalOpen, setIsRenModalOpen] = useState(false);
   const [renStep, setRenStep] = useState<1 | 2 | 3>(1);
@@ -903,6 +926,21 @@ export const Installments: React.FC = () => {
                                       >
                                         <FiDollarSign size={14} />
                                         Pagar
+                                      </Button>
+                                    )}
+                                    {inst.status === 'paid' && inst.saleReference?.startsWith('REN') && (
+                                      <Button
+                                        onClick={() => handleDownloadReceipt(inst.id)}
+                                        variant="secondary"
+                                        className="flex items-center gap-1 text-sm"
+                                        disabled={receiptLoading.has(inst.id)}
+                                      >
+                                        {receiptLoading.has(inst.id) ? (
+                                          <FiRefreshCw size={14} className="animate-spin" />
+                                        ) : (
+                                          <FiFileText size={14} />
+                                        )}
+                                        Recibo
                                       </Button>
                                     )}
                                     {inst.status === 'paid' && (

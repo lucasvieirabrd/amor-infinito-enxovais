@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { InstallmentService } from '../services/installment.service';
 import { z } from 'zod';
 import { generateReceivablesPdf } from '../services/receivablesPdf.service';
+import { generatePaymentReceiptPdf } from '../services/paymentReceipt.service';
 import { AppError } from '../utils/AppError';
 
 const installmentService = new InstallmentService();
@@ -182,6 +183,21 @@ export class InstallmentController {
 
     const pdf = await generateReceivablesPdf(month, year);
     const filename = `recebiveis-crediario-${year}-${String(month).padStart(2, '0')}.pdf`;
+
+    res.set({
+      'Content-Type':        'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length':      String(pdf.length),
+    });
+    res.end(pdf);
+  }
+
+  async getPaymentReceipt(req: Request, res: Response) {
+    const { id } = req.params;
+    const { pdf, customerName, installmentNumber, paymentDateSp } = await generatePaymentReceiptPdf(id);
+
+    const safeName = customerName.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '-').toLowerCase();
+    const filename = `recibo-${safeName}-parcela-${installmentNumber}-${paymentDateSp}.pdf`;
 
     res.set({
       'Content-Type':        'application/pdf',

@@ -29,6 +29,7 @@ installmentRouter.get('/customer/:customerId', installmentController.getByCustom
 installmentRouter.patch('/bulk-update-day', ensureAuthorized(['admin']), installmentController.bulkUpdateDay);
 
 // Operações por parcela
+installmentRouter.get('/:id/receipt/pdf', installmentController.getPaymentReceipt);
 installmentRouter.post('/:id/pay', installmentController.markAsPaid);
 installmentRouter.post('/:id/revert', ensureAuthorized(['admin']), installmentController.revertPayment);
 installmentRouter.put('/:id', ensureAuthorized(['admin']), installmentController.update);
