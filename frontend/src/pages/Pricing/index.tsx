@@ -206,6 +206,7 @@ export const Pricing: React.FC = () => {
               {unlockError && <p className="mt-1 text-xs text-red-600">{unlockError}</p>}
             </div>
             <button
+              type="button"
               onClick={handleUnlock}
               disabled={unlocking}
               className="w-full py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors"
@@ -271,6 +272,7 @@ export const Pricing: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-gray-800">Produtos</h2>
             <button
+              type="button"
               onClick={addItem}
               className="px-3 py-1.5 text-sm font-medium bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
             >
@@ -341,6 +343,7 @@ export const Pricing: React.FC = () => {
                 <div className="col-span-1 flex justify-center">
                   {items.length > 1 && (
                     <button
+                      type="button"
                       onClick={() => removeItem(item.id)}
                       className="text-red-400 hover:text-red-600 transition-colors p-1"
                     >
@@ -354,6 +357,7 @@ export const Pricing: React.FC = () => {
 
           <div className="mt-5 flex gap-3">
             <button
+              type="button"
               onClick={handleCalculate}
               disabled={calculating}
               className="px-6 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors"
@@ -370,6 +374,7 @@ export const Pricing: React.FC = () => {
               <h2 className="text-base font-semibold text-gray-800">Resultados</h2>
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={handleCopyWhatsApp}
                   className="px-3 py-1.5 text-sm font-medium bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
                 >
@@ -377,6 +382,7 @@ export const Pricing: React.FC = () => {
                 </button>
                 {!savedId ? (
                   <button
+                    type="button"
                     onClick={handleSave}
                     disabled={saving}
                     className="px-3 py-1.5 text-sm font-medium bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 disabled:opacity-60 transition-colors"
