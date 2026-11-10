@@ -99,7 +99,7 @@ export class PricingService {
     }>;
   }): Promise<string> {
     const valid = await this.validateCode(data.code);
-    if (!valid) throw new AppError('Código inválido', 401);
+    if (!valid) throw new AppError('Código inválido', 403);
 
     const historyId = uuidv4();
 

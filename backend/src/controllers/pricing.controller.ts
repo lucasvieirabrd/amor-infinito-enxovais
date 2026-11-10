@@ -46,7 +46,7 @@ export class PricingController {
   async validate(req: Request, res: Response) {
     const { code } = z.object({ code: z.string().min(1) }).parse(req.body);
     const valid = await pricingService.validateCode(code);
-    if (!valid) return res.status(401).json({ error: 'Código inválido' });
+    if (!valid) return res.status(403).json({ error: 'Código inválido' });
     const params = await pricingService.getParams();
     return res.json({ valid: true, params });
   }
@@ -59,7 +59,7 @@ export class PricingController {
     const { code, totalProducts, totalNf, freight, items, supplier, nfNumber } = parsed.data;
 
     const valid = await pricingService.validateCode(code);
-    if (!valid) return res.status(401).json({ error: 'Código inválido' });
+    if (!valid) return res.status(403).json({ error: 'Código inválido' });
 
     const params = await pricingService.getParams();
     const factor = calcFactor(totalProducts ?? null, totalNf ?? null, freight);
@@ -89,7 +89,7 @@ export class PricingController {
     const { code, totalProducts, totalNf, freight, items, supplier, nfNumber } = parsed.data;
 
     const valid = await pricingService.validateCode(code);
-    if (!valid) return res.status(401).json({ error: 'Código inválido' });
+    if (!valid) return res.status(403).json({ error: 'Código inválido' });
 
     const params = await pricingService.getParams();
     const factor = calcFactor(totalProducts ?? null, totalNf ?? null, freight);
@@ -134,10 +134,10 @@ export class PricingController {
 
   async getHistory(req: Request, res: Response) {
     const { code, search, from, to, limit, offset } = req.query as Record<string, string>;
-    if (!code) return res.status(401).json({ error: 'Código obrigatório' });
+    if (!code) return res.status(403).json({ error: 'Código obrigatório' });
 
     const valid = await pricingService.validateCode(code);
-    if (!valid) return res.status(401).json({ error: 'Código inválido' });
+    if (!valid) return res.status(403).json({ error: 'Código inválido' });
 
     const rows = await pricingService.getHistory({
       search,
@@ -152,10 +152,10 @@ export class PricingController {
   async getHistoryDetail(req: Request, res: Response) {
     const { id } = req.params;
     const { code } = req.query as { code: string };
-    if (!code) return res.status(401).json({ error: 'Código obrigatório' });
+    if (!code) return res.status(403).json({ error: 'Código obrigatório' });
 
     const valid = await pricingService.validateCode(code);
-    if (!valid) return res.status(401).json({ error: 'Código inválido' });
+    if (!valid) return res.status(403).json({ error: 'Código inválido' });
 
     const detail = await pricingService.getHistoryDetail(id);
     return res.json(detail);
@@ -168,7 +168,7 @@ export class PricingController {
     }
     const { code, params } = parsed.data;
     const valid = await pricingService.validateCode(code);
-    if (!valid) return res.status(401).json({ error: 'Código inválido' });
+    if (!valid) return res.status(403).json({ error: 'Código inválido' });
 
     await pricingService.updateParams(params as Partial<PricingParams>);
     return res.json({ success: true });
@@ -181,7 +181,7 @@ export class PricingController {
     }).parse(req.body);
 
     const valid = await pricingService.validateCode(currentCode);
-    if (!valid) return res.status(401).json({ error: 'Código atual inválido' });
+    if (!valid) return res.status(403).json({ error: 'Código atual inválido' });
 
     await pricingService.updateAccessCode(newCode);
     return res.json({ success: true });
