@@ -87,7 +87,7 @@ const TAB_OPTIONS = [
 export const Settings: React.FC = () => {
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers' | 'contacts' | 'usuarios' | 'feriados' | 'vend-ext' | 'agenda'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'notifications' | 'sellers' | 'contacts' | 'usuarios' | 'feriados' | 'vend-ext' | 'agenda' | 'precificacao'>('general');
   const [loading, setLoading] = useState(false);
   const [pixLoading, setPixLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -454,6 +454,59 @@ export const Settings: React.FC = () => {
     return `${d}/${m}/${y}`;
   };
 
+  // ─── Pricing params state ─────────────────────────────────────────────────
+
+  const [pricingCode, setPricingCode] = useState('');
+  const [pricingUnlocked, setPricingUnlocked] = useState(false);
+  const [pricingParams, setPricingParams] = useState<Record<string, number | boolean>>({});
+  const [pricingUnlocking, setPricingUnlocking] = useState(false);
+  const [pricingSaving, setPricingSaving] = useState(false);
+  const [newPricingCode, setNewPricingCode] = useState('');
+  const [changingCode, setChangingCode] = useState(false);
+
+  const handleUnlockPricing = async () => {
+    if (!pricingCode.trim()) return;
+    setPricingUnlocking(true);
+    try {
+      const res = await api.post('/pricing/validate', { code: pricingCode.trim() });
+      setPricingParams(res.data.params);
+      setPricingUnlocked(true);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error ?? 'Código inválido');
+    } finally {
+      setPricingUnlocking(false);
+    }
+  };
+
+  const handleSavePricingParams = async () => {
+    setPricingSaving(true);
+    try {
+      await api.patch('/pricing/params', { code: pricingCode.trim(), params: pricingParams });
+      toast.success('Parâmetros salvos!');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error ?? 'Erro ao salvar');
+    } finally {
+      setPricingSaving(false);
+    }
+  };
+
+  const handleChangePricingCode = async () => {
+    if (!newPricingCode.trim() || newPricingCode.trim().length < 4) {
+      toast.error('Novo código deve ter no mínimo 4 caracteres');
+      return;
+    }
+    setChangingCode(true);
+    try {
+      await api.patch('/pricing/access-code', { currentCode: pricingCode.trim(), newCode: newPricingCode.trim() });
+      toast.success('Código alterado! Novo código: ' + newPricingCode.trim().toUpperCase());
+      setNewPricingCode('');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error ?? 'Erro ao alterar código');
+    } finally {
+      setChangingCode(false);
+    }
+  };
+
   // ─── Sellers handlers ─────────────────────────────────────────────────────
 
   const loadSellers = async () => {
@@ -590,7 +643,8 @@ export const Settings: React.FC = () => {
             { key: 'usuarios', label: 'Usuários' },
             { key: 'feriados', label: 'Feriados' },
             { key: 'vend-ext', label: 'Vend. Externos' },
-            { key: 'agenda',   label: 'Agenda' },
+            { key: 'agenda',         label: 'Agenda' },
+            { key: 'precificacao',   label: 'Precificação' },
           ] as const
         ).map(tab => (
           <button
@@ -1550,6 +1604,92 @@ export const Settings: React.FC = () => {
               </div>
             )}
           </Card>
+        </div>
+      )}
+
+      {/* ── Precificação Tab ── */}
+      {activeTab === 'precificacao' && (
+        <div className="space-y-6">
+          {!pricingUnlocked ? (
+            <Card title="Parâmetros de Precificação" subtitle="Digite o código de acesso para editar">
+              <div className="max-w-sm space-y-4">
+                <Input
+                  label="Código de acesso"
+                  type="password"
+                  value={pricingCode}
+                  onChange={e => setPricingCode(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleUnlockPricing()}
+                  placeholder="Ex.: AIE-PRC-7X2K"
+                />
+                <Button variant="primary" loading={pricingUnlocking} onClick={handleUnlockPricing}>
+                  <FiKey size={16} className="mr-2" /> Desbloquear
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <>
+              <Card title="Parâmetros de Precificação" subtitle="Valores usados nas fórmulas da calculadora">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { key: 'imposto',                           label: 'Imposto (%)',                     pct: true },
+                    { key: 'comissao_vendedores_crediario',     label: 'Comissão Vendedores — Crediário (%)', pct: true },
+                    { key: 'comissao_marcelo_celita_crediario', label: 'Comissão Marcelo/Celita — Crediário (%)', pct: true },
+                    { key: 'comissao_vendedores_avista',        label: 'Comissão Vendedores — À Vista (%)',  pct: true },
+                    { key: 'comissao_marcelo_celita_avista',    label: 'Comissão Marcelo/Celita — À Vista (%)', pct: true },
+                    { key: 'custos_fixos',                      label: 'Custos Fixos (%)',                 pct: true },
+                    { key: 'calote',                            label: 'Calote / Inadimplência (%)',       pct: true },
+                    { key: 'multiplicador_crediario',           label: 'Multiplicador Crediário (×)',      pct: false },
+                    { key: 'lucro_desejado_avista_cartao',      label: 'Lucro Desejado À Vista/Cartão (%)', pct: true },
+                    { key: 'taxa_cartao_1x',                    label: 'Taxa Cartão 1× (%)',               pct: true },
+                    { key: 'taxa_cartao_parcelado',             label: 'Taxa Cartão Parcelado (%)',        pct: true },
+                  ].map(({ key, label, pct }) => (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                      <input
+                        type="number"
+                        step={pct ? '0.001' : '0.1'}
+                        min={0}
+                        value={pct ? (+(pricingParams[key] ?? 0) * 100).toFixed(1) : +(pricingParams[key] ?? 0)}
+                        onChange={e => {
+                          const v = parseFloat(e.target.value);
+                          setPricingParams(prev => ({ ...prev, [key]: pct ? v / 100 : v }));
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-3 pt-2">
+                    <label className="text-sm font-medium text-gray-700">Mostrar lucro para Marcelo</label>
+                    <button
+                      onClick={() => setPricingParams(prev => ({ ...prev, mostrar_lucro_para_marcelo: !prev.mostrar_lucro_para_marcelo }))}
+                      className={`p-1 rounded transition-colors ${pricingParams.mostrar_lucro_para_marcelo ? 'text-green-600' : 'text-gray-400'}`}
+                    >
+                      {pricingParams.mostrar_lucro_para_marcelo ? <FiToggleRight size={28} /> : <FiToggleLeft size={28} />}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-6 flex justify-end">
+                  <Button variant="primary" loading={pricingSaving} onClick={handleSavePricingParams}>
+                    <FiSave size={16} className="mr-2" /> Salvar Parâmetros
+                  </Button>
+                </div>
+              </Card>
+
+              <Card title="Alterar Código de Acesso" subtitle="Mude o código usado para acessar a calculadora">
+                <div className="max-w-sm space-y-4">
+                  <Input
+                    label="Novo código"
+                    value={newPricingCode}
+                    onChange={e => setNewPricingCode(e.target.value.toUpperCase())}
+                    placeholder="Mínimo 4 caracteres"
+                  />
+                  <Button variant="secondary" loading={changingCode} onClick={handleChangePricingCode}>
+                    <FiLock size={16} className="mr-2" /> Alterar Código
+                  </Button>
+                </div>
+              </Card>
+            </>
+          )}
         </div>
       )}
 

@@ -23,6 +23,7 @@ import { holidayRouter } from './holiday.routes';
 import { externalSellerRouter } from './external-seller.routes';
 import { orderFormRouter } from './order-form.routes';
 import { deliveryScheduleRouter } from './delivery-schedule.routes';
+import { pricingRouter } from './pricing.routes';
 
 const routes = Router();
 
@@ -50,5 +51,6 @@ routes.use('/holidays', holidayRouter);
 routes.use('/external-sellers',   externalSellerRouter);
 routes.use('/order-form',         orderFormRouter);
 routes.use('/delivery-schedule',  deliveryScheduleRouter);
+routes.use('/pricing',            pricingRouter);
 
 export { routes };

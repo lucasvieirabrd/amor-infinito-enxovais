@@ -100,6 +100,56 @@ const migrations: { name: string; sql: string }[] = [
     name: '0010_add_sticker_type_to_messages',
     sql: `ALTER TABLE messages MODIFY COLUMN type ENUM('text','template','image','audio','video','document','unknown','unsupported','sticker') NOT NULL DEFAULT 'text'`,
   },
+  {
+    name: '0011_create_pricing_history',
+    sql: `CREATE TABLE IF NOT EXISTS pricing_history (
+      id VARCHAR(36) NOT NULL PRIMARY KEY,
+      supplier VARCHAR(255),
+      nf_number VARCHAR(100),
+      total_products DECIMAL(12,2),
+      total_nf DECIMAL(12,2),
+      freight DECIMAL(12,2) NOT NULL DEFAULT 0,
+      factor DECIMAL(10,6),
+      params_snapshot JSON NOT NULL,
+      created_by VARCHAR(36),
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  },
+  {
+    name: '0012_create_pricing_history_items',
+    sql: `CREATE TABLE IF NOT EXISTS pricing_history_items (
+      id VARCHAR(36) NOT NULL PRIMARY KEY,
+      history_id VARCHAR(36) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      unit_cost DECIMAL(12,2) NOT NULL,
+      assembly DECIMAL(12,2) NOT NULL DEFAULT 0,
+      installments_count INT NOT NULL DEFAULT 10,
+      real_cost DECIMAL(12,2) NOT NULL,
+      price_credit DECIMAL(12,2) NOT NULL,
+      price_cash DECIMAL(12,2) NOT NULL,
+      price_card_1x DECIMAL(12,2) NOT NULL,
+      price_card_10x DECIMAL(12,2) NOT NULL,
+      profit_credit DECIMAL(12,2),
+      profit_cash DECIMAL(12,2),
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  },
+  {
+    name: '0013_seed_pricing_params',
+    sql: `INSERT INTO settings (id, \`key\`, value, description)
+      SELECT UUID(), 'pricing_params',
+        '{"imposto":0.083,"comissao_vendedores_crediario":0.05,"comissao_marcelo_celita_crediario":0.05,"comissao_vendedores_avista":0.05,"comissao_marcelo_celita_avista":0.05,"custos_fixos":0.20,"calote":0.05,"multiplicador_crediario":3,"lucro_desejado_avista_cartao":0.20,"taxa_cartao_1x":0.03,"taxa_cartao_parcelado":0.10,"mostrar_lucro_para_marcelo":true}',
+        'Parâmetros de precificação'
+      FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM settings WHERE \`key\` = 'pricing_params')`,
+  },
+  {
+    name: '0014_seed_pricing_access_code',
+    sql: `INSERT INTO settings (id, \`key\`, value, description)
+      SELECT UUID(), 'pricing_access_code', 'AIE-PRC-7X2K', 'Código de acesso à calculadora de precificação'
+      FROM DUAL
+      WHERE NOT EXISTS (SELECT 1 FROM settings WHERE \`key\` = 'pricing_access_code')`,
+  },
 ];
 
 async function run() {
