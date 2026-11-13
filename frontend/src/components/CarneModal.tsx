@@ -9,6 +9,8 @@ interface CarneModalProps {
   customerName: string;
   installmentsCount: number;
   onClose: () => void;
+  paymentMethod?: 'cash' | 'credit_card' | 'installment';
+  cardInstallmentsCount?: number;
 }
 
 async function fetchCarnePdf(saleId: string): Promise<Blob> {
@@ -23,7 +25,10 @@ export const CarneModal: React.FC<CarneModalProps> = ({
   customerName,
   installmentsCount,
   onClose,
+  paymentMethod = 'installment',
+  cardInstallmentsCount,
 }) => {
+  const isInstallment = paymentMethod === 'installment';
   const [loading, setLoading] = useState<'download' | 'print' | 'instrumento' | 'ordem' | null>(null);
 
   const handleDownload = async () => {
@@ -97,34 +102,43 @@ export const CarneModal: React.FC<CarneModalProps> = ({
         {/* Info */}
         <div className="text-sm text-gray-600 text-center space-y-0.5">
           <p><span className="font-semibold text-gray-800">Cliente:</span> {customerName}</p>
-          <p><span className="font-semibold text-gray-800">Parcelas:</span> {installmentsCount}x</p>
+          {isInstallment && (
+            <p><span className="font-semibold text-gray-800">Parcelas:</span> {installmentsCount}x</p>
+          )}
+          {paymentMethod === 'credit_card' && cardInstallmentsCount && cardInstallmentsCount > 1 && (
+            <p><span className="font-semibold text-gray-800">Cartão:</span> {cardInstallmentsCount}×</p>
+          )}
         </div>
 
         {/* Botões */}
         <div className="w-full space-y-3">
-          <button
-            onClick={handleDownload}
-            disabled={loading !== null}
-            className="w-full py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-semibold text-sm transition-colors"
-          >
-            {loading === 'download' ? 'Gerando PDF...' : '⬇ Baixar Carnê (PDF)'}
-          </button>
+          {isInstallment && (
+            <>
+              <button
+                onClick={handleDownload}
+                disabled={loading !== null}
+                className="w-full py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white font-semibold text-sm transition-colors"
+              >
+                {loading === 'download' ? 'Gerando PDF...' : '⬇ Baixar Carnê (PDF)'}
+              </button>
 
-          <button
-            onClick={handlePrint}
-            disabled={loading !== null}
-            className="w-full py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 text-gray-700 font-semibold text-sm transition-colors"
-          >
-            {loading === 'print' ? 'Abrindo...' : '🖨 Imprimir Carnê'}
-          </button>
+              <button
+                onClick={handlePrint}
+                disabled={loading !== null}
+                className="w-full py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 text-gray-700 font-semibold text-sm transition-colors"
+              >
+                {loading === 'print' ? 'Abrindo...' : '🖨 Imprimir Carnê'}
+              </button>
 
-          <button
-            onClick={handleInstrumento}
-            disabled={loading !== null}
-            className="w-full py-2.5 rounded-lg border border-blue-300 hover:bg-blue-50 disabled:opacity-50 text-blue-700 font-semibold text-sm transition-colors"
-          >
-            {loading === 'instrumento' ? 'Gerando...' : '📄 Imprimir Instrumento'}
-          </button>
+              <button
+                onClick={handleInstrumento}
+                disabled={loading !== null}
+                className="w-full py-2.5 rounded-lg border border-blue-300 hover:bg-blue-50 disabled:opacity-50 text-blue-700 font-semibold text-sm transition-colors"
+              >
+                {loading === 'instrumento' ? 'Gerando...' : '📄 Imprimir Instrumento'}
+              </button>
+            </>
+          )}
 
           <button
             onClick={handleOrdem}
@@ -138,7 +152,7 @@ export const CarneModal: React.FC<CarneModalProps> = ({
             onClick={onClose}
             className="w-full py-1.5 text-sm text-gray-400 hover:text-gray-600 underline transition-colors"
           >
-            Pular — gerar depois na tela da venda
+            {isInstallment ? 'Pular — gerar depois na tela da venda' : 'Nova Venda'}
           </button>
         </div>
       </div>

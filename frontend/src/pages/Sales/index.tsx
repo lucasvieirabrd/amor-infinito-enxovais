@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import {
   FiSearch, FiUser, FiShoppingCart, FiPlus, FiMinus,
-  FiTrash2, FiCreditCard, FiDollarSign, FiCalendar, FiCheckCircle, FiX, FiPrinter
+  FiTrash2, FiCreditCard, FiDollarSign, FiCalendar, FiX
 } from 'react-icons/fi';
 import { Button, Input, Card, Badge, Modal, Loading } from '../../components/ui';
 import { CarneModal } from '../../components/CarneModal';
@@ -83,14 +83,13 @@ export const Sales: React.FC = () => {
   const [firstDueDate, setFirstDueDate] = useState(format(addMonths(new Date(), 1), 'yyyy-MM-dd'));
   const [downPayment, setDownPayment] = useState(0);
   const [downPaymentDate, setDownPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [lastSale, setLastSale] = useState<{ saleId: string; saleNumber: string } | null>(null);
-  const [ordemLoading, setOrdemLoading] = useState(false);
-  const [carneModal, setCarneModal] = useState<{
+  const [successModal, setSuccessModal] = useState<{
     saleId: string;
     saleNumber: string;
     customerName: string;
     installmentsCount: number;
+    paymentMethod: 'cash' | 'credit_card' | 'installment';
+    cardInstallmentsCount?: number;
   } | null>(null);
 
   const queryClient = useQueryClient();
@@ -188,17 +187,14 @@ export const Sales: React.FC = () => {
     onSuccess: (response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       const { saleId, saleNumber } = response.data;
-      setLastSale({ saleId, saleNumber });
-      if (variables.paymentMethod === 'installment') {
-        setCarneModal({
-          saleId,
-          saleNumber,
-          customerName: selectedCustomer?.name ?? '',
-          installmentsCount: variables.installmentsCount ?? 1,
-        });
-      } else {
-        setIsSuccess(true);
-      }
+      setSuccessModal({
+        saleId,
+        saleNumber,
+        customerName: selectedCustomer?.name ?? '',
+        installmentsCount: variables.paymentMethod === 'installment' ? (variables.installmentsCount ?? 1) : 1,
+        paymentMethod: variables.paymentMethod,
+        cardInstallmentsCount: variables.paymentMethod === 'credit_card' ? variables.installmentsCount : undefined,
+      });
       setCart([]);
       setSelectedCustomer(null);
       setSelectedSellerId('');
@@ -207,23 +203,6 @@ export const Sales: React.FC = () => {
       alert(err.response?.data?.message || 'Erro ao registrar venda');
     }
   });
-
-  const downloadOrdem = async (saleId: string, saleNumber: string) => {
-    setOrdemLoading(true);
-    try {
-      const response = await api.get(`/sales/${saleId}/ordem`, { responseType: 'blob' });
-      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ordem-${saleNumber}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      alert('Erro ao gerar ordem de venda.');
-    } finally {
-      setOrdemLoading(false);
-    }
-  };
 
   const handleFinishSale = () => {
     if (!selectedCustomer) return alert('Selecione um cliente!');
@@ -252,52 +231,19 @@ export const Sales: React.FC = () => {
     registerSaleMutation.mutate(saleData);
   };
 
-  if (carneModal) {
+  if (successModal) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
         <CarneModal
           isOpen={true}
-          saleId={carneModal.saleId}
-          saleNumber={carneModal.saleNumber}
-          customerName={carneModal.customerName}
-          installmentsCount={carneModal.installmentsCount}
-          onClose={() => { setCarneModal(null); setIsSuccess(true); }}
+          saleId={successModal.saleId}
+          saleNumber={successModal.saleNumber}
+          customerName={successModal.customerName}
+          installmentsCount={successModal.installmentsCount}
+          paymentMethod={successModal.paymentMethod}
+          cardInstallmentsCount={successModal.cardInstallmentsCount}
+          onClose={() => setSuccessModal(null)}
         />
-      </div>
-    );
-  }
-
-  if (isSuccess) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 space-y-6">
-        <div className="p-4 bg-success bg-opacity-10 rounded-full">
-          <FiCheckCircle className="text-success" size={64} />
-        </div>
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900">Venda Realizada!</h2>
-          <p className="text-gray-600 mt-2">O estoque foi atualizado e as parcelas geradas (se crediário).</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3">
-          {lastSale && (
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => downloadOrdem(lastSale.saleId, lastSale.saleNumber)}
-              loading={ordemLoading}
-              disabled={ordemLoading}
-            >
-              <FiPrinter className="mr-2" size={18} />
-              Imprimir Ordem de Venda
-            </Button>
-          )}
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={() => { setIsSuccess(false); setLastSale(null); }}
-          >
-            Nova Venda
-          </Button>
-        </div>
       </div>
     );
   }
