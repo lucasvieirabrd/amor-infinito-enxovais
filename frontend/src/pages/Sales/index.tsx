@@ -45,14 +45,20 @@ interface CartItem {
 function getAutoPrice(
   product: Product,
   method: 'cash' | 'credit_card' | 'installment',
+  cardInstallments = 1,
 ): { price: number; noPrice: boolean } {
   if (method === 'cash') {
     if (product.priceCash != null) return { price: parseFloat(product.priceCash.toString()), noPrice: false };
     return { price: 0, noPrice: true };
   }
   if (method === 'credit_card') {
-    if (product.priceCard1x != null) return { price: parseFloat(product.priceCard1x.toString()), noPrice: false };
-    return { price: 0, noPrice: true };
+    if (cardInstallments <= 1) {
+      if (product.priceCard1x != null) return { price: parseFloat(product.priceCard1x.toString()), noPrice: false };
+      return { price: 0, noPrice: true };
+    } else {
+      if (product.priceCardInstallment != null) return { price: parseFloat(product.priceCardInstallment.toString()), noPrice: false };
+      return { price: 0, noPrice: true };
+    }
   }
   // crediário → usa price padrão (sempre disponível)
   return { price: parseFloat(product.price.toString()), noPrice: false };
@@ -60,7 +66,7 @@ function getAutoPrice(
 
 const METHOD_LABEL: Record<string, string> = {
   cash: 'à vista',
-  credit_card: 'cartão 1×',
+  credit_card: 'cartão',
   installment: 'crediário',
 };
 
@@ -73,6 +79,7 @@ export const Sales: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit_card' | 'installment'>('cash');
   const [installmentsCount, setInstallmentsCount] = useState(1);
+  const [cardInstallmentsCount, setCardInstallmentsCount] = useState(1);
   const [firstDueDate, setFirstDueDate] = useState(format(addMonths(new Date(), 1), 'yyyy-MM-dd'));
   const [downPayment, setDownPayment] = useState(0);
   const [downPaymentDate, setDownPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -132,7 +139,7 @@ export const Sales: React.FC = () => {
         alert('Produto sem estoque!');
         return;
       }
-      const { price, noPrice } = getAutoPrice(product, paymentMethod);
+      const { price, noPrice } = getAutoPrice(product, paymentMethod, cardInstallmentsCount);
       setCart([...cart, { product, quantity: 1, editedPrice: price, noPriceForMethod: noPrice }]);
     }
     setProductSearch('');
@@ -141,10 +148,10 @@ export const Sales: React.FC = () => {
   useEffect(() => {
     if (cart.length === 0) return;
     setCart(prev => prev.map(item => {
-      const { price, noPrice } = getAutoPrice(item.product, paymentMethod);
+      const { price, noPrice } = getAutoPrice(item.product, paymentMethod, cardInstallmentsCount);
       return { ...item, editedPrice: price, noPriceForMethod: noPrice };
     }));
-  }, [paymentMethod]);
+  }, [paymentMethod, cardInstallmentsCount]);
 
   const updatePrice = (productId: string, price: number) => {
     setCart(prev => prev.map(item =>
@@ -210,7 +217,11 @@ export const Sales: React.FC = () => {
         quantity: item.quantity,
         unitPrice: item.editedPrice,
       })),
-      installmentsCount: paymentMethod === 'installment' ? installmentsCount : undefined,
+      installmentsCount: paymentMethod === 'installment'
+        ? installmentsCount
+        : paymentMethod === 'credit_card'
+          ? cardInstallmentsCount
+          : undefined,
       saleDate: new Date().toISOString(),
       downPayment: paymentMethod === 'installment' ? downPayment : 0,
       downPaymentDate: paymentMethod === 'installment' && downPayment > 0 ? downPaymentDate : undefined,
@@ -396,9 +407,12 @@ export const Sales: React.FC = () => {
                   </div>
                 ) : (
                   cart.map(item => {
-                    const { price: autoPrice, noPrice } = getAutoPrice(item.product, paymentMethod);
+                    const { price: autoPrice, noPrice } = getAutoPrice(item.product, paymentMethod, cardInstallmentsCount);
                     const refPrice = noPrice ? parseFloat(item.product.price.toString()) : autoPrice;
                     const priceChanged = item.editedPrice > 0 && !item.noPriceForMethod && Math.abs(item.editedPrice - refPrice) > 0.001;
+                    const cardMethodLabel = paymentMethod === 'credit_card'
+                      ? (cardInstallmentsCount <= 1 ? 'cartão 1×' : `cartão ${cardInstallmentsCount}×`)
+                      : METHOD_LABEL[paymentMethod];
                     const priceInvalid = !item.editedPrice || item.editedPrice <= 0;
                     return (
                       <div key={item.product.id} className="flex items-center justify-between p-3 bg-background rounded-lg border border-gray-200 hover:border-primary transition-colors">
@@ -430,13 +444,16 @@ export const Sales: React.FC = () => {
                             />
                             <span className="text-xs text-gray-400">/ un</span>
                             {priceInvalid && item.noPriceForMethod && (
-                              <span className="text-xs text-orange-600 font-medium">sem preço {METHOD_LABEL[paymentMethod]} cadastrado</span>
+                              <span className="text-xs text-orange-600 font-medium">sem preço {cardMethodLabel} cadastrado</span>
                             )}
                             {priceInvalid && !item.noPriceForMethod && (
                               <span className="text-xs text-red-600 font-medium">obrigatório</span>
                             )}
                             {priceChanged && !priceInvalid && (
                               <span className="text-[10px] bg-orange-100 text-orange-700 rounded px-1 py-0.5 font-medium">promo</span>
+                            )}
+                            {paymentMethod === 'credit_card' && cardInstallmentsCount > 1 && !priceInvalid && (
+                              <span className="text-[10px] text-blue-600 font-medium">{cardInstallmentsCount}× de R$ {(item.editedPrice / cardInstallmentsCount).toFixed(2)}</span>
                             )}
                           </div>
                         </div>
@@ -515,6 +532,35 @@ export const Sales: React.FC = () => {
                   <span className="text-[10px] font-bold uppercase">Crediário</span>
                 </button>
               </div>
+
+              {paymentMethod === 'credit_card' && (
+                <div className="space-y-4 p-4 bg-background rounded-lg border border-gray-200">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">Parcelas</label>
+                    <select
+                      value={cardInstallmentsCount}
+                      onChange={e => setCardInstallmentsCount(Number(e.target.value))}
+                      className="input-base w-full"
+                    >
+                      {Array.from({length: 12}, (_, i) => i + 1).map(n => (
+                        <option key={n} value={n}>{n}× {n === 1 ? '(à vista)' : '(parcelado)'}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {cardInstallmentsCount > 1 && (
+                    <div className="pt-3 border-t border-gray-200 space-y-2">
+                      <div className="flex justify-between text-xs text-gray-600">
+                        <span>Total:</span>
+                        <span className="font-semibold">R$ {total.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-bold text-primary pt-2 border-t border-gray-200">
+                        <span>Valor da Parcela:</span>
+                        <span>{cardInstallmentsCount}× de R$ {(total / cardInstallmentsCount).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {paymentMethod === 'installment' && (
                 <div className="space-y-4 p-4 bg-background rounded-lg border border-gray-200">
