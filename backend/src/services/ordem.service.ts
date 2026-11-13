@@ -197,7 +197,13 @@ function buildOrdemHtml(data: Awaited<ReturnType<typeof getOrdemData>>): string 
   } else if (sale.paymentMethod === 'cash') {
     parcelamentoInfo = 'À vista';
   } else if (sale.paymentMethod === 'credit_card') {
-    parcelamentoInfo = 'Cartão de crédito';
+    const cardCount = sale.installmentsCount ?? 1;
+    if (cardCount <= 1) {
+      parcelamentoInfo = 'Cartão de crédito — à vista (1×)';
+    } else {
+      const instValue = brl(Number(sale.totalAmount) / cardCount);
+      parcelamentoInfo = `Cartão de crédito — ${cardCount}× de ${instValue}`;
+    }
   }
 
   const instCells: string[] = [];
