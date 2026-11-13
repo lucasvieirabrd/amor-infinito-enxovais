@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import {
   FiSearch, FiUser, FiShoppingCart, FiPlus, FiMinus,
-  FiTrash2, FiCreditCard, FiDollarSign, FiCalendar, FiCheckCircle, FiX
+  FiTrash2, FiCreditCard, FiDollarSign, FiCalendar, FiCheckCircle, FiX, FiPrinter
 } from 'react-icons/fi';
 import { Button, Input, Card, Badge, Modal, Loading } from '../../components/ui';
 import { CarneModal } from '../../components/CarneModal';
@@ -84,6 +84,8 @@ export const Sales: React.FC = () => {
   const [downPayment, setDownPayment] = useState(0);
   const [downPaymentDate, setDownPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isSuccess, setIsSuccess] = useState(false);
+  const [lastSale, setLastSale] = useState<{ saleId: string; saleNumber: string } | null>(null);
+  const [ordemLoading, setOrdemLoading] = useState(false);
   const [carneModal, setCarneModal] = useState<{
     saleId: string;
     saleNumber: string;
@@ -186,6 +188,7 @@ export const Sales: React.FC = () => {
     onSuccess: (response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       const { saleId, saleNumber } = response.data;
+      setLastSale({ saleId, saleNumber });
       if (variables.paymentMethod === 'installment') {
         setCarneModal({
           saleId,
@@ -204,6 +207,23 @@ export const Sales: React.FC = () => {
       alert(err.response?.data?.message || 'Erro ao registrar venda');
     }
   });
+
+  const downloadOrdem = async (saleId: string, saleNumber: string) => {
+    setOrdemLoading(true);
+    try {
+      const response = await api.get(`/sales/${saleId}/ordem`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ordem-${saleNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Erro ao gerar ordem de venda.');
+    } finally {
+      setOrdemLoading(false);
+    }
+  };
 
   const handleFinishSale = () => {
     if (!selectedCustomer) return alert('Selecione um cliente!');
@@ -257,13 +277,27 @@ export const Sales: React.FC = () => {
           <h2 className="text-3xl font-bold text-gray-900">Venda Realizada!</h2>
           <p className="text-gray-600 mt-2">O estoque foi atualizado e as parcelas geradas (se crediário).</p>
         </div>
-        <Button 
-          variant="primary"
-          size="lg"
-          onClick={() => setIsSuccess(false)}
-        >
-          Nova Venda
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          {lastSale && (
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => downloadOrdem(lastSale.saleId, lastSale.saleNumber)}
+              loading={ordemLoading}
+              disabled={ordemLoading}
+            >
+              <FiPrinter className="mr-2" size={18} />
+              Imprimir Ordem de Venda
+            </Button>
+          )}
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={() => { setIsSuccess(false); setLastSale(null); }}
+          >
+            Nova Venda
+          </Button>
+        </div>
       </div>
     );
   }
