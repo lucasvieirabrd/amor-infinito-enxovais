@@ -153,6 +153,9 @@ export class ProductService {
             sku,
             name: sp.name,
             price: sp.price,
+            priceCash: sp.priceCash ?? null,
+            priceCard1x: sp.priceCard1x ?? null,
+            priceCardInstallment: sp.priceCardInstallment ?? null,
             quantity: sp.quantity,
             category: sp.category || null,
             description: sp.description || null,
@@ -163,6 +166,9 @@ export class ProductService {
           await productRepository.update(found.id, {
             name: sp.name,
             price: sp.price,
+            priceCash: sp.priceCash ?? null,
+            priceCard1x: sp.priceCard1x ?? null,
+            priceCardInstallment: sp.priceCardInstallment ?? null,
             quantity: sp.quantity,
             category: sp.category || null,
             description: sp.description || null,
@@ -182,16 +188,25 @@ export class ProductService {
         } else {
           // Produto ativo — atualiza apenas se houver diferença
           const localPrice = typeof found.price === 'string' ? parseFloat(found.price) : (found.price as number);
+          const localPriceCash = found.priceCash != null ? parseFloat(found.priceCash as string) : null;
+          const localPriceCard1x = found.priceCard1x != null ? parseFloat(found.priceCard1x as string) : null;
+          const localPriceCardInst = found.priceCardInstallment != null ? parseFloat(found.priceCardInstallment as string) : null;
           if (
             found.quantity !== sp.quantity ||
             localPrice !== sp.price ||
             found.name !== sp.name ||
             found.category !== (sp.category || null) ||
-            found.description !== (sp.description || null)
+            found.description !== (sp.description || null) ||
+            localPriceCash !== sp.priceCash ||
+            localPriceCard1x !== sp.priceCard1x ||
+            localPriceCardInst !== sp.priceCardInstallment
           ) {
             await productRepository.update(found.id, {
               name: sp.name,
               price: sp.price,
+              priceCash: sp.priceCash ?? null,
+              priceCard1x: sp.priceCard1x ?? null,
+              priceCardInstallment: sp.priceCardInstallment ?? null,
               quantity: sp.quantity,
               category: sp.category || null,
               description: sp.description || null,

@@ -150,6 +150,18 @@ const migrations: { name: string; sql: string }[] = [
       FROM DUAL
       WHERE NOT EXISTS (SELECT 1 FROM settings WHERE \`key\` = 'pricing_access_code')`,
   },
+  {
+    name: '0015a_add_products_price_cash',
+    sql: `ALTER TABLE products ADD COLUMN price_cash DECIMAL(10,2) NULL`,
+  },
+  {
+    name: '0015b_add_products_price_card_1x',
+    sql: `ALTER TABLE products ADD COLUMN price_card_1x DECIMAL(10,2) NULL`,
+  },
+  {
+    name: '0015c_add_products_price_card_installment',
+    sql: `ALTER TABLE products ADD COLUMN price_card_installment DECIMAL(10,2) NULL`,
+  },
 ];
 
 async function run() {

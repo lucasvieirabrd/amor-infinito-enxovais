@@ -3,6 +3,14 @@ import { AppError } from '../utils/AppError';
 import dotenv from 'dotenv';
 dotenv.config();
 
+function parseSimplePrice(raw: any): number | null {
+  if (raw == null) return null;
+  const s = raw.toString().trim();
+  if (!s) return null;
+  const n = parseFloat(s.replace(/R\$\s*/g, '').replace(/\./g, '').replace(',', '.'));
+  return isNaN(n) ? null : n;
+}
+
 export class GoogleSheetsService {
   private auth: any;
   private sheets: any;
@@ -35,7 +43,10 @@ export class GoogleSheetsService {
     console.log('Google Sheets API client initialized.');
   }
 
-  async getProductsFromSheet(range = 'Página1!A2:H') {
+  // Colunas da planilha (A=0 … K=10):
+  // A=SKU, B=Nome, C=Categoria, D=Descrição, E=Especificações, F=ImageUrl,
+  // G=Preço Crediario, H=Preço À Vista, I=Preço Cartão 1x, J=Preço Cartão 12x, K=Quantidade
+  async getProductsFromSheet(range = 'Página1!A2:K') {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -46,6 +57,7 @@ export class GoogleSheetsService {
         return [];
       }
       return rows.map((row: any[]) => {
+        // Preço Crediario (col G, index 6) — mantém parse com suporte a "10x R$..."
         const priceRaw = row[6] ? row[6].toString().trim() : '0';
         const matchParcel = priceRaw.match(/(\d+)x\s*R\$\s*([\d.,]+)/i);
         const price = matchParcel
@@ -62,7 +74,10 @@ export class GoogleSheetsService {
           imageUrl: row[5] || '',
           price,
           priceDisplay,
-          quantity: row[7] ? parseInt(row[7].toString(), 10) : 0,
+          priceCash: parseSimplePrice(row[7]),           // col H
+          priceCard1x: parseSimplePrice(row[8]),          // col I
+          priceCardInstallment: parseSimplePrice(row[9]), // col J
+          quantity: row[10] ? parseInt(row[10].toString(), 10) : 0, // col K
         };
       });
     } catch (error: any) {
@@ -82,7 +97,7 @@ export class GoogleSheetsService {
       const rowIndex = rows.findIndex((row: any[]) => row[0] === sku);
       if (rowIndex === -1) return;
       const actualRow = rowIndex + 2;
-      const updateRange = 'Página1!H' + actualRow;
+      const updateRange = 'Página1!K' + actualRow; // Quantidade agora na coluna K
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
         range: updateRange,
@@ -100,7 +115,7 @@ export class GoogleSheetsService {
     try {
       await this.sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: 'Página1!A2:H',
+        range: 'Página1!A2:K',
         valueInputOption: 'RAW',
         requestBody: {
           values: [[
@@ -110,8 +125,11 @@ export class GoogleSheetsService {
             product.description || '',
             product.specifications || '',
             product.imageUrl || '',
-            product.price,
-            product.quantity,
+            product.price,   // col G: Preço Crediario
+            '',              // col H: Preço À Vista (preenchido via calculadora)
+            '',              // col I: Preço Cartão 1x
+            '',              // col J: Preço Cartão 12x
+            product.quantity,// col K: Quantidade
           ]],
         },
       });

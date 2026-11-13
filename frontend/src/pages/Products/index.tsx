@@ -15,6 +15,9 @@ interface Product {
   category: string | null;
   price: string | number;
   priceDisplay?: string;
+  priceCash?: string | number | null;
+  priceCard1x?: string | number | null;
+  priceCardInstallment?: string | number | null;
   quantity: number;
   minStockLevel: number;
   isKit: boolean;
@@ -500,11 +503,29 @@ export const Products: React.FC = () => {
 
                   <div className="space-y-2 mb-4">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Preço:</span>
+                      <span className="text-sm text-gray-600">Crediário:</span>
                       <span className="font-semibold text-gray-900">
                         {product.priceDisplay || `R$ ${parseFloat(product.price.toString()).toFixed(2)}`}
                       </span>
                     </div>
+                    {product.priceCash != null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">À Vista:</span>
+                        <span className="text-sm font-medium text-green-700">R$ {parseFloat(product.priceCash.toString()).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {product.priceCard1x != null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">Cartão 1×:</span>
+                        <span className="text-sm font-medium text-gray-700">R$ {parseFloat(product.priceCard1x.toString()).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {product.priceCardInstallment != null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">Cartão 12×:</span>
+                        <span className="text-sm font-medium text-gray-700">R$ {parseFloat(product.priceCardInstallment.toString()).toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Estoque:</span>
                       <Badge

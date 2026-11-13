@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
@@ -28,6 +28,9 @@ interface Product {
   description?: string | null;
   price: string | number;
   priceDisplay?: string;
+  priceCash?: string | number | null;
+  priceCard1x?: string | number | null;
+  priceCardInstallment?: string | number | null;
   quantity: number;
   isKit?: boolean;
 }
@@ -36,7 +39,30 @@ interface CartItem {
   product: Product;
   quantity: number;
   editedPrice: number;
+  noPriceForMethod?: boolean;
 }
+
+function getAutoPrice(
+  product: Product,
+  method: 'cash' | 'credit_card' | 'installment',
+): { price: number; noPrice: boolean } {
+  if (method === 'cash') {
+    if (product.priceCash != null) return { price: parseFloat(product.priceCash.toString()), noPrice: false };
+    return { price: 0, noPrice: true };
+  }
+  if (method === 'credit_card') {
+    if (product.priceCard1x != null) return { price: parseFloat(product.priceCard1x.toString()), noPrice: false };
+    return { price: 0, noPrice: true };
+  }
+  // crediário → usa price padrão (sempre disponível)
+  return { price: parseFloat(product.price.toString()), noPrice: false };
+}
+
+const METHOD_LABEL: Record<string, string> = {
+  cash: 'à vista',
+  credit_card: 'cartão 1×',
+  installment: 'crediário',
+};
 
 export const Sales: React.FC = () => {
   const navigate = useNavigate();
@@ -106,14 +132,23 @@ export const Sales: React.FC = () => {
         alert('Produto sem estoque!');
         return;
       }
-      setCart([...cart, { product, quantity: 1, editedPrice: parseFloat(product.price.toString()) }]);
+      const { price, noPrice } = getAutoPrice(product, paymentMethod);
+      setCart([...cart, { product, quantity: 1, editedPrice: price, noPriceForMethod: noPrice }]);
     }
     setProductSearch('');
   };
 
+  useEffect(() => {
+    if (cart.length === 0) return;
+    setCart(prev => prev.map(item => {
+      const { price, noPrice } = getAutoPrice(item.product, paymentMethod);
+      return { ...item, editedPrice: price, noPriceForMethod: noPrice };
+    }));
+  }, [paymentMethod]);
+
   const updatePrice = (productId: string, price: number) => {
     setCart(prev => prev.map(item =>
-      item.product.id === productId ? { ...item, editedPrice: price } : item
+      item.product.id === productId ? { ...item, editedPrice: price, noPriceForMethod: false } : item
     ));
   };
 
@@ -361,8 +396,9 @@ export const Sales: React.FC = () => {
                   </div>
                 ) : (
                   cart.map(item => {
-                    const catalogPrice = parseFloat(item.product.price.toString());
-                    const priceChanged = item.editedPrice > 0 && Math.abs(item.editedPrice - catalogPrice) > 0.001;
+                    const { price: autoPrice, noPrice } = getAutoPrice(item.product, paymentMethod);
+                    const refPrice = noPrice ? parseFloat(item.product.price.toString()) : autoPrice;
+                    const priceChanged = item.editedPrice > 0 && !item.noPriceForMethod && Math.abs(item.editedPrice - refPrice) > 0.001;
                     const priceInvalid = !item.editedPrice || item.editedPrice <= 0;
                     return (
                       <div key={item.product.id} className="flex items-center justify-between p-3 bg-background rounded-lg border border-gray-200 hover:border-primary transition-colors">
@@ -393,7 +429,12 @@ export const Sales: React.FC = () => {
                               }`}
                             />
                             <span className="text-xs text-gray-400">/ un</span>
-                            {priceInvalid && <span className="text-xs text-red-600 font-medium">obrigatório</span>}
+                            {priceInvalid && item.noPriceForMethod && (
+                              <span className="text-xs text-orange-600 font-medium">sem preço {METHOD_LABEL[paymentMethod]} cadastrado</span>
+                            )}
+                            {priceInvalid && !item.noPriceForMethod && (
+                              <span className="text-xs text-red-600 font-medium">obrigatório</span>
+                            )}
                             {priceChanged && !priceInvalid && (
                               <span className="text-[10px] bg-orange-100 text-orange-700 rounded px-1 py-0.5 font-medium">promo</span>
                             )}
