@@ -118,6 +118,7 @@ export const SalesHistory: React.FC = () => {
   const [sellerReportEnd, setSellerReportEnd] = useState('');
   const [sellerReportSellerId, setSellerReportSellerId] = useState('');
   const [sellerReportCommission, setSellerReportCommission] = useState('5');
+  const [sellerReportCommissionCash, setSellerReportCommissionCash] = useState('5');
   const [sellerReportFormat, setSellerReportFormat] = useState<'pdf' | 'excel'>('pdf');
   const [sellerReportLoading, setSellerReportLoading] = useState(false);
 
@@ -180,6 +181,7 @@ export const SalesHistory: React.FC = () => {
     setSellerReportEnd(format(endOfMonth(now), 'yyyy-MM-dd'));
     setSellerReportSellerId('');
     setSellerReportCommission('5');
+    setSellerReportCommissionCash('5');
     setSellerReportFormat('pdf');
     setShowSellerReport(true);
   };
@@ -191,6 +193,7 @@ export const SalesHistory: React.FC = () => {
         startDate: sellerReportStart,
         endDate: sellerReportEnd,
         commissionPercent: sellerReportCommission,
+        commissionPercentCash: sellerReportCommissionCash,
         format: sellerReportFormat,
         ...(sellerReportSellerId && { sellerId: sellerReportSellerId }),
       });
@@ -1573,19 +1576,35 @@ export const SalesHistory: React.FC = () => {
             </select>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">
-              Percentual de Comissão (%)
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="0.5"
-              value={sellerReportCommission}
-              onChange={e => setSellerReportCommission(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">
+                % Comissão Crediário
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={sellerReportCommission}
+                onChange={e => setSellerReportCommission(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">
+                % Comissão À Vista/Cartão
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={sellerReportCommissionCash}
+                onChange={e => setSellerReportCommissionCash(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
 
           <div>

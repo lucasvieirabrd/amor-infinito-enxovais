@@ -47,6 +47,7 @@ export class ReportController {
       endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       sellerId: z.string().optional(),
       commissionPercent: z.coerce.number().min(0).max(100).default(5),
+      commissionPercentCash: z.coerce.number().min(0).max(100).default(5),
       format: z.enum(['pdf', 'excel']).default('pdf'),
     });
 
@@ -58,6 +59,7 @@ export class ReportController {
       endDate: parsed.endDate,
       sellerId: parsed.sellerId,
       commissionPercent: parsed.commissionPercent,
+      commissionPercentCash: parsed.commissionPercentCash,
       outputFormat: parsed.format as 'pdf' | 'excel',
     };
 

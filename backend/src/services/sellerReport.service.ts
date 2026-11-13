@@ -10,7 +10,8 @@ export interface SellerReportParams {
   startDate: string;
   endDate: string;
   sellerId?: string;
-  commissionPercent: number;
+  commissionPercent: number;      // crediário
+  commissionPercentCash: number;  // à vista + cartão
   outputFormat: 'pdf' | 'excel';
 }
 
@@ -70,6 +71,7 @@ interface RawSaleRow {
   sale_date: Date | string;
   customer_name: string;
   total_amount: string;
+  payment_method: string;
 }
 
 interface SellerSale {
@@ -78,6 +80,7 @@ interface SellerSale {
   date: Date | string;
   customerName: string;
   totalAmount: number;
+  paymentMethod: string;
   commission: number;
 }
 
@@ -87,6 +90,8 @@ interface SellerData {
   sales: SellerSale[];
   totalAmount: number;
   totalCommission: number;
+  totalCommissionInstallment: number;
+  totalCommissionCash: number;
 }
 
 // --- Data Fetching ---
@@ -99,12 +104,13 @@ async function fetchData(params: SellerReportParams): Promise<SellerData[]> {
   const [rows] = await db.execute(sql`
     SELECT
       s.seller_id,
-      sel.name     AS seller_name,
-      s.id         AS sale_id,
+      sel.name        AS seller_name,
+      s.id            AS sale_id,
       s.sale_number,
       s.sale_date,
-      c.name       AS customer_name,
-      s.total_amount
+      c.name          AS customer_name,
+      s.total_amount,
+      s.payment_method
     FROM sales s
     LEFT JOIN sellers sel ON s.seller_id = sel.id
     JOIN customers c ON s.customer_id = c.id AND c.deleted_at IS NULL
@@ -116,6 +122,7 @@ async function fetchData(params: SellerReportParams): Promise<SellerData[]> {
   `);
 
   const pct = params.commissionPercent / 100;
+  const pctCash = params.commissionPercentCash / 100;
   const sellersMap = new Map<string, SellerData>();
 
   for (const row of rows as RawSaleRow[]) {
@@ -127,12 +134,15 @@ async function fetchData(params: SellerReportParams): Promise<SellerData[]> {
         sales: [],
         totalAmount: 0,
         totalCommission: 0,
+        totalCommissionInstallment: 0,
+        totalCommissionCash: 0,
       });
     }
 
     const seller = sellersMap.get(key)!;
     const amount = Number(row.total_amount);
-    const commission = amount * pct;
+    const isInstallment = row.payment_method === 'installment';
+    const commission = amount * (isInstallment ? pct : pctCash);
 
     seller.sales.push({
       id: row.sale_id,
@@ -140,11 +150,14 @@ async function fetchData(params: SellerReportParams): Promise<SellerData[]> {
       date: row.sale_date,
       customerName: row.customer_name,
       totalAmount: amount,
+      paymentMethod: row.payment_method,
       commission,
     });
 
     seller.totalAmount += amount;
     seller.totalCommission += commission;
+    if (isInstallment) seller.totalCommissionInstallment += commission;
+    else seller.totalCommissionCash += commission;
   }
 
   return [...sellersMap.values()];
@@ -159,7 +172,15 @@ export async function generateSellerReportPdf(params: SellerReportParams): Promi
   const grandCommission = sellers.reduce((s, v) => s + v.totalCommission, 0);
   const grandCount = sellers.reduce((s, v) => s + v.sales.length, 0);
   const generatedAt = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
-  const pctLabel = `${params.commissionPercent}%`;
+  const pctInstLabel = `${params.commissionPercent}%`;
+  const pctCashLabel = `${params.commissionPercentCash}%`;
+
+  function pmtLabel(pm: string): string {
+    if (pm === 'installment') return 'Crediário';
+    if (pm === 'cash') return 'À Vista';
+    if (pm === 'credit_card') return 'Cartão';
+    return pm;
+  }
 
   const sellersHtml = sellers.map(seller => `
     <div class="seller-section">
@@ -168,7 +189,7 @@ export async function generateSellerReportPdf(params: SellerReportParams): Promi
         <div class="seller-summary">
           ${seller.sales.length} venda${seller.sales.length !== 1 ? 's' : ''}
           &nbsp;|&nbsp; Total: ${brl(seller.totalAmount)}
-          &nbsp;|&nbsp; Comissão (${pctLabel}): ${brl(seller.totalCommission)}
+          &nbsp;|&nbsp; Comissão Total: ${brl(seller.totalCommission)}
         </div>
       </div>
       <div class="seller-body">
@@ -178,6 +199,7 @@ export async function generateSellerReportPdf(params: SellerReportParams): Promi
               <th>Nº Venda</th>
               <th>Data</th>
               <th>Cliente</th>
+              <th>Forma</th>
               <th class="td-right">Valor Total</th>
               <th class="td-right">Comissão</th>
             </tr>
@@ -188,6 +210,7 @@ export async function generateSellerReportPdf(params: SellerReportParams): Promi
                 <td><strong>${esc(sale.number)}</strong></td>
                 <td>${fmtDate(sale.date)}</td>
                 <td>${esc(sale.customerName)}</td>
+                <td>${pmtLabel(sale.paymentMethod)}</td>
                 <td class="td-right">${brl(sale.totalAmount)}</td>
                 <td class="td-right commission">${brl(sale.commission)}</td>
               </tr>
@@ -199,8 +222,18 @@ export async function generateSellerReportPdf(params: SellerReportParams): Promi
             <div class="footer-label">Subtotal Vendido</div>
             <div class="footer-value">${brl(seller.totalAmount)}</div>
           </div>
+          ${seller.totalCommissionInstallment > 0 ? `
           <div class="footer-item">
-            <div class="footer-label">Comissão Total (${pctLabel})</div>
+            <div class="footer-label">Comissão Crediário (${pctInstLabel})</div>
+            <div class="footer-value commission">${brl(seller.totalCommissionInstallment)}</div>
+          </div>` : ''}
+          ${seller.totalCommissionCash > 0 ? `
+          <div class="footer-item">
+            <div class="footer-label">Comissão À Vista/Cartão (${pctCashLabel})</div>
+            <div class="footer-value commission">${brl(seller.totalCommissionCash)}</div>
+          </div>` : ''}
+          <div class="footer-item">
+            <div class="footer-label">Comissão Total</div>
             <div class="footer-value commission">${brl(seller.totalCommission)}</div>
           </div>
         </div>
@@ -251,7 +284,7 @@ export async function generateSellerReportPdf(params: SellerReportParams): Promi
     <div class="report-title">RELATÓRIO DE VENDAS POR VENDEDOR</div>
     <div class="report-subtitle">AMOR INFINITO ENXOVAIS</div>
     <div class="report-subtitle">Período: ${fmtDate(params.startDate)} a ${fmtDate(params.endDate)}</div>
-    <div class="report-subtitle">Comissão: ${pctLabel} sobre o valor total da venda</div>
+    <div class="report-subtitle">Comissão Crediário: ${pctInstLabel} &nbsp;|&nbsp; Comissão À Vista/Cartão: ${pctCashLabel} &nbsp;— sobre o valor total da venda</div>
     <div class="report-subtitle">Gerado em ${generatedAt}</div>
   </div>
 
@@ -265,7 +298,7 @@ export async function generateSellerReportPdf(params: SellerReportParams): Promi
       <div class="summary-value" style="color:#be123c">${brl(grandTotal)}</div>
     </div>
     <div class="summary-card">
-      <div class="summary-label">Total Comissões (${pctLabel})</div>
+      <div class="summary-label">Total Comissões</div>
       <div class="summary-value" style="color:#16a34a">${brl(grandCommission)}</div>
     </div>
   </div>
@@ -312,10 +345,22 @@ export async function generateSellerReportPdf(params: SellerReportParams): Promi
 
 export async function generateSellerReportExcel(params: SellerReportParams): Promise<Buffer> {
   const sellers = await fetchData(params);
-  const pctLabel = `${params.commissionPercent}%`;
+
+  function pmtLabelXls(pm: string): string {
+    if (pm === 'installment') return 'Crediário';
+    if (pm === 'cash') return 'À Vista';
+    if (pm === 'credit_card') return 'Cartão';
+    return pm;
+  }
+
+  function pctForPmt(pm: string): string {
+    return pm === 'installment'
+      ? `${params.commissionPercent}%`
+      : `${params.commissionPercentCash}%`;
+  }
 
   const headerRow = [
-    'Vendedor', 'Nº Venda', 'Data', 'Cliente', 'Valor Total', `Comissão (${pctLabel})`,
+    'Vendedor', 'Nº Venda', 'Data', 'Cliente', 'Forma', '% Comissão', 'Valor Total', 'Comissão',
   ];
 
   const dataRows: (string | number)[][] = [];
@@ -326,12 +371,14 @@ export async function generateSellerReportExcel(params: SellerReportParams): Pro
         sale.number,
         fmtDate(sale.date),
         sale.customerName,
+        pmtLabelXls(sale.paymentMethod),
+        pctForPmt(sale.paymentMethod),
         Number(sale.totalAmount),
         Number(sale.commission.toFixed(2)),
       ]);
     }
     dataRows.push([
-      `SUBTOTAL — ${seller.name}`, '', '', '',
+      `SUBTOTAL — ${seller.name}`, '', '', '', '', '',
       Number(seller.totalAmount.toFixed(2)),
       Number(seller.totalCommission.toFixed(2)),
     ]);
@@ -340,13 +387,13 @@ export async function generateSellerReportExcel(params: SellerReportParams): Pro
 
   const grandTotal = sellers.reduce((s, v) => s + v.totalAmount, 0);
   const grandCommission = sellers.reduce((s, v) => s + v.totalCommission, 0);
-  dataRows.push(['TOTAL GERAL', '', '', '', Number(grandTotal.toFixed(2)), Number(grandCommission.toFixed(2))]);
+  dataRows.push(['TOTAL GERAL', '', '', '', '', '', Number(grandTotal.toFixed(2)), Number(grandCommission.toFixed(2))]);
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
 
   ws['!cols'] = [
-    { wch: 25 }, { wch: 14 }, { wch: 13 }, { wch: 35 }, { wch: 14 }, { wch: 18 },
+    { wch: 25 }, { wch: 14 }, { wch: 13 }, { wch: 35 }, { wch: 13 }, { wch: 12 }, { wch: 14 }, { wch: 18 },
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, 'Vendedores');
