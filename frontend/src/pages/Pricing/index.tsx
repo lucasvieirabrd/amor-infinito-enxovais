@@ -28,6 +28,7 @@ interface ItemInput {
   unitCost: string;
   assembly: string;
   installmentsCount: string;
+  cardInstallmentsCount: string;
   impostoOverride: string;
 }
 
@@ -48,6 +49,8 @@ interface ItemResult {
   priceCard10x: number;
   discountPct: number;
   divisorValid: boolean;
+  cardInstallmentsCount: number;
+  installmentValueCard: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -61,7 +64,15 @@ function pct(n: number) {
 }
 
 function newItem(): ItemInput {
-  return { id: Math.random().toString(36).slice(2), name: '', unitCost: '', assembly: '0', installmentsCount: '10', impostoOverride: '' };
+  return {
+    id: Math.random().toString(36).slice(2),
+    name: '',
+    unitCost: '',
+    assembly: '0',
+    installmentsCount: '10',
+    cardInstallmentsCount: '12',
+    impostoOverride: '',
+  };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -122,7 +133,11 @@ export const Pricing: React.FC = () => {
           imposto: i.impostoOverride ? parseFloat(i.impostoOverride) / 100 : undefined,
         })),
       });
-      setResults(res.data.results);
+      const enriched: ItemResult[] = res.data.results.map((r: any, i: number) => {
+        const cardN = parseInt(validItems[i]?.cardInstallmentsCount) || 12;
+        return { ...r, cardInstallmentsCount: cardN, installmentValueCard: r.priceCard10x / cardN };
+      });
+      setResults(enriched);
       setFactor(res.data.factor);
     } catch (err: any) {
       alert(err?.response?.data?.error ?? 'Erro ao calcular');
@@ -164,10 +179,14 @@ export const Pricing: React.FC = () => {
     const lines: string[] = ['*Tabela de Preços*', ''];
     results.forEach(r => {
       lines.push(`*${r.name}*`);
-      lines.push(`  Crediário 10×: ${fmtBRL(r.priceCredit)} (${r.installmentsCount}× de ${fmtBRL(r.installmentValue)})`);
+      if (r.installmentsCount >= 2) {
+        lines.push(`  Crediário: ${fmtBRL(r.priceCredit)} (Entrada de ${fmtBRL(r.installmentValue)} + ${r.installmentsCount - 1}× de ${fmtBRL(r.installmentValue)})`);
+      } else {
+        lines.push(`  Crediário: ${fmtBRL(r.priceCredit)}`);
+      }
       lines.push(`  À Vista: ${fmtBRL(r.priceCash)}`);
       lines.push(`  Cartão 1×: ${fmtBRL(r.priceCard1x)}`);
-      lines.push(`  Cartão 10×: ${fmtBRL(r.priceCard10x)}`);
+      lines.push(`  Cartão ${r.cardInstallmentsCount}×: ${fmtBRL(r.priceCard10x)} (${r.cardInstallmentsCount}× de ${fmtBRL(r.installmentValueCard)})`);
       lines.push('');
     });
     return lines.join('\n');
@@ -286,7 +305,8 @@ export const Pricing: React.FC = () => {
               <div className="col-span-3">Nome do produto</div>
               <div className="col-span-2">Custo unit. (R$)</div>
               <div className="col-span-2">Montagem (R$)</div>
-              <div className="col-span-2">Parcelas</div>
+              <div className="col-span-1">Cred. ×</div>
+              <div className="col-span-1">Cart. ×</div>
               <div className="col-span-2">Imposto % (opt.)</div>
               <div className="col-span-1"></div>
             </div>
@@ -320,13 +340,23 @@ export const Pricing: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   />
                 </div>
-                <div className="col-span-6 md:col-span-2">
+                <div className="col-span-3 md:col-span-1">
                   <input
                     type="number"
                     value={item.installmentsCount}
                     onChange={e => updateItem(item.id, 'installmentsCount', e.target.value)}
                     min={1}
                     max={60}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                </div>
+                <div className="col-span-3 md:col-span-1">
+                  <input
+                    type="number"
+                    value={item.cardInstallmentsCount}
+                    onChange={e => updateItem(item.id, 'cardInstallmentsCount', e.target.value)}
+                    min={2}
+                    max={12}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   />
                 </div>
@@ -407,7 +437,12 @@ export const Pricing: React.FC = () => {
                     <div className="bg-indigo-50 rounded-lg p-3">
                       <div className="text-xs text-indigo-600 font-medium mb-1">Crediário ({r.installmentsCount}×)</div>
                       <div className="text-lg font-bold text-indigo-700">{fmtBRL(r.priceCredit)}</div>
-                      <div className="text-xs text-indigo-500">{r.installmentsCount}× de {fmtBRL(r.installmentValue)}</div>
+                      <div className="text-xs text-indigo-500">
+                        {r.installmentsCount >= 2
+                          ? `Entrada de ${fmtBRL(r.installmentValue)} + ${r.installmentsCount - 1}× de ${fmtBRL(r.installmentValue)}`
+                          : fmtBRL(r.installmentValue)
+                        }
+                      </div>
                       {params?.mostrar_lucro_para_marcelo && (
                         <div className="text-xs text-indigo-400 mt-1">Lucro: {fmtBRL(r.profitCredit)} ({pct(r.profitCreditPct)})</div>
                       )}
@@ -428,8 +463,9 @@ export const Pricing: React.FC = () => {
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="text-xs text-gray-600 font-medium mb-1">Cartão 10×</div>
+                      <div className="text-xs text-gray-600 font-medium mb-1">Cartão {r.cardInstallmentsCount}×</div>
                       <div className="text-lg font-bold text-gray-700">{fmtBRL(r.priceCard10x)}</div>
+                      <div className="text-xs text-gray-500">{r.cardInstallmentsCount}× de {fmtBRL(r.installmentValueCard)}</div>
                     </div>
                   </div>
                 </div>
