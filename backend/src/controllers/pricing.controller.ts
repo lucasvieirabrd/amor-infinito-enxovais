@@ -12,6 +12,7 @@ const calcItemSchema = z.object({
   assembly: z.number().min(0).default(0),
   installmentsCount: z.number().int().min(1).max(60).default(10),
   imposto: z.number().optional(),
+  multiplicador: z.number().positive().optional(),
 });
 
 const calcRequestSchema = z.object({
@@ -75,6 +76,7 @@ export class PricingController {
         installmentsCount: item.installmentsCount,
         factor,
         imposto: item.imposto,
+        multiplicador: item.multiplicador,
       }),
     }));
 
@@ -101,6 +103,7 @@ export class PricingController {
         installmentsCount: item.installmentsCount,
         factor,
         imposto: item.imposto,
+        multiplicador: item.multiplicador,
       });
       return {
         name: item.name,

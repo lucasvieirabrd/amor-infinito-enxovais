@@ -111,5 +111,25 @@ checkStr('creditLine_c5', buildCreditLine(c5.priceCredit, c5.installmentValue, 1
 checkStr('cardLine_c5', buildCardLine(c5.priceCard10x, 12),
   'Cartão 12×: R$ 259,00 (12× de R$ 21,58)');
 
+console.log('\n--- Caso 6: Multiplicador editado por produto (Criado Malibu com 3,5 em vez do padrão) ---');
+const c6 = calcProduct(p, { unitCost: 140, assembly: 70, installmentsCount: 10, factor: fator, multiplicador: 3.5 });
+// 144.55 × 3.5 × 1.10 + 70 = 626.52 → arred9 → 629
+check('priceCredit (mult 3,5)', c6.priceCredit, 629);
+check('installmentValue (mult 3,5)', +c6.installmentValue.toFixed(2), 62.90, 0.01);
+// Só o crediário muda; à vista e cartão continuam iguais ao Caso 1
+check('priceCash inalterado', c6.priceCash, c1.priceCash, 0);
+check('priceCard1x inalterado', c6.priceCard1x, c1.priceCard1x, 0);
+check('priceCard10x inalterado', c6.priceCard10x, c1.priceCard10x, 0);
+// Parâmetro global não foi alterado
+check('params.multiplicador_crediario intacto', p.multiplicador_crediario, 3, 0);
+// Multiplicador ausente/inválido → usa o padrão
+const c6b = calcProduct(p, { unitCost: 140, assembly: 70, installmentsCount: 10, factor: fator, multiplicador: undefined });
+check('sem multiplicador = padrão', c6b.priceCredit, c1.priceCredit, 0);
+const c6c = calcProduct(p, { unitCost: 140, assembly: 70, installmentsCount: 10, factor: fator, multiplicador: NaN });
+check('multiplicador NaN = padrão', c6c.priceCredit, c1.priceCredit, 0);
+// Multiplicador 3,03 (exemplo real dos parâmetros)
+const c6d = calcProduct({ ...p, multiplicador_crediario: 3.03 }, { unitCost: 140, assembly: 70, installmentsCount: 10, factor: fator, multiplicador: 3.5 });
+check('override vence padrão 3,03', c6d.priceCredit, 629, 0);
+
 console.log(`\n========= Resultado: ${passed} OK / ${failed} falhou =========`);
 if (failed > 0) process.exit(1);

@@ -39,6 +39,7 @@ export interface ProductCalcInput {
   installmentsCount: number;
   factor: number;
   imposto?: number; // override do parâmetro salvo (campo editável na tela)
+  multiplicador?: number; // override do multiplicador_crediario só para este cálculo (não salva)
 }
 
 export interface ProductCalcResult {
@@ -59,12 +60,16 @@ export interface ProductCalcResult {
 export function calcProduct(params: PricingParams, input: ProductCalcInput): ProductCalcResult {
   const { unitCost, assembly, installmentsCount, factor } = input;
   const imposto = input.imposto ?? params.imposto;
+  const multiplicador =
+    input.multiplicador != null && Number.isFinite(input.multiplicador) && input.multiplicador > 0
+      ? input.multiplicador
+      : params.multiplicador_crediario;
 
   const realCost = unitCost * factor;
 
   // Crediário
   const acrescimo = params.comissao_vendedores_crediario + params.comissao_marcelo_celita_crediario;
-  const priceCredit = arred9(realCost * params.multiplicador_crediario * (1 + acrescimo) + assembly);
+  const priceCredit = arred9(realCost * multiplicador * (1 + acrescimo) + assembly);
   const installmentValue = priceCredit / installmentsCount;
   const baseCred = priceCredit - assembly;
   const profitCredit =

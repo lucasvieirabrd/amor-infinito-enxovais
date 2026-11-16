@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 const API = axios.create({
@@ -30,6 +30,7 @@ interface ItemInput {
   installmentsCount: string;
   cardInstallmentsCount: string;
   impostoOverride: string;
+  multiplicador: string;
 }
 
 interface ItemResult {
@@ -63,7 +64,21 @@ function pct(n: number) {
   return (n * 100).toFixed(1) + '%';
 }
 
-function newItem(): ItemInput {
+/** Formata o multiplicador com vírgula (ex.: 3.03 → "3,03"). */
+function fmtMult(n: number | undefined | null): string {
+  if (n == null || !Number.isFinite(n)) return '';
+  return String(n).replace('.', ',');
+}
+
+/** Lê o multiplicador aceitando vírgula ou ponto. Vazio/inválido → undefined (usa o padrão). */
+function parseMult(s: string): number | undefined {
+  const t = s.trim().replace(',', '.');
+  if (!t) return undefined;
+  const n = Number(t);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function newItem(defaultMult?: number): ItemInput {
   return {
     id: Math.random().toString(36).slice(2),
     name: '',
@@ -72,8 +87,27 @@ function newItem(): ItemInput {
     installmentsCount: '10',
     cardInstallmentsCount: '12',
     impostoOverride: '',
+    multiplicador: fmtMult(defaultMult),
   };
 }
+
+function toItemPayload(i: ItemInput) {
+  return {
+    name: i.name.trim(),
+    unitCost: parseFloat(i.unitCost),
+    assembly: parseFloat(i.assembly) || 0,
+    installmentsCount: parseInt(i.installmentsCount) || 10,
+    imposto: i.impostoOverride ? parseFloat(i.impostoOverride) / 100 : undefined,
+    multiplicador: parseMult(i.multiplicador),
+  };
+}
+
+const inputCls =
+  'w-full px-3 py-2.5 md:py-2 border border-gray-300 rounded-lg text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300';
+const fieldLabelCls = 'block md:hidden text-xs font-medium text-gray-600 mb-1';
+// Colunas da linha de produto no desktop (mesmo template no cabeçalho e nas linhas)
+const ROW_GRID =
+  'md:grid-cols-[minmax(0,3fr)_minmax(0,1.6fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.4fr)_2rem]';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -104,6 +138,8 @@ export const Pricing: React.FC = () => {
     try {
       const res = await API.post('/pricing/validate', { code: code.trim() });
       setParams(res.data.params);
+      const defMult = res.data.params?.multiplicador_crediario;
+      setItems(prev => prev.map(it => (it.multiplicador ? it : { ...it, multiplicador: fmtMult(defMult) })));
       setUnlocked(true);
     } catch (err: any) {
       setUnlockError(err?.response?.data?.error ?? 'Código inválido');
@@ -112,9 +148,17 @@ export const Pricing: React.FC = () => {
     }
   };
 
-  const handleCalculate = async () => {
+  // Depois do primeiro "Calcular", qualquer mudança nos campos recalcula sozinha.
+  const [liveCalc, setLiveCalc] = useState(false);
+  const calcSeq = useRef(0);
+
+  const handleCalculate = async (silent = false) => {
     const validItems = items.filter(i => i.name.trim() && i.unitCost);
-    if (!validItems.length) return;
+    if (!validItems.length) {
+      if (silent) setResults(null);
+      return;
+    }
+    const seq = ++calcSeq.current;
     setCalculating(true);
     setSavedId(null);
     try {
@@ -125,26 +169,31 @@ export const Pricing: React.FC = () => {
         totalProducts: totalProducts ? parseFloat(totalProducts) : undefined,
         totalNf: totalNf ? parseFloat(totalNf) : undefined,
         freight: parseFloat(freight) || 0,
-        items: validItems.map(i => ({
-          name: i.name.trim(),
-          unitCost: parseFloat(i.unitCost),
-          assembly: parseFloat(i.assembly) || 0,
-          installmentsCount: parseInt(i.installmentsCount) || 10,
-          imposto: i.impostoOverride ? parseFloat(i.impostoOverride) / 100 : undefined,
-        })),
+        items: validItems.map(toItemPayload),
       });
+      if (seq !== calcSeq.current) return; // resposta antiga, ignora
       const enriched: ItemResult[] = res.data.results.map((r: any, i: number) => {
         const cardN = parseInt(validItems[i]?.cardInstallmentsCount) || 12;
         return { ...r, cardInstallmentsCount: cardN, installmentValueCard: r.priceCard10x / cardN };
       });
       setResults(enriched);
       setFactor(res.data.factor);
+      setLiveCalc(true);
     } catch (err: any) {
-      alert(err?.response?.data?.error ?? 'Erro ao calcular');
+      if (seq !== calcSeq.current) return;
+      if (silent) setResults(null);
+      else alert(err?.response?.data?.error ?? 'Erro ao calcular');
     } finally {
-      setCalculating(false);
+      if (seq === calcSeq.current) setCalculating(false);
     }
   };
+
+  useEffect(() => {
+    if (!liveCalc) return;
+    const t = setTimeout(() => { handleCalculate(true); }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, supplier, nfNumber, totalProducts, totalNf, freight]);
 
   const handleSave = async () => {
     if (!results) return;
@@ -158,13 +207,7 @@ export const Pricing: React.FC = () => {
         totalProducts: totalProducts ? parseFloat(totalProducts) : undefined,
         totalNf: totalNf ? parseFloat(totalNf) : undefined,
         freight: parseFloat(freight) || 0,
-        items: validItems.map(i => ({
-          name: i.name.trim(),
-          unitCost: parseFloat(i.unitCost),
-          assembly: parseFloat(i.assembly) || 0,
-          installmentsCount: parseInt(i.installmentsCount) || 10,
-          imposto: i.impostoOverride ? parseFloat(i.impostoOverride) / 100 : undefined,
-        })),
+        items: validItems.map(toItemPayload),
       });
       setSavedId(res.data.id);
     } catch (err: any) {
@@ -199,10 +242,10 @@ export const Pricing: React.FC = () => {
 
   const updateItem = useCallback((id: string, field: keyof ItemInput, value: string) => {
     setItems(prev => prev.map(it => it.id === id ? { ...it, [field]: value } : it));
-    setResults(null);
+    setSavedId(null);
   }, []);
 
-  const addItem = () => setItems(prev => [...prev, newItem()]);
+  const addItem = () => setItems(prev => [...prev, newItem(params?.multiplicador_crediario)]);
   const removeItem = (id: string) => setItems(prev => prev.filter(it => it.id !== id));
 
   if (!unlocked) {
@@ -248,7 +291,7 @@ export const Pricing: React.FC = () => {
         </div>
 
         {/* NF Info */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 mb-6">
           <h2 className="text-base font-semibold text-gray-800 mb-4">Dados da Nota Fiscal (opcional)</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
@@ -262,7 +305,7 @@ export const Pricing: React.FC = () => {
                 <input
                   type={type}
                   value={value}
-                  onChange={e => { setter(e.target.value); setResults(null); }}
+                  onChange={e => { setter(e.target.value); setSavedId(null); }}
                   placeholder={placeholder}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
@@ -273,7 +316,7 @@ export const Pricing: React.FC = () => {
               <input
                 type="number"
                 value={freight}
-                onChange={e => { setFreight(e.target.value); setResults(null); }}
+                onChange={e => { setFreight(e.target.value); setSavedId(null); }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
               />
             </div>
@@ -287,7 +330,7 @@ export const Pricing: React.FC = () => {
         </div>
 
         {/* Items */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-gray-800">Produtos</h2>
             <button
@@ -300,81 +343,130 @@ export const Pricing: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-            {/* Header row */}
-            <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-1">
-              <div className="col-span-3">Nome do produto</div>
-              <div className="col-span-2">Custo unit. (R$)</div>
-              <div className="col-span-2">Montagem (R$)</div>
-              <div className="col-span-1">Cred. ×</div>
-              <div className="col-span-1">Cart. ×</div>
-              <div className="col-span-2">Imposto % (opt.)</div>
-              <div className="col-span-1"></div>
+            {/* Cabeçalho de colunas — só no desktop; no celular cada campo tem seu próprio rótulo */}
+            <div className={`hidden md:grid ${ROW_GRID} gap-2 text-xs font-medium text-gray-500 px-1`}>
+              <div>Nome do produto</div>
+              <div>Custo unit. (R$)</div>
+              <div>Montagem (R$)</div>
+              <div>Cred. ×</div>
+              <div>Cart. ×</div>
+              <div>Multiplicador</div>
+              <div>Imposto % (opt.)</div>
+              <div></div>
             </div>
 
-            {items.map(item => (
-              <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                <div className="col-span-12 md:col-span-3">
+            {items.map((item, idx) => (
+              <div
+                key={item.id}
+                className={`border border-gray-200 rounded-xl p-3 md:border-0 md:rounded-none md:p-0 grid grid-cols-2 ${ROW_GRID} gap-3 md:gap-2 md:items-center`}
+              >
+                {/* Topo do cartão (só celular) */}
+                <div className="col-span-2 flex items-center justify-between md:hidden">
+                  <span className="text-sm font-semibold text-gray-700">Produto {idx + 1}</span>
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.id)}
+                      className="px-3 py-1.5 text-sm text-red-600 bg-red-50 rounded-lg active:bg-red-100"
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+
+                <div className="col-span-2 md:col-span-1">
+                  <label className={fieldLabelCls}>Nome do produto</label>
                   <input
                     type="text"
                     value={item.name}
                     onChange={e => updateItem(item.id, 'name', e.target.value)}
                     placeholder="Nome"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    aria-label="Nome do produto"
+                    className={inputCls}
                   />
                 </div>
-                <div className="col-span-6 md:col-span-2">
+                <div>
+                  <label className={fieldLabelCls}>Custo unit. (R$)</label>
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={item.unitCost}
                     onChange={e => updateItem(item.id, 'unitCost', e.target.value)}
                     placeholder="0,00"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    aria-label="Custo unitário (R$)"
+                    className={inputCls}
                   />
                 </div>
-                <div className="col-span-6 md:col-span-2">
+                <div>
+                  <label className={fieldLabelCls}>Montagem (R$)</label>
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={item.assembly}
                     onChange={e => updateItem(item.id, 'assembly', e.target.value)}
                     placeholder="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    aria-label="Montagem (R$)"
+                    className={inputCls}
                   />
                 </div>
-                <div className="col-span-3 md:col-span-1">
+                <div>
+                  <label className={fieldLabelCls}>Parcelas crediário (×)</label>
                   <input
                     type="number"
+                    inputMode="numeric"
                     value={item.installmentsCount}
                     onChange={e => updateItem(item.id, 'installmentsCount', e.target.value)}
                     min={1}
                     max={60}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    aria-label="Parcelas no crediário"
+                    className={inputCls}
                   />
                 </div>
-                <div className="col-span-3 md:col-span-1">
+                <div>
+                  <label className={fieldLabelCls}>Parcelas cartão (×)</label>
                   <input
                     type="number"
+                    inputMode="numeric"
                     value={item.cardInstallmentsCount}
                     onChange={e => updateItem(item.id, 'cardInstallmentsCount', e.target.value)}
                     min={2}
                     max={12}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    aria-label="Parcelas no cartão"
+                    className={inputCls}
                   />
                 </div>
-                <div className="col-span-5 md:col-span-2">
+                <div>
+                  <label className={fieldLabelCls}>Multiplicador</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={item.multiplicador}
+                    onChange={e => updateItem(item.id, 'multiplicador', e.target.value.replace(/[^0-9.,]/g, ''))}
+                    placeholder={params ? fmtMult(params.multiplicador_crediario) : '3'}
+                    aria-label="Multiplicador do crediário"
+                    title="Multiplicador do crediário só para este produto (não altera as Configurações). Vazio = padrão."
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={fieldLabelCls}>Imposto % (opcional)</label>
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={item.impostoOverride}
                     onChange={e => updateItem(item.id, 'impostoOverride', e.target.value)}
                     placeholder={params ? (params.imposto * 100).toFixed(1) : '8.3'}
                     step="0.1"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    aria-label="Imposto % (opcional)"
+                    className={inputCls}
                   />
                 </div>
-                <div className="col-span-1 flex justify-center">
+                <div className="hidden md:flex justify-center">
                   {items.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeItem(item.id)}
+                      aria-label="Remover produto"
                       className="text-red-400 hover:text-red-600 transition-colors p-1"
                     >
                       ×
@@ -385,24 +477,27 @@ export const Pricing: React.FC = () => {
             ))}
           </div>
 
-          <div className="mt-5 flex gap-3">
+          <div className="mt-5 flex flex-col md:flex-row gap-3">
             <button
               type="button"
-              onClick={handleCalculate}
+              onClick={() => handleCalculate()}
               disabled={calculating}
-              className="px-6 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+              className="w-full md:w-auto px-6 py-3 md:py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors"
             >
               {calculating ? 'Calculando...' : 'Calcular Preços'}
             </button>
+            {liveCalc && (
+              <span className="text-xs text-gray-500 self-center">Os preços se atualizam sozinhos ao mudar os campos.</span>
+            )}
           </div>
         </div>
 
         {/* Results */}
         {results && results.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="flex items-center justify-between mb-5">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
               <h2 className="text-base font-semibold text-gray-800">Resultados</h2>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={handleCopyWhatsApp}
